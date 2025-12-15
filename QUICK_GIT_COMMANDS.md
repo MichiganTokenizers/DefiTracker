@@ -2,7 +2,7 @@
 
 ## First Time Setup (On This Computer)
 
-```powershell
+```bash
 # 1. Initialize git (if not already done)
 git init
 
@@ -25,27 +25,27 @@ git push -u origin main
 
 ## On Another Computer (Clone and Setup)
 
-```powershell
+```bash
 # 1. Clone the repository
 git clone https://github.com/YOUR_USERNAME/DefiTracker.git
 cd DefiTracker
 
 # 2. Create database config from template
-copy config\database.yaml.template config\database.yaml
-# Then edit config\database.yaml with your database password
+cp config/database.yaml.template config/database.yaml
+# Then edit config/database.yaml with your database password
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Set up database
-python src\database\setup.py
+python src/database/setup.py
 ```
 
 ## Daily Workflow
 
 ### When You Make Changes
 
-```powershell
+```bash
 # 1. Check what changed
 git status
 
@@ -61,7 +61,7 @@ git push
 
 ### When You Want Latest Changes (on another computer)
 
-```powershell
+```bash
 git pull
 ```
 
@@ -69,7 +69,7 @@ git pull
 
 Before your first commit, always check:
 
-```powershell
+```bash
 git status
 ```
 

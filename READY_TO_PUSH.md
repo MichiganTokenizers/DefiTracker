@@ -45,7 +45,7 @@ Go to https://github.com and create a new repository:
 
 ### 2. Commit and Push
 
-```powershell
+```bash
 # You're already in the project directory
 # Files are already staged (git add . was run)
 
@@ -74,19 +74,19 @@ git push -u origin main
 
 Once pushed, you can clone it on another computer:
 
-```powershell
+```bash
 git clone https://github.com/YOUR_USERNAME/DefiTracker.git
 cd DefiTracker
 
 # Create database config
-copy config\database.yaml.template config\database.yaml
-# Edit config\database.yaml with your database password
+cp config/database.yaml.template config/database.yaml
+# Edit config/database.yaml with your database password
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Set up database
-python src\database\setup.py
+python src/database/setup.py
 ```
 
 ## What's Protected (NOT in GitHub)
@@ -100,7 +100,6 @@ These files are in `.gitignore` and will NOT be committed:
 
 ## Notes
 
-- The warnings about LF/CRLF are normal on Windows - Git handles this automatically
 - Your database password is safe and will not be committed
 - The template file shows others what configuration is needed
 

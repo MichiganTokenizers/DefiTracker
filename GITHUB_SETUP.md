@@ -12,9 +12,9 @@
 
 ## Step 2: Initialize Git (if not already done)
 
-Open PowerShell or Command Prompt in your project directory:
+Open a terminal in your project directory:
 
-```powershell
+```bash
 # Check if git is already initialized
 git status
 
@@ -24,7 +24,7 @@ git init
 
 ## Step 3: Add All Files
 
-```powershell
+```bash
 # Add all files (except those in .gitignore)
 git add .
 
@@ -36,13 +36,13 @@ git status
 
 ## Step 4: Create Initial Commit
 
-```powershell
+```bash
 git commit -m "Initial commit: Multi-chain DeFi APR tracker framework"
 ```
 
 ## Step 5: Connect to GitHub Repository
 
-```powershell
+```bash
 # Add your GitHub repository as remote (replace YOUR_USERNAME with your GitHub username)
 git remote add origin https://github.com/YOUR_USERNAME/DefiTracker.git
 
@@ -52,7 +52,7 @@ git remote -v
 
 ## Step 6: Push to GitHub
 
-```powershell
+```bash
 # Push to GitHub (first time)
 git branch -M main
 git push -u origin main
@@ -70,9 +70,9 @@ You'll be prompted for your GitHub username and password (or personal access tok
 
 ### Step 1: Clone the Repository
 
-```powershell
+```bash
 # Navigate to where you want the project
-cd C:\Users\YourName\Projects
+cd ~/Projects
 
 # Clone the repository
 git clone https://github.com/YOUR_USERNAME/DefiTracker.git
@@ -83,24 +83,25 @@ cd DefiTracker
 
 ### Step 2: Create Database Configuration
 
-```powershell
+```bash
 # Copy the template
-copy config\database.yaml.template config\database.yaml
+cp config/database.yaml.template config/database.yaml
 
-# Edit config\database.yaml with your database credentials
-notepad config\database.yaml
+# Edit config/database.yaml with your database credentials
+nano config/database.yaml
+# Or use your preferred editor: vim, code, etc.
 ```
 
 Fill in your PostgreSQL password and other database settings.
 
 ### Step 3: Install Dependencies
 
-```powershell
+```bash
 # Create virtual environment (recommended)
-python -m venv venv
+python3 -m venv venv
 
 # Activate virtual environment
-.\venv\Scripts\Activate.ps1
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -110,16 +111,16 @@ pip install -r requirements.txt
 
 Follow the instructions in `DATABASE_SETUP_GUIDE.md`:
 
-```powershell
+```bash
 # Run database setup
-python src\database\setup.py
+python src/database/setup.py
 ```
 
 ## Updating the Repository
 
 ### When You Make Changes
 
-```powershell
+```bash
 # Check what changed
 git status
 
@@ -135,7 +136,7 @@ git push
 
 ### When You Pull Latest Changes (on another computer)
 
-```powershell
+```bash
 # Pull latest changes
 git pull
 ```
@@ -160,7 +161,7 @@ git pull
 ## Troubleshooting
 
 ### Error: "remote origin already exists"
-```powershell
+```bash
 # Remove existing remote
 git remote remove origin
 
@@ -175,7 +176,7 @@ git remote add origin https://github.com/YOUR_USERNAME/DefiTracker.git
   3. Use the token as your password when pushing
 
 ### Error: "database.yaml not found" on new computer
-- You need to copy the template: `copy config\database.yaml.template config\database.yaml`
+- You need to copy the template: `cp config/database.yaml.template config/database.yaml`
 - Then edit it with your database credentials
 
 ## Security Best Practices
