@@ -14,16 +14,16 @@ class FlareChainAdapter(ChainAdapter):
     
     def initialize_protocols(self):
         """Initialize Flare protocol adapters"""
-        # TODO: Import and initialize protocol adapters
-        # from src.adapters.flare.kinetic import KineticAdapter
+        from src.adapters.flare.kinetic import KineticAdapter
         # from src.adapters.flare.blazeswap import BlazeSwapAdapter
-        # 
-        # if 'kinetic' in self.config.get('protocols', {}):
-        #     self.protocols['kinetic'] = KineticAdapter(
-        #         'kinetic', 
-        #         self.config['protocols']['kinetic']
-        #     )
-        pass
+        
+        if 'kinetic' in self.config.get('protocols', {}):
+            kinetic_config = self.config['protocols']['kinetic']
+            if kinetic_config.get('enabled', False):
+                kinetic_adapter = KineticAdapter('kinetic', kinetic_config)
+                # Set Web3 instance for on-chain queries
+                kinetic_adapter.set_web3_instance(self.get_web3_instance())
+                self.protocols['kinetic'] = kinetic_adapter
     
     def get_web3_instance(self):
         """Get web3.py instance for Flare"""

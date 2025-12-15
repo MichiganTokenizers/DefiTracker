@@ -7,7 +7,25 @@ chains:
     protocols:
       kinetic:
         enabled: true
-        # Protocol-specific configuration will go here
+        # Kinetic uses on-chain contracts, not REST API
+        # Main protocol contracts for FXRP-USDT0-stXRP ISO Market
+        unitroller: "0x15F69897E6aEBE0463401345543C26d1Fd994abB"  # Unitroller for ISO Market
+        comptroller: "0x35aFf580e53d9834a3a0e21a50f97b942Aba8866"  # Comptroller Implementation
+        lens: "0x553e7b78812D69fA30242E7380417781125C7AC7"  # Lens contract for reading market data
+        # Token contracts
+        tokens:
+          FXRP:
+            address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE"  # FXRP token
+            iso_address: "0xD1b7A5eFa9bd88F291F7A4563a8f6185c0249CB3"  # ISO FXRP (lending market)
+            decimals: 18
+          USDT0:
+            address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"  # USDT0 token
+            iso_address: "0xad7e7989796414c9572da9854DEb1B920724fd09"  # ISO USDT0 (lending market)
+            decimals: 6  # USDT typically uses 6 decimals
+          stXRP:
+            address: "0x4C18Ff3C89632c3Dd62E796c0aFA5c07c4c1B2b3"  # STFXRP token
+            iso_address: "0x870f7B89F0d408D7CA2E6586Df26D00Ea03aA358"  # isoSTFXRP (lending market)
+            decimals: 18
       blazeswap:
         enabled: false
         # Protocol-specific configuration will go here
