@@ -1,0 +1,13 @@
+# Database configuration
+# Copy this file to database.yaml and fill in your actual values
+# database.yaml is in .gitignore and will not be committed to GitHub
+
+database:
+  host: localhost
+  port: 5432
+  database: defi_apr_tracker
+  user: postgres
+  password: your_password_here  # Replace with your actual PostgreSQL password
+  # TimescaleDB specific settings
+  # Ensure TimescaleDB extension is enabled in the database
+
