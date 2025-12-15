@@ -60,7 +60,7 @@ class ChainRegistry:
             if config.get('enabled', False)
         ]
     
-    def collect_all_aprs(self) -> Dict[str, Dict[str, Dict[str, Optional[float]]]]]:
+    def collect_all_aprs(self) -> Dict[str, Dict[str, Dict[str, Optional[float]]]]:
         """
         Collect APR data from all active chains.
         

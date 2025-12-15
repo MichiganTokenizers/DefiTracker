@@ -150,18 +150,22 @@ def verify_setup():
             
             logger.info(f"All required tables exist: {tables}")
             
-            # Check TimescaleDB hypertable
-            cur.execute("""
-                SELECT COUNT(*) 
-                FROM timescaledb_information.hypertables 
-                WHERE hypertable_name = 'apr_snapshots'
-            """)
-            is_hypertable = cur.fetchone()[0] > 0
-            
-            if is_hypertable:
-                logger.info("apr_snapshots is configured as TimescaleDB hypertable")
-            else:
-                logger.warning("apr_snapshots is NOT a TimescaleDB hypertable (may need superuser)")
+            # Check TimescaleDB hypertable (if TimescaleDB is installed)
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) 
+                    FROM timescaledb_information.hypertables 
+                    WHERE hypertable_name = 'apr_snapshots'
+                """)
+                is_hypertable = cur.fetchone()[0] > 0
+                
+                if is_hypertable:
+                    logger.info("apr_snapshots is configured as TimescaleDB hypertable")
+                else:
+                    logger.warning("apr_snapshots is NOT a TimescaleDB hypertable (may need superuser)")
+            except Exception as e:
+                # TimescaleDB not installed or not accessible
+                logger.info("TimescaleDB not installed - using standard PostgreSQL tables (this is fine)")
             
             return True
             
