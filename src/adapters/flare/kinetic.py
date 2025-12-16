@@ -21,6 +21,8 @@ class KineticAdapter(ProtocolAdapter):
         self.comptroller = config.get('comptroller')
         self.lens = config.get('lens')  # Lens contract for reading market data
         self.web3 = None  # Will be set by chain adapter
+        # Store reference to parent config for accessing other protocols (e.g., BlazeSwap)
+        self._parent_config = config.get('_parent_config')
         
     def set_web3_instance(self, web3: Web3):
         """Set Web3 instance from chain adapter"""
@@ -414,7 +416,7 @@ class KineticAdapter(ProtocolAdapter):
         """
         Get reward token (rFLR) price in underlying token terms.
         
-        This queries DEX prices or oracles to get the current rFLR price.
+        This queries BlazeSwap DEX to get the current rFLR price.
         
         Args:
             asset: Underlying token symbol (FXRP, USDT0, stXRP)
@@ -422,13 +424,68 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             Price of rFLR in underlying token units, or None if unavailable
         """
-        # TODO: Implement actual price lookup from:
-        # 1. BlazeSwap DEX router/pair contract
-        # 2. Chainlink oracle
-        # 3. Other price feed
+        if not self.web3:
+            logger.warning("Web3 instance not available for price lookup")
+            return None
         
-        # For now, return None to trigger fallback estimation
-        return None
+        # Get underlying token address and decimals
+        token_config = self.tokens.get(asset)
+        if not token_config:
+            logger.warning(f"Token config not found for {asset}")
+            return None
+        
+        underlying_token_address = token_config.get('address')
+        underlying_token_decimals = token_config.get('decimals', 18)
+        
+        if not underlying_token_address:
+            logger.warning(f"Token address not found for {asset}")
+            return None
+        
+        # rFLR token address (reward token)
+        rflr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2E78b7"  # rFLR token
+        rflr_decimals = 18
+        
+        # Try to get price from BlazeSwap
+        try:
+            from src.adapters.flare.blazeswap_price import BlazeSwapPriceFeed
+            
+            # Get BlazeSwap router address from parent config
+            blazeswap_router = None
+            if self._parent_config:
+                blazeswap_config = self._parent_config.get('blazeswap', {})
+                if blazeswap_config:
+                    blazeswap_router = blazeswap_config.get('router')
+            
+            if not blazeswap_router:
+                logger.warning("BlazeSwap router address not configured, using fallback price")
+                return None
+            
+            # Initialize price feed
+            price_feed = BlazeSwapPriceFeed(self.web3, blazeswap_router)
+            
+            # Get price: rFLR in terms of underlying token
+            # Returns: how many underlying tokens per 1 rFLR
+            price = price_feed.get_price_with_decimals(
+                token_in=rflr_address,
+                token_out=underlying_token_address,
+                token_in_decimals=rflr_decimals,
+                token_out_decimals=underlying_token_decimals,
+                amount_in=Decimal('1')
+            )
+            
+            if price is not None:
+                logger.info(f"Got rFLR price from BlazeSwap for {asset}: {price:.8f} {asset} per rFLR")
+                return price
+            else:
+                logger.warning(f"Could not get price from BlazeSwap for {asset}")
+                return None
+                
+        except ImportError:
+            logger.warning("BlazeSwap price feed not available")
+            return None
+        except Exception as e:
+            logger.warning(f"Error getting price from BlazeSwap: {e}")
+            return None
     
     def _estimate_reward_token_price(self, asset: str) -> Decimal:
         """

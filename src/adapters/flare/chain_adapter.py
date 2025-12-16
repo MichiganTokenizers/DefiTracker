@@ -20,6 +20,8 @@ class FlareChainAdapter(ChainAdapter):
         if 'kinetic' in self.config.get('protocols', {}):
             kinetic_config = self.config['protocols']['kinetic']
             if kinetic_config.get('enabled', False):
+                # Pass parent config so Kinetic can access BlazeSwap config
+                kinetic_config['_parent_config'] = self.config.get('protocols', {})
                 kinetic_adapter = KineticAdapter('kinetic', kinetic_config)
                 # Set Web3 instance for on-chain queries
                 kinetic_adapter.set_web3_instance(self.get_web3_instance())

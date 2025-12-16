@@ -27,7 +27,9 @@ chains:
             iso_address: "0x870f7B89F0d408D7CA2E6586Df26D00Ea03aA358"  # isoSTFXRP (lending market)
             decimals: 18
       blazeswap:
-        enabled: false
+        enabled: true
+        # BlazeSwap DEX router contract for price queries
+        router: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"  # TODO: Verify actual router address
         # Protocol-specific configuration will go here
     # Add more chains here as they're implemented
     # ethereum:
