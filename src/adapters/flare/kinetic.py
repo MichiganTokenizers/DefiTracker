@@ -230,14 +230,18 @@ class KineticAdapter(ProtocolAdapter):
                     except Exception as e2:
                         # Last resort: try calling directly on ISO contract
                         logger.warning(f"Comptroller methods failed, trying ISO contract directly: {e2}")
-                        from src.adapters.flare.abi_fetcher import get_minimal_ctoken_abi
-                        iso_abi = get_minimal_ctoken_abi()
+                        from src.adapters.flare.abi_fetcher import get_minimal_ctoken_abi, fetch_abi_from_flarescan
+                        # Try to load ISO ABI from local file first
+                        iso_abi = fetch_abi_from_flarescan(iso_address, contract_name='iso_fxrp') or get_minimal_ctoken_abi()
                         iso_contract = self.web3.eth.contract(
                             address=iso_address_checksum,
                             abi=iso_abi
                         )
                         try:
-                            supply_rate_per_block = iso_contract.functions.supplyRatePerBlock().call()
+                            # ISO contracts use supplyRatePerTimestamp, not supplyRatePerBlock
+                            supply_rate_per_timestamp = iso_contract.functions.supplyRatePerTimestamp().call()
+                            # Convert from per timestamp to per block (Flare has ~2 second blocks)
+                            supply_rate_per_block = supply_rate_per_timestamp * 2
                             logger.info(f"Retrieved supply rate directly from ISO contract for {asset}")
                         except Exception as e3:
                             logger.error(f"All methods failed: {e3}")
