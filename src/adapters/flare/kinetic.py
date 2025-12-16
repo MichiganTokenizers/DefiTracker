@@ -177,7 +177,8 @@ class KineticAdapter(ProtocolAdapter):
             
             from src.adapters.flare.abi_fetcher import get_minimal_comptroller_abi
             
-            comptroller_abi = fetch_abi_from_flarescan(self.comptroller)
+            # Try to fetch ABI (checks local files first, then API)
+            comptroller_abi = fetch_abi_from_flarescan(self.comptroller, contract_name='comptroller')
             if not comptroller_abi:
                 logger.info(f"Could not fetch ABI from FlareScan for Comptroller, using minimal ABI")
                 comptroller_abi = get_minimal_comptroller_abi()
@@ -189,56 +190,62 @@ class KineticAdapter(ProtocolAdapter):
             
             iso_address_checksum = Web3.to_checksum_address(iso_address)
             
-            # Try getMarketData first (returns tuple with supply rate)
-            try:
-                market_data = comptroller_contract.functions.getMarketData(iso_address_checksum).call()
-                if isinstance(market_data, (list, tuple)) and len(market_data) > 0:
-                    supply_rate_per_block = market_data[0]  # First element is supplyRatePerBlock
-                    logger.info(f"Retrieved market data from Comptroller for {asset}")
-                else:
-                    raise ValueError("Unexpected market data format")
-            except Exception as e1:
-                # Fallback: try supplyRatePerBlock(address) on Comptroller
-                logger.warning(f"getMarketData failed, trying supplyRatePerBlock: {e1}")
+            # Try Lens contract first (most reliable method)
+            supply_rate_per_block = None
+            if self.lens:
                 try:
-                    supply_rate_per_block = comptroller_contract.functions.supplyRatePerBlock(iso_address_checksum).call()
-                    logger.info(f"Retrieved supply rate from Comptroller for {asset}")
-                except Exception as e2:
-                    # Last resort: try calling directly on ISO contract
-                    logger.warning(f"Comptroller methods failed, trying ISO contract directly: {e2}")
-                    from src.adapters.flare.abi_fetcher import get_minimal_ctoken_abi
-                    iso_abi = get_minimal_ctoken_abi()
-                    iso_contract = self.web3.eth.contract(
-                        address=iso_address_checksum,
-                        abi=iso_abi
+                    lens_abi = fetch_abi_from_flarescan(self.lens, contract_name='lens') or get_minimal_lens_abi()
+                    lens_contract = self.web3.eth.contract(
+                        address=Web3.to_checksum_address(self.lens),
+                        abi=lens_abi
                     )
-                    supply_rate_per_block = iso_contract.functions.supplyRatePerBlock().call()
-                    logger.info(f"Retrieved supply rate directly from ISO contract for {asset}")
-                logger.warning(f"supplyRatePerBlock() failed: {e1}")
-                # Try alternative: use Lens contract if available
-                if self.lens:
+                    iso_address_checksum = Web3.to_checksum_address(iso_address)
+                    
+                    # Use getMarketMetadata - this is the correct function
+                    market_metadata = lens_contract.functions.getMarketMetadata(iso_address_checksum).call()
+                    if isinstance(market_metadata, (list, tuple)) and len(market_metadata) >= 2:
+                        supply_rate_per_block = market_metadata[1]  # supplyRate is second field
+                        logger.info(f"Retrieved supply rate from Lens.getMarketMetadata for {asset}")
+                    else:
+                        raise ValueError("Unexpected market metadata format")
+                except Exception as e_lens:
+                    logger.warning(f"Lens.getMarketMetadata failed: {e_lens}")
+                    supply_rate_per_block = None
+            
+            # If Lens didn't work, try Comptroller methods (fallback)
+            if supply_rate_per_block is None:
+                try:
+                    market_data = comptroller_contract.functions.getMarketData(iso_address_checksum).call()
+                    if isinstance(market_data, (list, tuple)) and len(market_data) > 0:
+                        supply_rate_per_block = market_data[0]  # First element is supplyRatePerBlock
+                        logger.info(f"Retrieved market data from Comptroller for {asset}")
+                    else:
+                        raise ValueError("Unexpected market data format")
+                except Exception as e1:
+                    # Fallback: try supplyRatePerBlock(address) on Comptroller
+                    logger.warning(f"getMarketData failed, trying supplyRatePerBlock: {e1}")
                     try:
-                        lens_abi = fetch_abi_from_flarescan(self.lens) or get_minimal_lens_abi()
-                        lens_contract = self.web3.eth.contract(
-                            address=Web3.to_checksum_address(self.lens),
-                            abi=lens_abi
-                        )
-                        iso_address_checksum = Web3.to_checksum_address(iso_address)
-                        # Try different Lens function signatures
-                        try:
-                            market_data = lens_contract.functions.getMarketData(iso_address_checksum).call()
-                            if isinstance(market_data, (list, tuple)) and len(market_data) > 0:
-                                supply_rate_per_block = market_data[0]
-                            else:
-                                raise ValueError("Unexpected market data format")
-                        except:
-                            # Try supplyRatePerBlock on Lens with cToken parameter
-                            supply_rate_per_block = lens_contract.functions.supplyRatePerBlock(iso_address_checksum).call()
+                        supply_rate_per_block = comptroller_contract.functions.supplyRatePerBlock(iso_address_checksum).call()
+                        logger.info(f"Retrieved supply rate from Comptroller for {asset}")
                     except Exception as e2:
-                        logger.error(f"Lens contract also failed: {e2}")
-                        raise e1
-                else:
-                    raise e1
+                        # Last resort: try calling directly on ISO contract
+                        logger.warning(f"Comptroller methods failed, trying ISO contract directly: {e2}")
+                        from src.adapters.flare.abi_fetcher import get_minimal_ctoken_abi
+                        iso_abi = get_minimal_ctoken_abi()
+                        iso_contract = self.web3.eth.contract(
+                            address=iso_address_checksum,
+                            abi=iso_abi
+                        )
+                        try:
+                            supply_rate_per_block = iso_contract.functions.supplyRatePerBlock().call()
+                            logger.info(f"Retrieved supply rate directly from ISO contract for {asset}")
+                        except Exception as e3:
+                            logger.error(f"All methods failed: {e3}")
+                            supply_rate_per_block = None
+            
+            # If we still don't have a supply rate, raise an error
+            if supply_rate_per_block is None:
+                raise ValueError("Could not retrieve supply rate from any source")
             
             # Convert supply rate per block to APR
             # Flare has ~2 second blocks, so blocks per year = 365 * 24 * 60 * 60 / 2
