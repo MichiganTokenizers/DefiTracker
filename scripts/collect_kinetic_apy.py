@@ -122,8 +122,9 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
     timestamp = datetime.utcnow()
     snapshots = []
     
-    # Tokens to collect
-    tokens = ['FXRP', 'USDT0', 'stXRP']
+    # Get all supported tokens dynamically from adapter
+    tokens = kinetic.get_supported_assets()
+    logger.info(f"Collecting APY for {len(tokens)} tokens: {', '.join(tokens)}")
     
     for token in tokens:
         try:
@@ -140,7 +141,8 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             borrow_apy = kinetic.get_borrow_apr(token)
             
             # Get or create asset in database
-            token_config = kinetic.tokens.get(token, {})
+            # Use _all_tokens which includes both FXRP and JOULE market tokens
+            token_config = kinetic._all_tokens.get(token, {})
             asset_id = db_queries.get_or_create_asset(
                 symbol=token,
                 contract_address=token_config.get('address'),

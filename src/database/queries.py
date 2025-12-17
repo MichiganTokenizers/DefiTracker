@@ -294,6 +294,8 @@ class APYQueries:
             conn.rollback()
             logger.error(f"Error getting/creating asset {symbol}: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)
     
     # ============================================
     # Price snapshot operations
@@ -335,6 +337,8 @@ class APYQueries:
             conn.rollback()
             logger.error(f"Error inserting price snapshot: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)
     
     def get_latest_price(self, token_symbol: str, source: Optional[str] = None) -> Optional[PriceSnapshot]:
         """Get the latest price for a token"""
@@ -383,6 +387,8 @@ class APYQueries:
         except Exception as e:
             logger.error(f"Error getting latest price for {token_symbol}: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)
     
     # ============================================
     # Kinetic APY snapshot operations
@@ -424,6 +430,8 @@ class APYQueries:
             conn.rollback()
             logger.error(f"Error inserting Kinetic APY snapshot: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)
     
     def get_latest_kinetic_apy(self, asset_symbol: str) -> Optional[KineticAPYSnapshot]:
         """Get the latest Kinetic APY snapshot for an asset"""
@@ -465,6 +473,8 @@ class APYQueries:
         except Exception as e:
             logger.error(f"Error getting latest Kinetic APY for {asset_symbol}: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)
     
     def get_kinetic_apy_history(self, asset_symbol: str, days: int = 30) -> List[KineticAPYSnapshot]:
         """Get Kinetic APY history for an asset"""
@@ -506,3 +516,5 @@ class APYQueries:
         except Exception as e:
             logger.error(f"Error getting Kinetic APY history for {asset_symbol}: {e}")
             raise
+        finally:
+            self.db.return_connection(conn)

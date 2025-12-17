@@ -16,10 +16,25 @@ class KineticAdapter(ProtocolAdapter):
     
     def __init__(self, protocol_name: str, config: Dict):
         super().__init__(protocol_name, config)
+        # FXRP-USDT0-stXRP market tokens (uses Lens)
         self.tokens = config.get('tokens', {})
         self.unitroller = config.get('unitroller')
         self.comptroller = config.get('comptroller')
         self.lens = config.get('lens')  # Lens contract for reading market data
+        
+        # JOULE-USDC-FLR market tokens (uses direct ISO queries)
+        self.joule_market = config.get('joule_market', {})
+        self.joule_tokens = self.joule_market.get('tokens', {})
+        
+        # Merge all tokens into a unified view
+        self._all_tokens = {}
+        for symbol, token_config in self.tokens.items():
+            token_config['market_type'] = 'lens'  # Uses Lens contract
+            self._all_tokens[symbol] = token_config
+        for symbol, token_config in self.joule_tokens.items():
+            token_config['market_type'] = 'direct'  # Uses direct ISO queries
+            self._all_tokens[symbol] = token_config
+        
         self.web3 = None  # Will be set by chain adapter
         # Store reference to parent config for accessing other protocols (e.g., BlazeSwap)
         self._parent_config = config.get('_parent_config')
@@ -33,88 +48,114 @@ class KineticAdapter(ProtocolAdapter):
         Get list of supported assets from configuration.
         
         Returns:
-            List of asset symbols configured in chains.yaml (e.g., ['FXRP', 'USDT0', 'stXRP'])
+            List of asset symbols from all markets (e.g., ['FXRP', 'USDT0', 'stXRP', 'FLR', 'USDC', 'JOULE'])
         """
-        return list(self.tokens.keys())
+        return list(self._all_tokens.keys())
     
     def get_supply_apr(self, asset: str) -> Optional[Decimal]:
         """
-        Method 1: Get supply APR directly from Kinetic Lens contract (on-chain).
+        Get supply APR from Kinetic protocol (on-chain).
         
-        Kinetic doesn't provide REST API, so we query the Lens contract
-        which provides read-only market data.
+        For FXRP market: Uses Lens contract
+        For JOULE market: Uses direct ISO contract queries
         
         Args:
-            asset: Token symbol (e.g., FXRP, USDT0, stXRP)
+            asset: Token symbol (e.g., FXRP, USDT0, stXRP, FLR, USDC, JOULE)
             
         Returns:
             Total APY as Decimal (supply APR + distribution APR), or None if unavailable
         """
-        if asset not in self.tokens:
+        if asset not in self._all_tokens:
             logger.warning(f"Asset {asset} not configured in tokens")
             return None
         
         if not self.web3:
-            logger.error("Web3 instance not set. Cannot query Lens contract.")
+            logger.error("Web3 instance not set. Cannot query contracts.")
             return None
         
+        token_config = self._all_tokens[asset]
+        market_type = token_config.get('market_type', 'lens')
+        
         try:
-            apr = self._get_apr_from_lens(asset)
+            if market_type == 'lens':
+                apr = self._get_apr_from_lens(asset)
+            else:
+                apr = self._get_apr_from_direct(asset)
+            
             if apr is not None:
-                logger.info(f"Retrieved APR for {asset} from Lens contract: {apr}%")
+                logger.info(f"Retrieved APR for {asset} from {market_type} query: {apr}%")
             return apr
         except Exception as e:
-            logger.error(f"Error fetching APR from Lens for {asset}: {e}")
+            logger.error(f"Error fetching APR for {asset}: {e}")
             return None
     
     def get_borrow_apr(self, asset: str) -> Optional[Decimal]:
         """
-        Get borrow APR directly from Kinetic Lens contract (on-chain).
+        Get borrow APR from Kinetic protocol (on-chain).
+        
+        For FXRP market: Uses Lens contract
+        For JOULE market: Uses direct ISO contract queries
         
         Args:
-            asset: Token symbol (e.g., FXRP, USDT0, stXRP)
+            asset: Token symbol (e.g., FXRP, USDT0, stXRP, FLR, USDC, JOULE)
             
         Returns:
             Borrow APR as Decimal (e.g., 9.59 for 9.59%), or None if unavailable
         """
-        if asset not in self.tokens:
+        if asset not in self._all_tokens:
             logger.warning(f"Asset {asset} not configured in tokens")
             return None
         
         if not self.web3:
-            logger.error("Web3 instance not set. Cannot query Lens contract.")
+            logger.error("Web3 instance not set. Cannot query contracts.")
             return None
         
+        token_config = self._all_tokens[asset]
+        market_type = token_config.get('market_type', 'lens')
+        
         try:
-            borrow_apr = self._get_borrow_apr_from_lens(asset)
+            if market_type == 'lens':
+                borrow_apr = self._get_borrow_apr_from_lens(asset)
+            else:
+                borrow_apr = self._get_borrow_apr_from_direct(asset)
+            
             if borrow_apr is not None:
-                logger.info(f"Retrieved borrow APR for {asset} from Lens contract: {borrow_apr}%")
+                logger.info(f"Retrieved borrow APR for {asset} from {market_type} query: {borrow_apr}%")
             return borrow_apr
         except Exception as e:
-            logger.error(f"Error fetching borrow APR from Lens for {asset}: {e}")
+            logger.error(f"Error fetching borrow APR for {asset}: {e}")
             return None
     
     def get_supply_apr_breakdown(self, asset: str) -> Optional[Dict[str, Decimal]]:
         """
         Get supply APR breakdown: supply APR and distribution APR separately.
         
+        For FXRP market: Uses Lens contract (includes distribution rewards)
+        For JOULE market: Uses direct ISO contract queries (base rates only, no distribution yet)
+        
         Args:
-            asset: Token symbol (e.g., FXRP, USDT0, stXRP)
+            asset: Token symbol (e.g., FXRP, USDT0, stXRP, FLR, USDC, JOULE)
             
         Returns:
             Dict with keys: 'supply_apr', 'distribution_apr', 'total_apy'
             or None if unavailable
         """
-        if asset not in self.tokens:
+        if asset not in self._all_tokens:
             logger.warning(f"Asset {asset} not configured in tokens")
             return None
         
         if not self.web3:
-            logger.error("Web3 instance not set. Cannot query Lens contract.")
+            logger.error("Web3 instance not set. Cannot query contracts.")
             return None
         
+        token_config = self._all_tokens[asset]
+        market_type = token_config.get('market_type', 'lens')
+        
         try:
-            breakdown = self._get_supply_apr_breakdown_from_lens(asset)
+            if market_type == 'lens':
+                breakdown = self._get_supply_apr_breakdown_from_lens(asset)
+            else:
+                breakdown = self._get_supply_apr_breakdown_from_direct(asset)
             return breakdown
         except Exception as e:
             logger.error(f"Error fetching supply APR breakdown for {asset}: {e}")
@@ -670,6 +711,136 @@ class KineticAdapter(ProtocolAdapter):
         except Exception as e:
             logger.error(f"Error fetching supply APR breakdown for {asset}: {e}")
             return None
+    
+    # ============================================
+    # Direct ISO Contract Query Methods
+    # For markets without a Lens contract (e.g., JOULE-USDC-FLR)
+    # ============================================
+    
+    def _get_apr_from_direct(self, asset: str) -> Optional[Decimal]:
+        """
+        Get total APY by querying ISO contract directly (no Lens).
+        Used for JOULE-USDC-FLR market.
+        
+        Note: This only returns base supply APY. Distribution rewards
+        require finding the Lens contract for this market.
+        
+        Args:
+            asset: Token symbol (FLR, USDC, JOULE)
+            
+        Returns:
+            Supply APY as Decimal (base rate only, no distribution)
+        """
+        token_config = self._all_tokens.get(asset)
+        if not token_config:
+            logger.error(f"Token config not found for {asset}")
+            return None
+        
+        iso_address = token_config.get('iso_address')
+        if not iso_address:
+            logger.error(f"ISO address not found for {asset}")
+            return None
+        
+        try:
+            # ABI for direct ISO contract queries (JOULE market uses per-timestamp rates)
+            iso_abi = [
+                {"inputs":[],"name":"supplyRatePerTimestamp","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
+            ]
+            
+            iso_contract = self.web3.eth.contract(
+                address=Web3.to_checksum_address(iso_address),
+                abi=iso_abi
+            )
+            
+            supply_rate = iso_contract.functions.supplyRatePerTimestamp().call()
+            
+            # Calculate APY (rate is per second)
+            seconds_per_year = Decimal(365 * 24 * 60 * 60)
+            supply_rate_per_second = Decimal(supply_rate) / Decimal(10**18)
+            supply_apy = ((Decimal(1) + supply_rate_per_second) ** seconds_per_year - 1) * Decimal(100)
+            
+            logger.debug(f"Direct query {asset}: supply_rate={supply_rate}, APY={supply_apy:.4f}%")
+            return supply_apy
+            
+        except Exception as e:
+            logger.error(f"Error in direct query for {asset}: {e}")
+            return None
+    
+    def _get_borrow_apr_from_direct(self, asset: str) -> Optional[Decimal]:
+        """
+        Get borrow APY by querying ISO contract directly (no Lens).
+        Used for JOULE-USDC-FLR market.
+        
+        Args:
+            asset: Token symbol (FLR, USDC, JOULE)
+            
+        Returns:
+            Borrow APY as Decimal
+        """
+        token_config = self._all_tokens.get(asset)
+        if not token_config:
+            logger.error(f"Token config not found for {asset}")
+            return None
+        
+        iso_address = token_config.get('iso_address')
+        if not iso_address:
+            logger.error(f"ISO address not found for {asset}")
+            return None
+        
+        try:
+            iso_abi = [
+                {"inputs":[],"name":"borrowRatePerTimestamp","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
+            ]
+            
+            iso_contract = self.web3.eth.contract(
+                address=Web3.to_checksum_address(iso_address),
+                abi=iso_abi
+            )
+            
+            borrow_rate = iso_contract.functions.borrowRatePerTimestamp().call()
+            
+            # Calculate APY (rate is per second)
+            seconds_per_year = Decimal(365 * 24 * 60 * 60)
+            borrow_rate_per_second = Decimal(borrow_rate) / Decimal(10**18)
+            borrow_apy = ((Decimal(1) + borrow_rate_per_second) ** seconds_per_year - 1) * Decimal(100)
+            
+            logger.debug(f"Direct query {asset}: borrow_rate={borrow_rate}, APY={borrow_apy:.4f}%")
+            return borrow_apy
+            
+        except Exception as e:
+            logger.error(f"Error in direct borrow query for {asset}: {e}")
+            return None
+    
+    def _get_supply_apr_breakdown_from_direct(self, asset: str) -> Optional[Dict[str, Decimal]]:
+        """
+        Get supply APR breakdown by querying ISO contract directly (no Lens).
+        Used for JOULE-USDC-FLR market.
+        
+        Note: Distribution rewards are set to 0 until we find the Lens contract
+        for this market.
+        
+        Args:
+            asset: Token symbol (FLR, USDC, JOULE)
+            
+        Returns:
+            Dict with 'supply_apr', 'distribution_apr', 'total_apy'
+        """
+        supply_apr = self._get_apr_from_direct(asset)
+        if supply_apr is None:
+            return None
+        
+        # TODO: Find Lens contract for JOULE market to get distribution rewards
+        # For now, distribution is 0
+        distribution_apr = Decimal(0)
+        total_apy = supply_apr + distribution_apr
+        
+        logger.info(f"Direct breakdown for {asset}: Supply APY={supply_apr:.4f}%, Distribution=0% (Lens not found)")
+        
+        return {
+            'supply_apr': supply_apr,
+            'distribution_apr': distribution_apr,
+            'total_apy': total_apy
+        }
     
     def _get_rewards_paid(
         self, 
