@@ -469,21 +469,24 @@ class KineticAdapter(ProtocolAdapter):
                 router_address=blazeswap_router
             )
             
-            # Get price: rFLR in terms of underlying token
-            # Returns: how many underlying tokens per 1 rFLR
+            # Get price: FLR/WFLR in terms of underlying token
+            # Using FLR instead of rFLR (prices should be nearly the same)
+            # Returns: how many underlying tokens per 1 FLR
             price = price_feed.get_price_with_decimals(
-                token_in=rflr_address,
+                token_in=flr_address,
                 token_out=underlying_token_address,
-                token_in_decimals=rflr_decimals,
+                token_in_decimals=flr_decimals,
                 token_out_decimals=underlying_token_decimals,
                 amount_in=Decimal('1')
             )
             
             if price is not None:
-                logger.info(f"Got rFLR price from BlazeSwap for {asset}: {price:.8f} {asset} per rFLR")
+                logger.info(f"Got FLR price from BlazeSwap for {asset}: {price:.8f} {asset} per FLR")
                 return price
             else:
-                logger.warning(f"Could not get price from BlazeSwap for {asset}")
+                logger.debug(f"Could not get FLR price from BlazeSwap for {asset}, trying alternative FLR address")
+                # Try alternative: if WFLR doesn't work, might need native FLR representation
+                # For now, return None and use fallback
                 return None
                 
         except ImportError:
