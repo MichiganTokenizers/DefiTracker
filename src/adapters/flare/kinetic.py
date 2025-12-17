@@ -416,7 +416,13 @@ class KineticAdapter(ProtocolAdapter):
         """
         Get reward token (rFLR) price in underlying token terms.
         
-        This queries BlazeSwap DEX to get the current rFLR price.
+        This queries BlazeSwap DEX to get the WFLR/USDT0 price, then converts
+        to underlying token terms using known/estimated token prices.
+        
+        Strategy:
+        - Always get WFLR/USDT0 price from BlazeSwap (this pair exists)
+        - For USDT0: return WFLR/USDT0 price directly
+        - For FXRP/stXRP: convert using estimated underlying token prices
         
         Args:
             asset: Underlying token symbol (FXRP, USDT0, stXRP)
@@ -428,25 +434,13 @@ class KineticAdapter(ProtocolAdapter):
             logger.warning("Web3 instance not available for price lookup")
             return None
         
-        # Get underlying token address and decimals
-        token_config = self.tokens.get(asset)
-        if not token_config:
-            logger.warning(f"Token config not found for {asset}")
-            return None
+        # WFLR and USDT0 addresses (known working pair on BlazeSwap)
+        wflr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"
+        usdt0_address = "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
+        wflr_decimals = 18
+        usdt0_decimals = 6
         
-        underlying_token_address = token_config.get('address')
-        underlying_token_decimals = token_config.get('decimals', 18)
-        
-        if not underlying_token_address:
-            logger.warning(f"Token address not found for {asset}")
-            return None
-        
-        # Use WFLR (Wrapped FLR) instead of rFLR (prices should be nearly the same)
-        # WFLR address on Flare network
-        flr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"  # WFLR token
-        flr_decimals = 18
-        
-        # Try to get price from BlazeSwap
+        # Try to get WFLR/USDT0 price from BlazeSwap
         try:
             from src.adapters.flare.blazeswap_price import BlazeSwapPriceFeed
             
@@ -463,32 +457,54 @@ class KineticAdapter(ProtocolAdapter):
                 logger.warning("BlazeSwap factory/router not configured, using fallback price")
                 return None
             
-            # Initialize price feed (factory preferred, router as fallback)
+            # Initialize price feed
             price_feed = BlazeSwapPriceFeed(
                 self.web3, 
                 factory_address=blazeswap_factory,
                 router_address=blazeswap_router
             )
             
-            # Get price: FLR/WFLR in terms of underlying token
-            # Using FLR instead of rFLR (prices should be nearly the same)
-            # Returns: how many underlying tokens per 1 FLR
-            price = price_feed.get_price_with_decimals(
-                token_in=flr_address,
-                token_out=underlying_token_address,
-                token_in_decimals=flr_decimals,
-                token_out_decimals=underlying_token_decimals,
+            # Get WFLR price in USDT0 terms
+            wflr_price_in_usdt0 = price_feed.get_price_with_decimals(
+                token_in=wflr_address,
+                token_out=usdt0_address,
+                token_in_decimals=wflr_decimals,
+                token_out_decimals=usdt0_decimals,
                 amount_in=Decimal('1')
             )
             
-            if price is not None:
-                logger.info(f"Got FLR price from BlazeSwap for {asset}: {price:.8f} {asset} per FLR")
-                return price
-            else:
-                logger.debug(f"Could not get FLR price from BlazeSwap for {asset}, trying alternative FLR address")
-                # Try alternative: if WFLR doesn't work, might need native FLR representation
-                # For now, return None and use fallback
+            if wflr_price_in_usdt0 is None or wflr_price_in_usdt0 == 0:
+                logger.warning("Could not get WFLR/USDT0 price from BlazeSwap")
                 return None
+            
+            logger.info(f"WFLR price from BlazeSwap: {wflr_price_in_usdt0:.8f} USDT0")
+            
+            # Convert to underlying token terms
+            if asset == 'USDT0':
+                # For USDT0, the WFLR price in USDT0 is what we need
+                price = wflr_price_in_usdt0
+            else:
+                # For other tokens (FXRP, stXRP), we need to convert from USDT0 to underlying
+                # Use estimated underlying token prices (in USDT0 terms)
+                # FXRP and stXRP are wrapped XRP tokens, so use XRP price estimate
+                # Current XRP price is approximately $2.30 (as of Dec 2024)
+                underlying_prices_in_usdt0 = {
+                    'FXRP': Decimal('2.30'),   # FXRP ≈ XRP price
+                    'stXRP': Decimal('2.30'),  # stXRP ≈ XRP price
+                    # Add more tokens as needed
+                }
+                
+                underlying_price = underlying_prices_in_usdt0.get(asset)
+                if underlying_price is None:
+                    logger.warning(f"No price estimate for {asset}, using fallback")
+                    return None
+                
+                # Convert: WFLR/USDT0 / underlying/USDT0 = WFLR/underlying
+                # i.e., how many underlying tokens = 1 WFLR
+                price = wflr_price_in_usdt0 / underlying_price
+            
+            logger.info(f"Got FLR price from BlazeSwap for {asset}: {price:.8f} {asset} per FLR")
+            return price
                 
         except ImportError:
             logger.warning("BlazeSwap price feed not available")
