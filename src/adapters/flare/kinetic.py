@@ -449,19 +449,25 @@ class KineticAdapter(ProtocolAdapter):
         try:
             from src.adapters.flare.blazeswap_price import BlazeSwapPriceFeed
             
-            # Get BlazeSwap router address from parent config
+            # Get BlazeSwap factory/router addresses from parent config
+            blazeswap_factory = None
             blazeswap_router = None
             if self._parent_config:
                 blazeswap_config = self._parent_config.get('blazeswap', {})
                 if blazeswap_config:
+                    blazeswap_factory = blazeswap_config.get('factory')
                     blazeswap_router = blazeswap_config.get('router')
             
-            if not blazeswap_router:
-                logger.warning("BlazeSwap router address not configured, using fallback price")
+            if not blazeswap_factory and not blazeswap_router:
+                logger.warning("BlazeSwap factory/router not configured, using fallback price")
                 return None
             
-            # Initialize price feed
-            price_feed = BlazeSwapPriceFeed(self.web3, blazeswap_router)
+            # Initialize price feed (factory preferred, router as fallback)
+            price_feed = BlazeSwapPriceFeed(
+                self.web3, 
+                factory_address=blazeswap_factory,
+                router_address=blazeswap_router
+            )
             
             # Get price: rFLR in terms of underlying token
             # Returns: how many underlying tokens per 1 rFLR

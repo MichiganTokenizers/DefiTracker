@@ -28,8 +28,11 @@ chains:
             decimals: 18
       blazeswap:
         enabled: true
-        # BlazeSwap DEX router contract for price queries
-        router: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"  # TODO: Verify actual router address
+        # BlazeSwap DEX contracts for price queries
+        # Factory is recommended (more reliable) - finds pair addresses
+        factory: "0x440602f459D7Dd500a74528003e6A20A46d6e2A6"  # BlazeSwapFactory on Flare
+        # Router is optional (alternative method)
+        router: ""  # Optional: BlazeSwap router address if it exists
         # Protocol-specific configuration will go here
     # Add more chains here as they're implemented
     # ethereum:
