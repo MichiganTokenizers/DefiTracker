@@ -441,9 +441,10 @@ class KineticAdapter(ProtocolAdapter):
             logger.warning(f"Token address not found for {asset}")
             return None
         
-        # rFLR token address (reward token)
-        rflr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2E78b7"  # rFLR token
-        rflr_decimals = 18
+        # Use FLR/WFLR instead of rFLR (prices should be nearly the same)
+        # WFLR address on Flare (wrapped native token) - same address as rFLR for now
+        flr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2E78b7"  # WFLR token
+        flr_decimals = 18
         
         # Try to get price from BlazeSwap
         try:
