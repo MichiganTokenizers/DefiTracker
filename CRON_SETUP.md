@@ -134,6 +134,38 @@ source venv/bin/activate
 python scripts/collect_kinetic_apy.py
 ```
 
+---
+
+# Cron Setup for Minswap APR Collection
+
+## Overview
+
+The script `scripts/collect_minswap_apr.py` pulls APR data for configured Minswap pools (e.g., NIGHT-ADA) and stores them in `apr_snapshots`.
+
+### Prerequisites
+
+1. Update `config/chains.yaml` with valid `farm_id` / `pool_id` for the pairs you want to track.
+2. Database and virtualenv set up as above.
+
+### Test the Script
+
+```bash
+cd /home/danladuke/Projects/DefiTracker
+source venv/bin/activate
+python scripts/collect_minswap_apr.py
+```
+
+### Add to Crontab (daily 10:00 AM server time)
+
+```cron
+0 10 * * * cd /home/danladuke/Projects/DefiTracker && /home/danladuke/Projects/DefiTracker/venv/bin/python scripts/collect_minswap_apr.py >> logs/minswap_collection.log 2>&1
+```
+
+### Logs
+
+- Kinetic: `logs/kinetic_collection.log`
+- Minswap: `logs/minswap_collection.log`
+
 ## Upgrading to Celery (Future)
 
 When ready to upgrade to Celery for more robust task management:
