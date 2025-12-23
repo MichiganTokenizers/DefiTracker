@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}{{ chain|title }} - DeFi APR Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="display-6">
+            <span class="chain-badge chain-{{ chain }}">{{ chain|upper }}</span>
+            {{ chain|title }} APR History
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <label class="form-label">Time Range</label>
+        <select id="timeRange" class="form-select">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+            <option value="365">Last Year</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Asset Filter</label>
+        <select id="assetFilter" class="form-select">
+            <option value="">All Assets</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Chart Type</label>
+        <select id="chartType" class="form-select">
+            <option value="line">Line Chart</option>
+            <option value="bar">Bar Chart</option>
+        </select>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card p-4">
+            <canvas id="aprChart" height="100"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card p-4">
+            <h5 class="mb-3">Current APRs</h5>
+            <div id="currentAprs" class="row g-3">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const chain = "{{ chain }}";
+let chart = null;
+
+// Get protocol name based on chain
+const protocolMap = {
+    'flare': 'kinetic',
+    'cardano': 'minswap'
+};
+const protocol = protocolMap[chain];
+
+async function loadAssets() {
+    const response = await fetch(`/api/${chain}/${protocol}/assets`);
+    const assets = await response.json();
+    
+    const select = document.getElementById('assetFilter');
+    assets.forEach(asset => {
+        const option = document.createElement('option');
+        option.value = asset.symbol;
+        option.textContent = asset.symbol + (asset.name ? ` (${asset.name})` : '');
+        select.appendChild(option);
+    });
+}
+
+async function loadChart() {
+    const days = document.getElementById('timeRange').value;
+    const asset = document.getElementById('assetFilter').value;
+    const chartType = document.getElementById('chartType').value;
+    
+    const url = `/api/${chain}/${protocol}/history?days=${days}${asset ? '&asset=' + asset : ''}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    // Destroy existing chart
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Prepare datasets
+    const datasets = data.map((assetData, idx) => {
+        const colors = [
+            '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
+            '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4'
+        ];
+        const color = colors[idx % colors.length];
+        
+        return {
+            label: assetData.symbol,
+            data: assetData.data.map(d => ({
+                x: new Date(d.timestamp),
+                y: d.apr
+            })),
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: chartType === 'line'
+        };
+    });
+    
+    // Create chart
+    const ctx = document.getElementById('aprChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: chartType,
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#ffffff' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week'
+                    },
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    ticks: { color: '#b0b3c1' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    ticks: {
+                        color: '#b0b3c1',
+                        callback: (value) => value + '%'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Update current APRs table
+    updateCurrentAprs(data);
+}
+
+function updateCurrentAprs(data) {
+    const container = document.getElementById('currentAprs');
+    container.innerHTML = '';
+    
+    data.forEach(assetData => {
+        const latest = assetData.data[assetData.data.length - 1];
+        if (!latest) return;
+        
+        const col = document.createElement('div');
+        col.className = 'col-md-3';
+        col.innerHTML = `
+            <div class="card p-3 bg-opacity-50">
+                <div class="text-secondary small">${assetData.symbol}</div>
+                <div class="apr-value">${latest.apr.toFixed(2)}%</div>
+                <div class="text-secondary small">Current APR</div>
+            </div>
+        `;
+        container.appendChild(col);
+    });
+}
+
+// Event listeners
+document.getElementById('timeRange').addEventListener('change', loadChart);
+document.getElementById('assetFilter').addEventListener('change', loadChart);
+document.getElementById('chartType').addEventListener('change', loadChart);
+
+// Initial load
+loadAssets().then(loadChart);
+</script>
+{% endblock %}
+

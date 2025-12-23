@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 text-center mb-5">
+        <h1 class="display-4 fw-bold mb-3">DeFi APR Historical Tracker</h1>
+        <p class="lead text-secondary">Track and compare yield rates across multiple blockchains</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card p-4">
+            <div class="d-flex align-items-center mb-3">
+                <span class="chain-badge chain-flare me-3">FLARE</span>
+                <h3 class="mb-0">Flare Network</h3>
+            </div>
+            <p class="text-secondary mb-3">Kinetic Markets lending protocol</p>
+            <div class="mb-3">
+                <small class="text-muted">6 Assets Tracked</small>
+            </div>
+            <a href="/chain/flare" class="btn btn-primary">View Charts →</a>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card p-4">
+            <div class="d-flex align-items-center mb-3">
+                <span class="chain-badge chain-cardano me-3">CARDANO</span>
+                <h3 class="mb-0">Cardano</h3>
+            </div>
+            <p class="text-secondary mb-3">Minswap DEX liquidity pools</p>
+            <div class="mb-3">
+                <small class="text-muted">35 Pools Tracked</small>
+            </div>
+            <a href="/chain/cardano" class="btn btn-primary">View Charts →</a>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card p-4">
+            <h4 class="mb-4">Features</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <h6>📈 Historical Data</h6>
+                    <p class="text-secondary">Track APR changes over time</p>
+                </div>
+                <div class="col-md-4">
+                    <h6>🔗 Embeddable Widgets</h6>
+                    <p class="text-secondary">Add charts to your site</p>
+                </div>
+                <div class="col-md-4">
+                    <h6>🔄 Daily Updates</h6>
+                    <p class="text-secondary">Fresh data every day</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            background: #1a1d29;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #title {
+            color: #ffffff;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">{{ protocol|title }} - {{ asset or 'All Assets' }}</div>
+    <canvas id="chart"></canvas>
+    
+    <script>
+    (async function() {
+        const chain = "{{ chain }}";
+        const protocol = "{{ protocol }}";
+        const asset = "{{ asset or '' }}";
+        const days = {{ days }};
+        
+        const url = `http://localhost:5000/api/${chain}/${protocol}/history?days=${days}${asset ? '&asset=' + asset : ''}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        const datasets = data.map((assetData, idx) => {
+            const colors = ['#4ade80', '#60a5fa', '#f59e0b', '#ef4444'];
+            const color = colors[idx % colors.length];
+            
+            return {
+                label: assetData.symbol,
+                data: assetData.data.map(d => ({
+                    x: new Date(d.timestamp),
+                    y: d.apr
+                })),
+                borderColor: color,
+                backgroundColor: color + '40',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            };
+        });
+        
+        const ctx = document.getElementById('chart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#ffffff', font: { size: 11 } }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#b0b3c1', font: { size: 10 } }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: {
+                            color: '#b0b3c1',
+                            font: { size: 10 },
+                            callback: (value) => value + '%'
+                        }
+                    }
+                }
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
+
