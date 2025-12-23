@@ -83,9 +83,9 @@
                 <table class="table table-dark table-hover" id="aprTable">
                     <thead>
                         <tr>
-                            <th style="cursor: pointer;" onclick="sortTable(0)">Asset</th>
-                            <th style="cursor: pointer;" onclick="sortTable(1)">Current APR ↓</th>
-                            <th style="cursor: pointer;" onclick="sortTable(2)">24h Change</th>
+                            <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">Current APR</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change ↓</th>
                             <th>Last Updated</th>
                         </tr>
                     </thead>
@@ -103,6 +103,8 @@
 <script>
 const chain = "{{ chain }}";
 let chart = null;
+let currentSortColumn = 2; // Default to 24h Change column
+let currentSortDirection = 'desc'; // Default to descending
 
 // Get protocol name based on chain
 const protocolMap = {
@@ -241,11 +243,61 @@ function updateCurrentAprs(data) {
             change24h: change24h,
             timestamp: new Date(latest.timestamp)
         };
-    }).filter(x => x !== null)
-      .sort((a, b) => b.apr - a.apr); // Sort by APR descending
+    }).filter(x => x !== null);
+    
+    // Store data globally for sorting
+    window.tableData = sortedData;
+    
+    // Apply initial sort
+    applySortToTable();
+}
+
+function applySortToTable() {
+    const tbody = document.getElementById('currentAprs');
+    tbody.innerHTML = '';
+    
+    // Sort the data based on current column and direction
+    let sorted = [...window.tableData];
+    
+    sorted.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(currentSortColumn) {
+            case 0: // Asset
+                aVal = a.symbol;
+                bVal = b.symbol;
+                const cmp = aVal.localeCompare(bVal);
+                return currentSortDirection === 'asc' ? cmp : -cmp;
+            
+            case 1: // APR
+                aVal = a.apr;
+                bVal = b.apr;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            
+            case 2: // 24h Change
+                aVal = a.change24h ?? -Infinity;
+                bVal = b.change24h ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            
+            default:
+                return 0;
+        }
+    });
+    
+    // Update column headers with arrows
+    for (let i = 0; i < 3; i++) {
+        const th = document.getElementById(`th-${i}`);
+        if (th) {
+            let text = th.textContent.replace(/ [↑↓]/g, '');
+            if (i === currentSortColumn) {
+                text += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+            th.textContent = text;
+        }
+    }
     
     // Populate table
-    sortedData.forEach(item => {
+    sorted.forEach(item => {
         const row = document.createElement('tr');
         
         // Format 24h change
@@ -279,26 +331,15 @@ function formatTimeAgo(date) {
 }
 
 function sortTable(columnIndex) {
-    const tbody = document.getElementById('currentAprs');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+    // Toggle direction if clicking the same column, otherwise default to desc
+    if (currentSortColumn === columnIndex) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = columnIndex;
+        currentSortDirection = 'desc';
+    }
     
-    rows.sort((a, b) => {
-        let aVal = a.cells[columnIndex].textContent.trim();
-        let bVal = b.cells[columnIndex].textContent.trim();
-        
-        // Extract numeric values for sorting
-        if (columnIndex === 1 || columnIndex === 2) {
-            aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
-            bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
-            return bVal - aVal; // Descending
-        }
-        
-        // Text sorting
-        return aVal.localeCompare(bVal);
-    });
-    
-    tbody.innerHTML = '';
-    rows.forEach(row => tbody.appendChild(row));
+    applySortToTable();
 }
 
 // Event listeners
