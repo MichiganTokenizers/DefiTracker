@@ -2,6 +2,36 @@
 
 {% block title %}{{ chain|title }} - DeFi APR Tracker{% endblock %}
 
+{% block extra_css %}
+<style>
+    #aprTable {
+        margin-bottom: 0;
+    }
+    #aprTable th {
+        border-top: none;
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        padding: 1rem;
+        font-weight: 600;
+        color: #b0b3c1;
+        user-select: none;
+    }
+    #aprTable th:hover {
+        color: #ffffff;
+    }
+    #aprTable td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #aprTable tbody tr:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+    .table-responsive {
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -39,8 +69,8 @@
 
 <div class="row">
     <div class="col-12">
-        <div class="card p-4">
-            <canvas id="aprChart" height="100"></canvas>
+        <div class="card p-4" style="min-height: 600px;">
+            <canvas id="aprChart"></canvas>
         </div>
     </div>
 </div>
@@ -49,8 +79,20 @@
     <div class="col-12">
         <div class="card p-4">
             <h5 class="mb-3">Current APRs</h5>
-            <div id="currentAprs" class="row g-3">
-                <!-- Populated by JS -->
+            <div class="table-responsive">
+                <table class="table table-dark table-hover" id="aprTable">
+                    <thead>
+                        <tr>
+                            <th style="cursor: pointer;" onclick="sortTable(0)">Asset</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)">Current APR ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)">24h Change</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="currentAprs">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -164,24 +206,99 @@ async function loadChart() {
 }
 
 function updateCurrentAprs(data) {
-    const container = document.getElementById('currentAprs');
-    container.innerHTML = '';
+    const tbody = document.getElementById('currentAprs');
+    tbody.innerHTML = '';
     
-    data.forEach(assetData => {
+    // Sort by APR descending
+    const sortedData = data.map(assetData => {
         const latest = assetData.data[assetData.data.length - 1];
-        if (!latest) return;
+        if (!latest) return null;
         
-        const col = document.createElement('div');
-        col.className = 'col-md-3';
-        col.innerHTML = `
-            <div class="card p-3 bg-opacity-50">
-                <div class="text-secondary small">${assetData.symbol}</div>
-                <div class="apr-value">${latest.apr.toFixed(2)}%</div>
-                <div class="text-secondary small">Current APR</div>
-            </div>
+        // Calculate 24h change if we have data from ~24h ago
+        let change24h = null;
+        if (assetData.data.length > 1) {
+            const now = new Date(latest.timestamp);
+            const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+            
+            // Find closest data point to 24h ago
+            let closest = assetData.data[0];
+            let minDiff = Math.abs(new Date(closest.timestamp) - oneDayAgo);
+            
+            for (let point of assetData.data) {
+                const diff = Math.abs(new Date(point.timestamp) - oneDayAgo);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = point;
+                }
+            }
+            
+            change24h = latest.apr - closest.apr;
+        }
+        
+        return {
+            symbol: assetData.symbol,
+            apr: latest.apr,
+            change24h: change24h,
+            timestamp: new Date(latest.timestamp)
+        };
+    }).filter(x => x !== null)
+      .sort((a, b) => b.apr - a.apr); // Sort by APR descending
+    
+    // Populate table
+    sortedData.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Format 24h change
+        let changeHtml = '<span class="text-muted">-</span>';
+        if (item.change24h !== null) {
+            const changeClass = item.change24h >= 0 ? 'text-success' : 'text-danger';
+            const changeSymbol = item.change24h >= 0 ? '+' : '';
+            changeHtml = `<span class="${changeClass}">${changeSymbol}${item.change24h.toFixed(2)}%</span>`;
+        }
+        
+        // Format timestamp
+        const timeAgo = formatTimeAgo(item.timestamp);
+        
+        row.innerHTML = `
+            <td><strong>${item.symbol}</strong></td>
+            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
+            <td>${changeHtml}</td>
+            <td class="text-secondary">${timeAgo}</td>
         `;
-        container.appendChild(col);
+        tbody.appendChild(row);
     });
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function sortTable(columnIndex) {
+    const tbody = document.getElementById('currentAprs');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    rows.sort((a, b) => {
+        let aVal = a.cells[columnIndex].textContent.trim();
+        let bVal = b.cells[columnIndex].textContent.trim();
+        
+        // Extract numeric values for sorting
+        if (columnIndex === 1 || columnIndex === 2) {
+            aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
+            bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
+            return bVal - aVal; // Descending
+        }
+        
+        // Text sorting
+        return aVal.localeCompare(bVal);
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(row));
 }
 
 // Event listeners
