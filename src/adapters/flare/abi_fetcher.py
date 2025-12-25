@@ -210,6 +210,44 @@ def get_minimal_comptroller_abi() -> list:
     ]
 
 
+def get_primary_lens_abi() -> list:
+    """
+    Load Primary market Lens ABI from file.
+    The Primary market Lens has 20 fields in MarketMetadata (no accrualBlockTimestamp).
+    """
+    abi_path = Path(__file__).parent.parent.parent.parent / 'abis' / 'primary_lens_abi.json'
+    try:
+        with open(abi_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load primary lens ABI from {abi_path}: {e}")
+        return get_minimal_lens_abi()
+
+
+def get_lens_abi_for_market(market_key: str) -> list:
+    """
+    Get the appropriate Lens ABI based on market type.
+    
+    Args:
+        market_key: 'Primary', 'ISO: FXRP-USDT0-stXRP', or 'ISO: JOULE-USDC-FLR'
+        
+    Returns:
+        ABI list for the appropriate Lens contract
+    """
+    if market_key == 'Primary':
+        return get_primary_lens_abi()
+    else:
+        # ISO markets use the standard lens ABI
+        abi_path = Path(__file__).parent.parent.parent.parent / 'abis' / 'lens_abi.json'
+        try:
+            with open(abi_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load lens ABI from {abi_path}: {e}")
+            return get_minimal_lens_abi()
+
+
+
 def get_minimal_lens_abi() -> list:
     """
     Return minimal ABI for Lens contract with common functions.

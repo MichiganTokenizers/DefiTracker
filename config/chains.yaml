@@ -8,49 +8,87 @@ chains:
       kinetic:
         enabled: true
         # Kinetic uses on-chain contracts, not REST API
-        # Main protocol contracts for FXRP-USDT0-stXRP ISO Market
-        unitroller: "0x15F69897E6aEBE0463401345543C26d1Fd994abB"  # Unitroller for ISO Market
-        comptroller: "0x35aFf580e53d9834a3a0e21a50f97b942Aba8866"  # Comptroller Implementation
-        lens: "0x553e7b78812D69fA30242E7380417781125C7AC7"  # Lens contract for reading market data
-        # Token contracts for FXRP-USDT0-stXRP ISO Market
-        tokens:
-          FXRP:
-            address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE"  # FXRP token
-            iso_address: "0xD1b7A5eFa9bd88F291F7A4563a8f6185c0249CB3"  # ISO FXRP (lending market)
-            decimals: 18
-            market: "fxrp"  # Market identifier for Lens-based queries
-          USDT0:
-            address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"  # USDT0 token
-            iso_address: "0xad7e7989796414c9572da9854DEb1B920724fd09"  # ISO USDT0 (lending market)
-            decimals: 6  # USDT typically uses 6 decimals
-            market: "fxrp"
-          stXRP:
-            address: "0x4C18Ff3C89632c3Dd62E796c0aFA5c07c4c1B2b3"  # STFXRP token
-            iso_address: "0x870f7B89F0d408D7CA2E6586Df26D00Ea03aA358"  # isoSTFXRP (lending market)
-            decimals: 18
-            market: "fxrp"
+        # Documentation: https://docs.kinetic.market/contracts-and-api-documentation
+        
         # ========================================================
-        # JOULE-USDC-FLR ISO Market (separate comptroller)
+        # PRIMARY MARKET (main Kinetic lending)
+        # ========================================================
+        primary_market:
+          unitroller: "0x8041680Fb73E1Fe5F851e76233DCDfA0f2D2D7c8"
+          comptroller_impl: "0xeC7e541375D70c37262f619162502dB9131d6db5"
+          lens: "0x120f76169dd938361cE917bDF773979FB21b7d19"
+          oracle: "0x952fc67C5930776fe890A812dcd23919559eE6b2"
+          market_label: "Primary"
+          tokens:
+            sFLR:
+              address: "0x12e605bc104e93B45e1aD99F9e555f659051c2BB"
+              ktoken_address: "0x291487beC339c2fE5D83DD45F0a15EFC9Ac45656"  # kSFLR
+              decimals: 18
+            USDC.e:
+              address: "0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6"
+              ktoken_address: "0xDEeBaBe05BDA7e8C1740873abF715f16164C29B8"  # kUSDC.E
+              decimals: 6
+            USDT:
+              address: "0x0B38e83B86d491735fEaa0a791F65c2B99535396"
+              ktoken_address: "0x1e5bBC19E0B17D7d38F318C79401B3D16F2b93bb"  # kUSDT
+              decimals: 6
+            wETH:
+              address: "0x1502FA4be69d526124D453619276FacCab275d3D"
+              ktoken_address: "0x5C2400019017AE61F811D517D088Df732642DbD0"  # kWETH
+              decimals: 18
+            FLRETH:
+              address: "0x26A1faB310bd080542DC864647d05985360B16A5"
+              ktoken_address: "0x40eE5dfe1D4a957cA8AC4DD4ADaf8A8fA76b1C16"  # kFLRETH
+              decimals: 18
+            USDT0:
+              address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
+              ktoken_address: "0x76809aBd690B77488Ffb5277e0a8300a7e77B779"  # kUSDT0
+              decimals: 6
+        
+        # ========================================================
+        # ISO MARKET: FXRP-USDT0-stXRP
+        # ========================================================
+        fxrp_market:
+          unitroller: "0x15F69897E6aEBE0463401345543C26d1Fd994abB"
+          comptroller_impl: "0x35aFf580e53d9834a3a0e21a50f97b942Aba8866"
+          lens: "0x553e7b78812D69fA30242E7380417781125C7AC7"
+          oracle: "0x61f77Ef0064736Ffa68c31D960E55BAf67F79A4b"
+          market_label: "ISO: FXRP-USDT0-stXRP"
+          tokens:
+            FXRP:
+              address: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE"
+              ktoken_address: "0xD1b7A5eFa9bd88F291F7A4563a8f6185c0249CB3"  # isoFXRP
+              decimals: 18
+            USDT0:
+              address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
+              ktoken_address: "0xad7e7989796414c9572da9854DEb1B920724fd09"  # isoUSDT0
+              decimals: 6
+            stXRP:
+              address: "0x4C18Ff3C89632c3Dd62E796c0aFA5c07c4c1B2b3"
+              ktoken_address: "0x870f7B89F0d408D7CA2E6586Df26D00Ea03aA358"  # isoSTXRP
+              decimals: 18
+        
+        # ========================================================
+        # ISO MARKET: JOULE-USDC-FLR
         # ========================================================
         joule_market:
-          comptroller: "0xDcce91d46Ecb209645A26B5885500127819BeAdd"
-          # Lens contract not yet identified - using direct ISO queries
+          unitroller: "0xDcce91d46Ecb209645A26B5885500127819BeAdd"
+          lens: "0xA3fC6CbC28E6B1A4f40F74326c8A924C982Bb138"
+          oracle: "0x30eDf82B2B75BbBf8e0b04b0F59086d321af964D"
+          market_label: "ISO: JOULE-USDC-FLR"
           tokens:
             FLR:
-              address: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"  # WFLR (native FLR wrapped)
-              iso_address: "0xd7291D5001693d15b6e4d56d73B5d2cD7eCfE5c6"  # isoFLR
+              address: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"  # WFLR
+              ktoken_address: "0xd7291D5001693d15b6e4d56d73B5d2cD7eCfE5c6"  # isoFLR
               decimals: 18
-              rate_function: "supplyRatePerTimestamp"  # Different from FXRP market
             USDC:
-              address: "0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6"  # USDC.e (Bridged USDC Stargate)
-              iso_address: "0x1bb34A8360A09f3166574A331B941CD7E4463aB7"  # isoUSDC
+              address: "0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6"  # USDC.e
+              ktoken_address: "0x1bb34A8360A09f3166574A331B941CD7E4463aB7"  # isoUSDC
               decimals: 6
-              rate_function: "supplyRatePerTimestamp"
             JOULE:
-              address: "0xE6505f92583103AF7ed9974DEC451A7Af4e3A3bE"  # JOULE token
-              iso_address: "0x7B6fCf27E6Fc63aaee93295b8d116EefF11983D3"  # isoJOULE
+              address: "0xE6505f92583103AF7ed9974DEC451A7Af4e3A3bE"
+              ktoken_address: "0x7B6fCf27E6Fc63aaee93295b8d116EefF11983D3"  # isoJOULE
               decimals: 18
-              rate_function: "supplyRatePerTimestamp"
       blazeswap:
         enabled: true
         # BlazeSwap DEX contracts for price queries

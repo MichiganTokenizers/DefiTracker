@@ -141,13 +141,16 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             borrow_apy = kinetic.get_borrow_apr(token)
             
             # Get or create asset in database
-            # Use _all_tokens which includes both FXRP and JOULE market tokens
+            # Use _all_tokens which includes all market tokens (Primary + ISO markets)
             token_config = kinetic._all_tokens.get(token, {})
             asset_id = db_queries.get_or_create_asset(
                 symbol=token,
                 contract_address=token_config.get('address'),
                 decimals=token_config.get('decimals', 18)
             )
+            
+            # Get market type label for this token
+            market_type = kinetic.get_market_label(token)
             
             # Get price snapshot ID (for WFLR used in distribution calculation)
             price_snapshot_id = prices.get('WFLR', {}).get('snapshot_id')
@@ -162,7 +165,8 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
                 borrow_apy=Decimal(str(borrow_apy)) if borrow_apy else None,
                 borrow_distribution_apy=None,  # Kinetic doesn't have borrow rewards currently
                 price_snapshot_id=price_snapshot_id,
-                timestamp=timestamp
+                timestamp=timestamp,
+                market_type=market_type
             )
             
             # Insert snapshot
@@ -170,10 +174,11 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             snapshot.snapshot_id = snapshot_id
             snapshots.append(snapshot)
             
-            logger.info(f"{token}: Supply APY={breakdown['supply_apr']:.4f}%, "
+            borrow_str = f"{borrow_apy:.4f}%" if borrow_apy else "N/A"
+            logger.info(f"[{market_type}] {token}: Supply APY={breakdown['supply_apr']:.4f}%, "
                        f"Distribution APY={breakdown['distribution_apr']:.4f}%, "
                        f"Total={breakdown['total_apy']:.4f}%, "
-                       f"Borrow APY={borrow_apy:.4f}%" if borrow_apy else "N/A")
+                       f"Borrow APY={borrow_str}")
             
         except Exception as e:
             logger.error(f"Error collecting APY for {token}: {e}")

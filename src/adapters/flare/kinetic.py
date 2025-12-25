@@ -6,7 +6,7 @@ import logging
 from web3 import Web3
 from eth_utils import keccak, to_bytes, to_hex
 from src.adapters.base import ProtocolAdapter
-from src.adapters.flare.abi_fetcher import fetch_abi_from_flarescan, get_minimal_lens_abi
+from src.adapters.flare.abi_fetcher import fetch_abi_from_flarescan, get_minimal_lens_abi, get_lens_abi_for_market
 
 logger = logging.getLogger(__name__)
 
@@ -14,26 +14,69 @@ logger = logging.getLogger(__name__)
 class KineticAdapter(ProtocolAdapter):
     """Adapter for Kinetic protocol on Flare blockchain"""
     
+    # Market type constants
+    MARKET_PRIMARY = 'Primary'
+    MARKET_FXRP = 'ISO: FXRP-USDT0-stXRP'
+    MARKET_JOULE = 'ISO: JOULE-USDC-FLR'
+    
     def __init__(self, protocol_name: str, config: Dict):
         super().__init__(protocol_name, config)
-        # FXRP-USDT0-stXRP market tokens (uses Lens)
-        self.tokens = config.get('tokens', {})
-        self.unitroller = config.get('unitroller')
-        self.comptroller = config.get('comptroller')
-        self.lens = config.get('lens')  # Lens contract for reading market data
         
-        # JOULE-USDC-FLR market tokens (uses direct ISO queries)
+        # Parse all three markets from config
+        self.primary_market = config.get('primary_market', {})
+        self.fxrp_market = config.get('fxrp_market', {})
         self.joule_market = config.get('joule_market', {})
-        self.joule_tokens = self.joule_market.get('tokens', {})
         
-        # Merge all tokens into a unified view
+        # Store market configs for accessing unitroller/lens per market
+        self._markets = {
+            self.MARKET_PRIMARY: self.primary_market,
+            self.MARKET_FXRP: self.fxrp_market,
+            self.MARKET_JOULE: self.joule_market,
+        }
+        
+        # Merge all tokens into a unified view with market_label
         self._all_tokens = {}
-        for symbol, token_config in self.tokens.items():
-            token_config['market_type'] = 'lens'  # Uses Lens contract
+        
+        # Primary market tokens
+        for symbol, token_config in self.primary_market.get('tokens', {}).items():
+            token_config = dict(token_config)  # Copy to avoid mutating config
+            token_config['market_label'] = self.primary_market.get('market_label', self.MARKET_PRIMARY)
+            token_config['market_key'] = self.MARKET_PRIMARY
+            token_config['unitroller'] = self.primary_market.get('unitroller')
+            token_config['lens'] = self.primary_market.get('lens')
+            # Normalize ktoken_address to iso_address for backward compatibility
+            if 'ktoken_address' in token_config and 'iso_address' not in token_config:
+                token_config['iso_address'] = token_config['ktoken_address']
             self._all_tokens[symbol] = token_config
-        for symbol, token_config in self.joule_tokens.items():
-            token_config['market_type'] = 'direct'  # Uses direct ISO queries
+        
+        # FXRP ISO market tokens
+        for symbol, token_config in self.fxrp_market.get('tokens', {}).items():
+            token_config = dict(token_config)
+            token_config['market_label'] = self.fxrp_market.get('market_label', self.MARKET_FXRP)
+            token_config['market_key'] = self.MARKET_FXRP
+            token_config['unitroller'] = self.fxrp_market.get('unitroller')
+            token_config['lens'] = self.fxrp_market.get('lens')
+            if 'ktoken_address' in token_config and 'iso_address' not in token_config:
+                token_config['iso_address'] = token_config['ktoken_address']
             self._all_tokens[symbol] = token_config
+        
+        # JOULE ISO market tokens
+        for symbol, token_config in self.joule_market.get('tokens', {}).items():
+            token_config = dict(token_config)
+            token_config['market_label'] = self.joule_market.get('market_label', self.MARKET_JOULE)
+            token_config['market_key'] = self.MARKET_JOULE
+            token_config['unitroller'] = self.joule_market.get('unitroller')
+            token_config['lens'] = self.joule_market.get('lens')
+            if 'ktoken_address' in token_config and 'iso_address' not in token_config:
+                token_config['iso_address'] = token_config['ktoken_address']
+            self._all_tokens[symbol] = token_config
+        
+        # Legacy compatibility - set default lens/unitroller from FXRP market
+        self.unitroller = self.fxrp_market.get('unitroller')
+        self.comptroller = self.fxrp_market.get('comptroller_impl')
+        self.lens = self.fxrp_market.get('lens')
+        self.tokens = self.fxrp_market.get('tokens', {})  # Legacy
+        self.joule_tokens = self.joule_market.get('tokens', {})  # Legacy
         
         self.web3 = None  # Will be set by chain adapter
         # Store reference to parent config for accessing other protocols (e.g., BlazeSwap)
@@ -51,6 +94,21 @@ class KineticAdapter(ProtocolAdapter):
             List of asset symbols from all markets (e.g., ['FXRP', 'USDT0', 'stXRP', 'FLR', 'USDC', 'JOULE'])
         """
         return list(self._all_tokens.keys())
+    
+    def get_market_label(self, asset: str) -> str:
+        """
+        Get the market label for an asset.
+        
+        Args:
+            asset: Token symbol
+            
+        Returns:
+            Market label (e.g., 'Primary', 'ISO: FXRP-USDT0-stXRP', 'ISO: JOULE-USDC-FLR')
+        """
+        token_config = self._all_tokens.get(asset)
+        if token_config:
+            return token_config.get('market_label', 'Unknown')
+        return 'Unknown'
     
     def get_supply_apr(self, asset: str) -> Optional[Decimal]:
         """
@@ -191,7 +249,7 @@ class KineticAdapter(ProtocolAdapter):
         
         try:
             # Get token and ISO market addresses
-            token_config = self.tokens.get(asset)
+            token_config = self._all_tokens.get(asset)
             if not token_config:
                 logger.error(f"Token config not found for {asset}")
                 return None
@@ -247,13 +305,15 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             APR as Decimal (percentage), or None if unavailable
         """
-        if not self.lens:
-            logger.error("Lens contract address not configured")
-            return None
-        
-        token_config = self.tokens.get(asset)
+        token_config = self._all_tokens.get(asset)
         if not token_config:
             logger.error(f"Token config not found for {asset}")
+            return None
+        
+        # Use token's specific lens address, fallback to default
+        lens_address = token_config.get('lens') or self.lens
+        if not lens_address:
+            logger.error(f"Lens contract address not configured for {asset}")
             return None
         
         iso_address = token_config.get('iso_address')
@@ -287,11 +347,13 @@ class KineticAdapter(ProtocolAdapter):
             supply_rate_per_block = None
             total_underlying_supply = None
             supply_reward_speeds = None
-            if self.lens:
+            if lens_address:
                 try:
-                    lens_abi = fetch_abi_from_flarescan(self.lens, contract_name='lens') or get_minimal_lens_abi()
+                    # Use market-specific ABI (Primary has 20 fields, ISO has 21)
+                    market_key = token_config.get('market_key', 'Primary')
+                    lens_abi = get_lens_abi_for_market(market_key)
                     lens_contract = self.web3.eth.contract(
-                        address=Web3.to_checksum_address(self.lens),
+                        address=Web3.to_checksum_address(lens_address),
                         abi=lens_abi
                     )
                     iso_address_checksum = Web3.to_checksum_address(iso_address)
@@ -591,13 +653,15 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             Borrow APR as Decimal (percentage), or None if unavailable
         """
-        if not self.lens:
-            logger.error("Lens contract address not configured")
-            return None
-        
-        token_config = self.tokens.get(asset)
+        token_config = self._all_tokens.get(asset)
         if not token_config:
             logger.error(f"Token config not found for {asset}")
+            return None
+        
+        # Use token's specific lens address, fallback to default
+        lens_address = token_config.get('lens') or self.lens
+        if not lens_address:
+            logger.error(f"Lens contract address not configured for {asset}")
             return None
         
         iso_address = token_config.get('iso_address')
@@ -606,9 +670,11 @@ class KineticAdapter(ProtocolAdapter):
             return None
         
         try:
-            lens_abi = fetch_abi_from_flarescan(self.lens, contract_name='lens') or get_minimal_lens_abi()
+            # Use market-specific ABI (Primary has 20 fields, ISO has 21)
+            market_key = token_config.get('market_key', 'Primary')
+            lens_abi = get_lens_abi_for_market(market_key)
             lens_contract = self.web3.eth.contract(
-                address=Web3.to_checksum_address(self.lens),
+                address=Web3.to_checksum_address(lens_address),
                 abi=lens_abi
             )
             iso_address_checksum = Web3.to_checksum_address(iso_address)
@@ -644,13 +710,15 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             Dict with 'supply_apr', 'distribution_apr', 'total_apy', or None
         """
-        if not self.lens:
-            logger.error("Lens contract address not configured")
-            return None
-        
-        token_config = self.tokens.get(asset)
+        token_config = self._all_tokens.get(asset)
         if not token_config:
             logger.error(f"Token config not found for {asset}")
+            return None
+        
+        # Use token's specific lens address, fallback to default
+        lens_address = token_config.get('lens') or self.lens
+        if not lens_address:
+            logger.error(f"Lens contract address not configured for {asset}")
             return None
         
         iso_address = token_config.get('iso_address')
@@ -661,9 +729,11 @@ class KineticAdapter(ProtocolAdapter):
         try:
             # Reuse the logic from _get_apr_from_lens but return breakdown
             # This is a simplified version - in production, we'd refactor to avoid duplication
-            lens_abi = fetch_abi_from_flarescan(self.lens, contract_name='lens') or get_minimal_lens_abi()
+            # Use market-specific ABI (Primary has 20 fields, ISO has 21)
+            market_key = token_config.get('market_key', 'Primary')
+            lens_abi = get_lens_abi_for_market(market_key)
             lens_contract = self.web3.eth.contract(
-                address=Web3.to_checksum_address(self.lens),
+                address=Web3.to_checksum_address(lens_address),
                 abi=lens_abi
             )
             iso_address_checksum = Web3.to_checksum_address(iso_address)
@@ -864,7 +934,7 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             Total rewards paid as Decimal, or None if unavailable
         """
-        token_config = self.tokens.get(asset)
+        token_config = self._all_tokens.get(asset)
         if not token_config:
             logger.error(f"Token config not found for {asset}")
             return None
@@ -1011,7 +1081,7 @@ class KineticAdapter(ProtocolAdapter):
         Returns:
             Total volume as Decimal, or None if unavailable
         """
-        token_config = self.tokens.get(asset)
+        token_config = self._all_tokens.get(asset)
         if not token_config:
             logger.error(f"Token config not found for {asset}")
             return None

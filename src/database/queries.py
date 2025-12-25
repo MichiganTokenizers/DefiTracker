@@ -404,8 +404,8 @@ class APYQueries:
                         asset_id, supply_apy, supply_distribution_apy, total_supply_apy,
                         borrow_apy, borrow_distribution_apy,
                         total_supply_tokens, total_borrowed_tokens, utilization_rate,
-                        price_snapshot_id, timestamp
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        price_snapshot_id, timestamp, market_type
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING snapshot_id
                 """, (
                     snapshot.asset_id,
@@ -418,7 +418,8 @@ class APYQueries:
                     snapshot.total_borrowed_tokens,
                     snapshot.utilization_rate,
                     snapshot.price_snapshot_id,
-                    snapshot.timestamp or datetime.utcnow()
+                    snapshot.timestamp or datetime.utcnow(),
+                    snapshot.market_type
                 ))
                 
                 snapshot_id = cur.fetchone()[0]
