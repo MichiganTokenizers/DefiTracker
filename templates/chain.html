@@ -29,6 +29,91 @@
     .table-responsive {
         border-radius: 8px;
     }
+    
+    /* Multi-select dropdown styles */
+    .multi-select-container {
+        position: relative;
+    }
+    .multi-select-btn {
+        width: 100%;
+        text-align: left;
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .multi-select-btn:hover {
+        border-color: rgba(255,255,255,0.3);
+    }
+    .multi-select-btn .count-badge {
+        background: var(--accent-primary);
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .multi-select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bg-card);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 6px;
+        margin-top: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+    }
+    .multi-select-dropdown.show {
+        display: block;
+    }
+    .multi-select-actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .multi-select-actions button {
+        flex: 1;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: transparent;
+        color: #b0b3c1;
+        cursor: pointer;
+    }
+    .multi-select-actions button:hover {
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+    }
+    .multi-select-option {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .multi-select-option:hover {
+        background: rgba(255,255,255,0.05);
+    }
+    .multi-select-option input {
+        margin-right: 10px;
+        accent-color: var(--accent-primary);
+    }
+    .multi-select-option label {
+        cursor: pointer;
+        margin: 0;
+        flex: 1;
+    }
 </style>
 {% endblock %}
 
@@ -52,11 +137,24 @@
             <option value="365">Last Year</option>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <label class="form-label">Asset Filter</label>
-        <select id="assetFilter" class="form-select">
-            <option value="">All Assets</option>
-        </select>
+        <div class="multi-select-container" id="assetFilterContainer">
+            <button type="button" class="multi-select-btn" id="assetFilterBtn">
+                <span id="assetFilterLabel">Loading...</span>
+                <span class="count-badge" id="assetCount">0</span>
+            </button>
+            <div class="multi-select-dropdown" id="assetDropdown">
+                <div class="multi-select-actions">
+                    <button type="button" onclick="selectAllAssets()">Select All</button>
+                    <button type="button" onclick="deselectAllAssets()">Clear</button>
+                    <button type="button" onclick="selectDefaults()">Defaults</button>
+                </div>
+                <div id="assetOptions">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
     </div>
     <div class="col-md-3">
         <label class="form-label">Chart Type</label>
@@ -105,6 +203,8 @@ const chain = "{{ chain }}";
 let chart = null;
 let currentSortColumn = 2; // Default to 24h Change column
 let currentSortDirection = 'desc'; // Default to descending
+let allAssets = [];
+let selectedAssets = new Set();
 
 // Get protocol name based on chain
 const protocolMap = {
@@ -113,27 +213,155 @@ const protocolMap = {
 };
 const protocol = protocolMap[chain];
 
+// Default asset selections by chain
+const defaultAssets = {
+    'cardano': [
+        // NIGHT pairs
+        'NIGHT-ADA', 'NIGHT-USDM', 'NIGHT-USDA',
+        // ADA/stablecoin pairs  
+        'USDM/ADA', 'USDA/ADA', 'DJED/ADA', 'iUSD/ADA',
+        // Other key pairs
+        'MIN/ADA', 'SNEK/ADA'
+    ],
+    'flare': [
+        // FXRP and stablecoin supply returns
+        'FXRP', 'USDT0', 'USDT', 'USDC', 'USDC.e', 'stXRP'
+    ]
+};
+
+function isDefaultAsset(symbol) {
+    const defaults = defaultAssets[chain] || [];
+    // Check exact match or partial match for flexibility
+    return defaults.some(d => 
+        symbol === d || 
+        symbol.toUpperCase() === d.toUpperCase() ||
+        symbol.includes(d) || 
+        d.includes(symbol)
+    );
+}
+
 async function loadAssets() {
     const response = await fetch(`/api/${chain}/${protocol}/assets`);
-    const assets = await response.json();
+    allAssets = await response.json();
     
-    const select = document.getElementById('assetFilter');
-    assets.forEach(asset => {
-        const option = document.createElement('option');
-        option.value = asset.symbol;
-        option.textContent = asset.symbol + (asset.name ? ` (${asset.name})` : '');
-        select.appendChild(option);
+    const optionsContainer = document.getElementById('assetOptions');
+    optionsContainer.innerHTML = '';
+    
+    allAssets.forEach(asset => {
+        const isDefault = isDefaultAsset(asset.symbol);
+        if (isDefault) {
+            selectedAssets.add(asset.symbol);
+        }
+        
+        const div = document.createElement('div');
+        div.className = 'multi-select-option';
+        div.innerHTML = `
+            <input type="checkbox" id="asset-${asset.symbol}" value="${asset.symbol}" 
+                   ${isDefault ? 'checked' : ''} onchange="toggleAsset('${asset.symbol}')">
+            <label for="asset-${asset.symbol}">${asset.symbol}</label>
+        `;
+        optionsContainer.appendChild(div);
     });
+    
+    updateAssetLabel();
 }
+
+function toggleAsset(symbol) {
+    if (selectedAssets.has(symbol)) {
+        selectedAssets.delete(symbol);
+    } else {
+        selectedAssets.add(symbol);
+    }
+    updateAssetLabel();
+    loadChart();
+}
+
+function selectAllAssets() {
+    allAssets.forEach(asset => selectedAssets.add(asset.symbol));
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
+    updateAssetLabel();
+    loadChart();
+}
+
+function deselectAllAssets() {
+    selectedAssets.clear();
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = false);
+    updateAssetLabel();
+    loadChart();
+}
+
+function selectDefaults() {
+    selectedAssets.clear();
+    allAssets.forEach(asset => {
+        const isDefault = isDefaultAsset(asset.symbol);
+        const checkbox = document.getElementById(`asset-${asset.symbol}`);
+        if (checkbox) {
+            checkbox.checked = isDefault;
+        }
+        if (isDefault) {
+            selectedAssets.add(asset.symbol);
+        }
+    });
+    updateAssetLabel();
+    loadChart();
+}
+
+function updateAssetLabel() {
+    const label = document.getElementById('assetFilterLabel');
+    const count = document.getElementById('assetCount');
+    const size = selectedAssets.size;
+    
+    count.textContent = size;
+    
+    if (size === 0) {
+        label.textContent = 'No assets selected';
+    } else if (size === allAssets.length) {
+        label.textContent = 'All assets';
+    } else if (size <= 3) {
+        label.textContent = Array.from(selectedAssets).slice(0, 3).join(', ');
+    } else {
+        label.textContent = Array.from(selectedAssets).slice(0, 2).join(', ') + ` +${size - 2} more`;
+    }
+}
+
+function getSelectedAssets() {
+    return Array.from(selectedAssets);
+}
+
+// Dropdown toggle
+document.getElementById('assetFilterBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('assetDropdown').classList.toggle('show');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('assetFilterContainer').contains(e.target)) {
+        document.getElementById('assetDropdown').classList.remove('show');
+    }
+});
 
 async function loadChart() {
     const days = document.getElementById('timeRange').value;
-    const asset = document.getElementById('assetFilter').value;
     const chartType = document.getElementById('chartType').value;
+    const selected = getSelectedAssets();
     
-    const url = `/api/${chain}/${protocol}/history?days=${days}${asset ? '&asset=' + asset : ''}`;
+    // Build URL with multiple assets
+    let url = `/api/${chain}/${protocol}/history?days=${days}`;
+    if (selected.length > 0 && selected.length < allAssets.length) {
+        // Only add filter if not all selected
+        selected.forEach(asset => {
+            url += `&asset=${encodeURIComponent(asset)}`;
+        });
+    }
+    
     const response = await fetch(url);
-    const data = await response.json();
+    let data = await response.json();
+    
+    // Filter client-side if API doesn't support multi-asset filter
+    if (selected.length > 0 && selected.length < allAssets.length) {
+        data = data.filter(d => selected.includes(d.symbol));
+    }
     
     // Destroy existing chart
     if (chart) {
@@ -344,7 +572,6 @@ function sortTable(columnIndex) {
 
 // Event listeners
 document.getElementById('timeRange').addEventListener('change', loadChart);
-document.getElementById('assetFilter').addEventListener('change', loadChart);
 document.getElementById('chartType').addEventListener('change', loadChart);
 
 // Initial load
