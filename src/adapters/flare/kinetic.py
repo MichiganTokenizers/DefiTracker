@@ -519,16 +519,16 @@ class KineticAdapter(ProtocolAdapter):
         """
         Get reward token (rFLR) price in underlying token terms.
         
-        This queries BlazeSwap DEX to get the WFLR/USDT0 price, then converts
-        to underlying token terms using known/estimated token prices.
+        Uses Flare's native FTSO v2 oracle to get real-time prices.
+        Much simpler and more reliable than DEX-based queries.
         
         Strategy:
-        - Always get WFLR/USDT0 price from BlazeSwap (this pair exists)
-        - For USDT0: return WFLR/USDT0 price directly
-        - For FXRP/stXRP: convert using estimated underlying token prices
+        - Get FLR price in USD from FTSO
+        - Get underlying asset price in USD from FTSO
+        - Calculate FLR price in underlying terms: FLR_USD / underlying_USD
         
         Args:
-            asset: Underlying token symbol (FXRP, USDT0, stXRP)
+            asset: Underlying token symbol (FXRP, USDT0, stXRP, SFLR, etc.)
             
         Returns:
             Price of rFLR in underlying token units, or None if unavailable
@@ -537,85 +537,58 @@ class KineticAdapter(ProtocolAdapter):
             logger.warning("Web3 instance not available for price lookup")
             return None
         
-        # WFLR and USDT0 addresses (known working pair on BlazeSwap)
-        wflr_address = "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"
-        usdt0_address = "0xe7cd86e13AC4309349F30B3435a9d337750fC82D"
-        wflr_decimals = 18
-        usdt0_decimals = 6
-        
-        # Try to get WFLR/USDT0 price from BlazeSwap
         try:
-            from src.adapters.flare.blazeswap_price import BlazeSwapPriceFeed
+            from src.adapters.flare.ftso_price import FTSOPriceFeed
             
-            # Get BlazeSwap factory/router addresses from parent config
-            blazeswap_factory = None
-            blazeswap_router = None
-            if self._parent_config:
-                blazeswap_config = self._parent_config.get('blazeswap', {})
-                if blazeswap_config:
-                    blazeswap_factory = blazeswap_config.get('factory')
-                    blazeswap_router = blazeswap_config.get('router')
+            ftso = FTSOPriceFeed(self.web3)
             
-            if not blazeswap_factory and not blazeswap_router:
-                logger.warning("BlazeSwap factory/router not configured, using fallback price")
+            # Get FLR price in USD
+            flr_price_usd = ftso.get_price_usd('FLR')
+            if flr_price_usd is None or flr_price_usd == 0:
+                logger.warning("Could not get FLR price from FTSO")
                 return None
             
-            # Initialize price feed
-            price_feed = BlazeSwapPriceFeed(
-                self.web3, 
-                factory_address=blazeswap_factory,
-                router_address=blazeswap_router
-            )
+            logger.info(f"FLR price from FTSO: ${flr_price_usd:.6f} USD")
             
-            # Get WFLR price in USDT0 terms
-            wflr_price_in_usdt0 = price_feed.get_price_with_decimals(
-                token_in=wflr_address,
-                token_out=usdt0_address,
-                token_in_decimals=wflr_decimals,
-                token_out_decimals=usdt0_decimals,
-                amount_in=Decimal('1')
-            )
+            # Map asset to FTSO symbol for underlying price
+            # Most assets have direct FTSO feeds or map to a base token
+            asset_to_ftso = {
+                'USDT0': 'USDT',      # USDT0 uses USDT price
+                'USDC': 'USDC',
+                'USDT': 'USDT',
+                'FXRP': 'XRP',        # FXRP is wrapped XRP
+                'stXRP': 'XRP',       # stXRP is staked XRP
+                'WETH': 'ETH',
+                'wETH': 'ETH',
+                'FLRETH': 'ETH',      # FLRETH is wrapped ETH on Flare
+                'SFLR': 'FLR',        # SFLR is staked FLR
+                'WFLR': 'FLR',
+            }
             
-            if wflr_price_in_usdt0 is None or wflr_price_in_usdt0 == 0:
-                logger.warning("Could not get WFLR/USDT0 price from BlazeSwap")
+            ftso_symbol = asset_to_ftso.get(asset, asset)
+            
+            # Get underlying asset price in USD
+            underlying_price_usd = ftso.get_price_usd(ftso_symbol)
+            if underlying_price_usd is None or underlying_price_usd == 0:
+                logger.warning(f"Could not get {ftso_symbol} price from FTSO for asset {asset}")
                 return None
             
-            logger.info(f"WFLR price from BlazeSwap: {wflr_price_in_usdt0:.8f} USDT0")
+            logger.info(f"{asset} ({ftso_symbol}) price from FTSO: ${underlying_price_usd:.6f} USD")
             
-            # Convert to underlying token terms
-            if asset == 'USDT0':
-                # For USDT0, the WFLR price in USDT0 is what we need
-                price = wflr_price_in_usdt0
-            else:
-                # For other tokens (FXRP, stXRP), we need to convert from USDT0 to underlying
-                # Use estimated underlying token prices (in USDT0 terms)
-                # FXRP and stXRP are wrapped XRP tokens, so use XRP price estimate
-                # Current XRP price is approximately $2.30 (as of Dec 2024)
-                underlying_prices_in_usdt0 = {
-                    'FXRP': Decimal('2.30'),   # FXRP ≈ XRP price
-                    'stXRP': Decimal('2.30'),  # stXRP ≈ XRP price
-                    # Add more tokens as needed
-                }
-                
-                underlying_price = underlying_prices_in_usdt0.get(asset)
-                if underlying_price is None:
-                    logger.warning(f"No price estimate for {asset}, using fallback")
-                    return None
-                
-                # Convert: WFLR/USDT0 / underlying/USDT0 = WFLR/underlying
-                # i.e., how many underlying tokens = 1 WFLR
-                price = wflr_price_in_usdt0 / underlying_price
+            # Calculate FLR price in underlying terms
+            # FLR_underlying = FLR_USD / underlying_USD
+            price = flr_price_usd / underlying_price_usd
             
-            logger.info(f"Got FLR price from BlazeSwap for {asset}: {price:.8f} {asset} per FLR")
+            logger.info(f"FLR price in {asset} terms: {price:.8f} {asset} per FLR")
             return price
                 
         except ImportError:
-            logger.warning("BlazeSwap price feed not available")
+            logger.warning("FTSO price feed not available")
             return None
         except Exception as e:
-            logger.warning(f"Error getting price from BlazeSwap: {e}")
+            logger.warning(f"Error getting price from FTSO: {e}")
             return None
-    
+
     def _estimate_reward_token_price(self, asset: str) -> Decimal:
         """
         Estimate reward token price based on observed distribution APY ratios.
