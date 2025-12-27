@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -36,6 +37,44 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Database column NUMERIC(10, 4) can store max 999999.9999
+# Cap extreme APY values to prevent overflow errors
+MAX_APY_VALUE = Decimal('999999.9999')
+MIN_APY_VALUE = Decimal('-999999.9999')
+
+
+def cap_apy_value(value: Optional[Decimal], asset: str, field_name: str) -> Optional[Decimal]:
+    """
+    Cap APY value to prevent database overflow.
+    
+    Database columns are NUMERIC(10, 4) = max 999999.9999
+    Logs a warning if capping occurs (indicates a calculation issue).
+    
+    Args:
+        value: The APY value to cap
+        asset: Asset symbol (for logging)
+        field_name: Field name (for logging)
+        
+    Returns:
+        Capped value, or None if input was None
+    """
+    if value is None:
+        return None
+    
+    if value > MAX_APY_VALUE:
+        logger.warning(
+            f"APY overflow detected for {asset}.{field_name}: {value} capped to {MAX_APY_VALUE}"
+        )
+        return MAX_APY_VALUE
+    
+    if value < MIN_APY_VALUE:
+        logger.warning(
+            f"APY underflow detected for {asset}.{field_name}: {value} capped to {MIN_APY_VALUE}"
+        )
+        return MIN_APY_VALUE
+    
+    return value
 
 
 def load_config():
@@ -155,14 +194,19 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             # Get price snapshot ID (for WFLR used in distribution calculation)
             price_snapshot_id = prices.get('WFLR', {}).get('snapshot_id')
             
-            # Create snapshot
+            # Create snapshot with capped values to prevent database overflow
+            supply_apy = cap_apy_value(Decimal(str(breakdown['supply_apr'])), token, 'supply_apy')
+            distribution_apy = cap_apy_value(Decimal(str(breakdown['distribution_apr'])), token, 'supply_distribution_apy')
+            total_apy = cap_apy_value(Decimal(str(breakdown['total_apy'])), token, 'total_supply_apy')
+            borrow_apy_capped = cap_apy_value(Decimal(str(borrow_apy)) if borrow_apy else None, token, 'borrow_apy')
+            
             snapshot = KineticAPYSnapshot(
                 asset_id=asset_id,
                 asset_symbol=token,
-                supply_apy=Decimal(str(breakdown['supply_apr'])),
-                supply_distribution_apy=Decimal(str(breakdown['distribution_apr'])),
-                total_supply_apy=Decimal(str(breakdown['total_apy'])),
-                borrow_apy=Decimal(str(borrow_apy)) if borrow_apy else None,
+                supply_apy=supply_apy,
+                supply_distribution_apy=distribution_apy,
+                total_supply_apy=total_apy,
+                borrow_apy=borrow_apy_capped,
                 borrow_distribution_apy=None,  # Kinetic doesn't have borrow rewards currently
                 price_snapshot_id=price_snapshot_id,
                 timestamp=timestamp,
