@@ -156,13 +156,6 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <label class="form-label">Chart Type</label>
-        <select id="chartType" class="form-select">
-            <option value="line">Line Chart</option>
-            <option value="bar">Bar Chart</option>
-        </select>
-    </div>
 </div>
 
 <div class="row">
@@ -343,24 +336,21 @@ document.addEventListener('click', function(e) {
 
 async function loadChart() {
     const days = document.getElementById('timeRange').value;
-    const chartType = document.getElementById('chartType').value;
+    const chartType = 'line';  // Fixed to line chart
     const selected = getSelectedAssets();
     
-    // Build URL with multiple assets
-    let url = `/api/${chain}/${protocol}/history?days=${days}`;
-    if (selected.length > 0 && selected.length < allAssets.length) {
-        // Only add filter if not all selected
-        selected.forEach(asset => {
-            url += `&asset=${encodeURIComponent(asset)}`;
-        });
-    }
+    // Always fetch all data, filter client-side (API only supports single asset)
+    const url = `/api/${chain}/${protocol}/history?days=${days}`;
     
     const response = await fetch(url);
     let data = await response.json();
     
-    // Filter client-side if API doesn't support multi-asset filter
+    // Filter client-side based on selected assets
     if (selected.length > 0 && selected.length < allAssets.length) {
         data = data.filter(d => selected.includes(d.symbol));
+    } else if (selected.length === 0) {
+        // No assets selected - show nothing
+        data = [];
     }
     
     // Destroy existing chart
@@ -572,7 +562,6 @@ function sortTable(columnIndex) {
 
 // Event listeners
 document.getElementById('timeRange').addEventListener('change', loadChart);
-document.getElementById('chartType').addEventListener('change', loadChart);
 
 // Initial load
 loadAssets().then(loadChart);
