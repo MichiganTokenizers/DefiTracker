@@ -228,16 +228,22 @@ def get_lens_abi_for_market(market_key: str) -> list:
     """
     Get the appropriate Lens ABI based on market type.
     
+    Different markets use different Lens contract versions:
+    - Primary market: 20-field MarketMetadata struct
+    - JOULE ISO market: 20-field MarketMetadata struct (same as Primary)
+    - FXRP ISO market: 21-field MarketMetadata struct (has extra accrualBlockTimestamp)
+    
     Args:
         market_key: 'Primary', 'ISO: FXRP-USDT0-stXRP', or 'ISO: JOULE-USDC-FLR'
         
     Returns:
         ABI list for the appropriate Lens contract
     """
-    if market_key == 'Primary':
+    # Primary and JOULE ISO markets use 20-field struct
+    if market_key == 'Primary' or 'JOULE' in market_key:
         return get_primary_lens_abi()
     else:
-        # ISO markets use the standard lens ABI
+        # FXRP ISO market uses 21-field struct  
         abi_path = Path(__file__).parent.parent.parent.parent / 'abis' / 'lens_abi.json'
         try:
             with open(abi_path, 'r') as f:
