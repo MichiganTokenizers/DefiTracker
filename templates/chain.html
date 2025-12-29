@@ -175,8 +175,8 @@
                     <thead>
                         <tr>
                             <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
-                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">Current APR</th>
-                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">Current APR ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
                             <th>Last Updated</th>
                         </tr>
                     </thead>
@@ -194,8 +194,8 @@
 <script>
 const chain = "{{ chain }}";
 let chart = null;
-let currentSortColumn = 2; // Default to 24h Change column
-let currentSortDirection = 'desc'; // Default to descending
+let currentSortColumn = 1; // Default to Current APR column
+let currentSortDirection = 'asc'; // Default to ascending (lowest first)
 let allAssets = [];
 let selectedAssets = new Set();
 
@@ -205,6 +205,13 @@ const protocolMap = {
     'cardano': 'minswap'
 };
 const protocol = protocolMap[chain];
+
+// Protocol logo mapping
+const protocolLogos = {
+    'kinetic': '/static/kinetic-logo.svg',
+    'minswap': '/static/minswap-logo.webp'
+};
+const protocolLogo = protocolLogos[protocol];
 
 // Default asset selections by chain
 const defaultAssets = {
@@ -334,6 +341,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Store all data globally for table (unfiltered)
+let allHistoryData = [];
+
 async function loadChart() {
     const days = document.getElementById('timeRange').value;
     const chartType = 'line';  // Fixed to line chart
@@ -343,14 +353,15 @@ async function loadChart() {
     const url = `/api/${chain}/${protocol}/history?days=${days}`;
     
     const response = await fetch(url);
-    let data = await response.json();
+    allHistoryData = await response.json();  // Store unfiltered data
     
-    // Filter client-side based on selected assets
+    // Filter for chart only
+    let chartData = allHistoryData;
     if (selected.length > 0 && selected.length < allAssets.length) {
-        data = data.filter(d => selected.includes(d.symbol));
+        chartData = allHistoryData.filter(d => selected.includes(d.symbol));
     } else if (selected.length === 0) {
-        // No assets selected - show nothing
-        data = [];
+        // No assets selected - show nothing in chart
+        chartData = [];
     }
     
     // Destroy existing chart
@@ -359,7 +370,7 @@ async function loadChart() {
     }
     
     // Prepare datasets
-    const datasets = data.map((assetData, idx) => {
+    const datasets = chartData.map((assetData, idx) => {
         const colors = [
             '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
             '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4'
@@ -421,8 +432,8 @@ async function loadChart() {
         }
     });
     
-    // Update current APRs table
-    updateCurrentAprs(data);
+    // Update current APRs table with ALL data (unfiltered)
+    updateCurrentAprs(allHistoryData);
 }
 
 function updateCurrentAprs(data) {
@@ -530,7 +541,10 @@ function applySortToTable() {
         const timeAgo = formatTimeAgo(item.timestamp);
         
         row.innerHTML = `
-            <td><strong>${item.symbol}</strong></td>
+            <td>
+                <img src="${protocolLogo}" alt="${protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;">
+                <strong>${item.symbol}</strong>
+            </td>
             <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
             <td>${changeHtml}</td>
             <td class="text-secondary">${timeAgo}</td>

@@ -210,7 +210,8 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
                 borrow_distribution_apy=None,  # Kinetic doesn't have borrow rewards currently
                 price_snapshot_id=price_snapshot_id,
                 timestamp=timestamp,
-                market_type=market_type
+                market_type=market_type,
+                yield_type='supply'  # Lending market - primary view is supply (earn) side
             )
             
             # Insert snapshot

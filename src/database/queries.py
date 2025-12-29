@@ -174,8 +174,13 @@ class DatabaseQueries:
     
     def insert_apr_snapshot(self, blockchain_id: int, protocol_id: int, 
                            asset_id: int, apr: Decimal, 
-                           timestamp: Optional[datetime] = None) -> int:
-        """Insert a new APR snapshot"""
+                           timestamp: Optional[datetime] = None,
+                           yield_type: str = 'lp') -> int:
+        """Insert a new APR snapshot
+        
+        Args:
+            yield_type: Type of yield - 'lp' (liquidity pool), 'supply' (lending earn), 'borrow' (lending cost)
+        """
         if timestamp is None:
             timestamp = datetime.utcnow()
         
@@ -184,10 +189,10 @@ class DatabaseQueries:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO apr_snapshots 
-                       (blockchain_id, protocol_id, asset_id, apr, timestamp)
-                       VALUES (%s, %s, %s, %s, %s)
+                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type)
+                       VALUES (%s, %s, %s, %s, %s, %s)
                        RETURNING snapshot_id""",
-                    (blockchain_id, protocol_id, asset_id, apr, timestamp)
+                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type)
                 )
                 snapshot_id = cur.fetchone()[0]
                 conn.commit()
@@ -404,8 +409,8 @@ class APYQueries:
                         asset_id, supply_apy, supply_distribution_apy, total_supply_apy,
                         borrow_apy, borrow_distribution_apy,
                         total_supply_tokens, total_borrowed_tokens, utilization_rate,
-                        price_snapshot_id, timestamp, market_type
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        price_snapshot_id, timestamp, market_type, yield_type
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING snapshot_id
                 """, (
                     snapshot.asset_id,
@@ -419,7 +424,8 @@ class APYQueries:
                     snapshot.utilization_rate,
                     snapshot.price_snapshot_id,
                     snapshot.timestamp or datetime.utcnow(),
-                    snapshot.market_type
+                    snapshot.market_type,
+                    snapshot.yield_type or 'supply'
                 ))
                 
                 snapshot_id = cur.fetchone()[0]

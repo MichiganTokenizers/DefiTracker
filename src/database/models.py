@@ -1,8 +1,11 @@
 """Database models for APR/APY tracking"""
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 from dataclasses import dataclass
+
+# Valid yield types
+YieldType = Literal['lp', 'supply', 'borrow']
 
 
 @dataclass
@@ -14,6 +17,7 @@ class APRSnapshot:
     apr: Decimal
     timestamp: datetime
     snapshot_id: Optional[int] = None
+    yield_type: Optional[str] = 'lp'  # lp, supply, or borrow
     
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
@@ -23,7 +27,8 @@ class APRSnapshot:
             'protocol_id': self.protocol_id,
             'asset': self.asset,
             'apr': float(self.apr),
-            'timestamp': self.timestamp.isoformat()
+            'timestamp': self.timestamp.isoformat(),
+            'yield_type': self.yield_type
         }
 
 
@@ -55,6 +60,9 @@ class KineticAPYSnapshot:
     # Market type (Primary, ISO: FXRP-USDT0-stXRP, ISO: JOULE-USDC-FLR)
     market_type: Optional[str] = None
     
+    # Yield type (supply or borrow - lending markets have both)
+    yield_type: Optional[str] = 'supply'  # lp, supply, or borrow
+    
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -71,7 +79,8 @@ class KineticAPYSnapshot:
             'utilization_rate': float(self.utilization_rate) if self.utilization_rate else None,
             'price_snapshot_id': self.price_snapshot_id,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'market_type': self.market_type
+            'market_type': self.market_type,
+            'yield_type': self.yield_type
         }
 
 

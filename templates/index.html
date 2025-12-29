@@ -1,63 +1,265 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    .strategy-card {
+        background: var(--secondary-bg);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+        height: 100%;
+        transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+        text-decoration: none;
+        display: block;
+        color: inherit;
+    }
+    .strategy-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255,255,255,0.2);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        color: inherit;
+    }
+    .strategy-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+    }
+    .strategy-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .strategy-desc {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    .best-apr {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: rgba(74, 222, 128, 0.1);
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+    }
+    .best-apr-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #4ade80;
+    }
+    .best-apr-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    .best-apr-asset {
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .protocol-logo-small {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+    }
+    .chain-mini {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .chain-flare { background: #e84142; }
+    .chain-cardano { background: #0033ad; }
+    
+    .chain-card {
+        background: var(--secondary-bg);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        padding: 1.25rem;
+        transition: transform 0.2s;
+    }
+    .chain-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .hero-section {
+        text-align: center;
+        padding: 2rem 0 3rem;
+    }
+    .hero-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    .hero-subtitle {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-12 text-center mb-5">
-        <h1 class="display-4 fw-bold mb-3">DeFi APR Historical Tracker</h1>
-        <p class="lead text-secondary">Track and compare yield rates across multiple blockchains</p>
+<div class="hero-section">
+    <h1 class="hero-title">DeFi Yield Tracker</h1>
+    <p class="hero-subtitle">Compare yield opportunities across chains and strategies</p>
+</div>
+
+<!-- Strategy Cards -->
+<div class="row g-4 mb-5">
+    <div class="col-md-4">
+        <a href="/lps" class="strategy-card">
+            <div class="strategy-icon">🌊</div>
+            <div class="strategy-title">Liquidity Pools</div>
+            <div class="strategy-desc">Provide liquidity to DEXs and earn trading fees + rewards</div>
+            <div class="best-apr" id="lp-best">
+                <div>
+                    <div class="best-apr-value" id="lp-apr">--</div>
+                    <div class="best-apr-label">Best APR</div>
+                </div>
+                <div class="ms-auto text-end">
+                    <div class="best-apr-asset" id="lp-asset">Loading...</div>
+                    <div id="lp-chain"></div>
+                </div>
+            </div>
+            <small class="text-muted" id="lp-count">-- pools tracked</small>
+        </a>
+    </div>
+    
+    <div class="col-md-4">
+        <a href="/earn" class="strategy-card">
+            <div class="strategy-icon">💰</div>
+            <div class="strategy-title">Earn (Lend)</div>
+            <div class="strategy-desc">Supply assets to lending markets and earn interest</div>
+            <div class="best-apr" id="supply-best">
+                <div>
+                    <div class="best-apr-value" id="supply-apr">--</div>
+                    <div class="best-apr-label">Best APY</div>
+                </div>
+                <div class="ms-auto text-end">
+                    <div class="best-apr-asset" id="supply-asset">Loading...</div>
+                    <div id="supply-chain"></div>
+                </div>
+            </div>
+            <small class="text-muted" id="supply-count">-- assets tracked</small>
+        </a>
+    </div>
+    
+    <div class="col-md-4">
+        <a href="/borrow" class="strategy-card">
+            <div class="strategy-icon">🏦</div>
+            <div class="strategy-title">Borrow Rates</div>
+            <div class="strategy-desc">Compare borrowing costs across lending markets</div>
+            <div class="best-apr" id="borrow-best" style="background: rgba(239, 68, 68, 0.1);">
+                <div>
+                    <div class="best-apr-value" id="borrow-apr" style="color: #ef4444;">--</div>
+                    <div class="best-apr-label">Lowest Rate</div>
+                </div>
+                <div class="ms-auto text-end">
+                    <div class="best-apr-asset" id="borrow-asset">Loading...</div>
+                    <div id="borrow-chain"></div>
+                </div>
+            </div>
+            <small class="text-muted" id="borrow-count">-- assets tracked</small>
+        </a>
     </div>
 </div>
 
-<div class="row g-4">
+<!-- Chain Quick Links -->
+<h4 class="mb-3">Browse by Chain</h4>
+<div class="row g-3 mb-5">
     <div class="col-md-6">
-        <div class="card p-4">
-            <div class="d-flex align-items-center mb-3">
-                <span class="chain-badge chain-flare me-3">FLARE</span>
-                <h3 class="mb-0">Flare Network</h3>
+        <a href="/chain/flare" class="chain-card d-flex align-items-center text-decoration-none text-white">
+            <span class="chain-badge chain-flare me-3">FLARE</span>
+            <div>
+                <strong>Flare Network</strong>
+                <br><small class="text-muted">Kinetic lending markets</small>
             </div>
-            <p class="text-secondary mb-3">Kinetic Markets lending protocol</p>
-            <div class="mb-3">
-                <small class="text-muted">6 Assets Tracked</small>
-            </div>
-            <a href="/chain/flare" class="btn btn-primary">View Charts →</a>
-        </div>
+            <span class="ms-auto">→</span>
+        </a>
     </div>
-
     <div class="col-md-6">
-        <div class="card p-4">
-            <div class="d-flex align-items-center mb-3">
-                <span class="chain-badge chain-cardano me-3">CARDANO</span>
-                <h3 class="mb-0">Cardano</h3>
+        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
+            <span class="chain-badge chain-cardano me-3">CARDANO</span>
+            <div>
+                <strong>Cardano</strong>
+                <br><small class="text-muted">Minswap liquidity pools</small>
             </div>
-            <p class="text-secondary mb-3">Minswap DEX liquidity pools</p>
-            <div class="mb-3">
-                <small class="text-muted">35 Pools Tracked</small>
-            </div>
-            <a href="/chain/cardano" class="btn btn-primary">View Charts →</a>
-        </div>
+            <span class="ms-auto">→</span>
+        </a>
     </div>
 </div>
 
-<div class="row mt-5">
-    <div class="col-12">
-        <div class="card p-4">
-            <h4 class="mb-4">Features</h4>
-            <div class="row">
-                <div class="col-md-4">
-                    <h6>📈 Historical Data</h6>
-                    <p class="text-secondary">Track APR changes over time</p>
-                </div>
-                <div class="col-md-4">
-                    <h6>🔗 Embeddable Widgets</h6>
-                    <p class="text-secondary">Add charts to your site</p>
-                </div>
-                <div class="col-md-4">
-                    <h6>🔄 Daily Updates</h6>
-                    <p class="text-secondary">Fresh data every day</p>
-                </div>
-            </div>
+<!-- Features -->
+<div class="card p-4">
+    <h4 class="mb-4">Features</h4>
+    <div class="row">
+        <div class="col-md-3">
+            <h6>📈 Historical Data</h6>
+            <p class="text-secondary small">Track APR/APY changes over time with interactive charts</p>
+        </div>
+        <div class="col-md-3">
+            <h6>🔗 Multi-Chain</h6>
+            <p class="text-secondary small">Compare yields across Flare, Cardano, and more</p>
+        </div>
+        <div class="col-md-3">
+            <h6>📊 Strategy Views</h6>
+            <p class="text-secondary small">Filter by LPs, lending supply, or borrow rates</p>
+        </div>
+        <div class="col-md-3">
+            <h6>🔄 Daily Updates</h6>
+            <p class="text-secondary small">Fresh data collected automatically every day</p>
         </div>
     </div>
 </div>
 {% endblock %}
 
+{% block extra_js %}
+<script>
+async function loadBestYields() {
+    // Load LP best
+    try {
+        const lpResponse = await fetch('/api/yields/lp/latest');
+        const lpData = await lpResponse.json();
+        if (lpData.length > 0) {
+            const best = lpData[0];
+            document.getElementById('lp-apr').textContent = best.apr.toFixed(1) + '%';
+            document.getElementById('lp-asset').textContent = best.symbol;
+            document.getElementById('lp-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
+            document.getElementById('lp-count').textContent = `${lpData.length} pools tracked`;
+        }
+    } catch (e) { console.error('Error loading LP data', e); }
+    
+    // Load Supply best
+    try {
+        const supplyResponse = await fetch('/api/yields/supply/latest');
+        const supplyData = await supplyResponse.json();
+        if (supplyData.length > 0) {
+            const best = supplyData[0];
+            document.getElementById('supply-apr').textContent = best.apr.toFixed(1) + '%';
+            document.getElementById('supply-asset').textContent = best.symbol;
+            document.getElementById('supply-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
+            document.getElementById('supply-count').textContent = `${supplyData.length} assets tracked`;
+        }
+    } catch (e) { console.error('Error loading supply data', e); }
+    
+    // Load Borrow best (lowest rate)
+    try {
+        const borrowResponse = await fetch('/api/yields/borrow/latest');
+        const borrowData = await borrowResponse.json();
+        if (borrowData.length > 0) {
+            // Sort ascending to get lowest rate
+            borrowData.sort((a, b) => a.apr - b.apr);
+            const best = borrowData[0];
+            document.getElementById('borrow-apr').textContent = best.apr.toFixed(1) + '%';
+            document.getElementById('borrow-asset').textContent = best.symbol;
+            document.getElementById('borrow-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
+            document.getElementById('borrow-count').textContent = `${borrowData.length} assets tracked`;
+        }
+    } catch (e) { console.error('Error loading borrow data', e); }
+}
+
+// Load on page load
+loadBestYields();
+</script>
+{% endblock %}

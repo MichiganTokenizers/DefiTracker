@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - DeFi APR Tracker{% endblock %}
+
+{% block extra_css %}
+<style>
+    .yield-type-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .yield-type-icon {
+        font-size: 2.5rem;
+    }
+    .chain-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .chain-flare { background: #e84142; }
+    .chain-cardano { background: #0033ad; }
+    #aprTable th {
+        border-top: none;
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        padding: 1rem;
+        font-weight: 600;
+        color: #b0b3c1;
+        cursor: pointer;
+        user-select: none;
+    }
+    #aprTable th:hover {
+        color: #ffffff;
+    }
+    #aprTable td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #aprTable tbody tr:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="yield-type-header">
+    <span class="yield-type-icon">{{ icon }}</span>
+    <div>
+        <h2 class="display-6 mb-0">{{ title }}</h2>
+        <p class="text-secondary mb-0">{{ description }}</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <label class="form-label">Time Range</label>
+        <select id="timeRange" class="form-select">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Chain</label>
+        <select id="chainFilter" class="form-select">
+            <option value="all">All Chains</option>
+            <option value="flare">Flare</option>
+            <option value="cardano">Cardano</option>
+        </select>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="row">
+    <div class="col-12">
+        <div class="card p-4" style="min-height: 500px;">
+            <canvas id="aprChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Full Table -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card p-4">
+            <h5 class="mb-3">All {{ title }}</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover" id="aprTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)" id="th-0">Asset</th>
+                            <th onclick="sortTable(1)" id="th-1">Chain</th>
+                            <th onclick="sortTable(2)" id="th-2">Protocol</th>
+                            <th onclick="sortTable(3)" id="th-3">Current APR ↓</th>
+                            <th onclick="sortTable(4)" id="th-4">24h Change</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="yieldTable">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const yieldType = "{{ yield_type }}";
+let chart = null;
+let allData = [];
+let currentSortColumn = 3;
+let currentSortDirection = 'desc';
+
+// Protocol logo mapping
+const protocolLogos = {
+    'kinetic': '/static/kinetic-logo.svg',
+    'minswap': '/static/minswap-logo.webp'
+};
+
+// Chain colors
+const chainColors = {
+    'flare': '#e84142',
+    'cardano': '#0033ad'
+};
+
+async function loadData() {
+    const days = document.getElementById('timeRange').value;
+    const chainFilter = document.getElementById('chainFilter').value;
+    
+    // Load historical data
+    const historyResponse = await fetch(`/api/yields/${yieldType}?days=${days}`);
+    allData = await historyResponse.json();
+    
+    // Filter by chain if needed
+    let filteredData = allData;
+    if (chainFilter !== 'all') {
+        filteredData = allData.filter(d => d.chain === chainFilter);
+    }
+    
+    // Load latest for table
+    const latestResponse = await fetch(`/api/yields/${yieldType}/latest`);
+    let latestData = await latestResponse.json();
+    
+    if (chainFilter !== 'all') {
+        latestData = latestData.filter(d => d.chain === chainFilter);
+    }
+    
+    updateChart(filteredData);
+    updateTable(latestData);
+}
+
+function updateChart(data) {
+    if (chart) {
+        chart.destroy();
+    }
+    
+    const days = document.getElementById('timeRange').value;
+    
+    // Take top 8 by latest APR for chart
+    const sortedData = [...data].sort((a, b) => {
+        const aLatest = a.data[a.data.length - 1]?.apr || 0;
+        const bLatest = b.data[b.data.length - 1]?.apr || 0;
+        return bLatest - aLatest;
+    }).slice(0, 8);
+    
+    const datasets = sortedData.map((item, idx) => {
+        const colors = [
+            '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
+            '#ec4899', '#14b8a6', '#f97316'
+        ];
+        const color = colors[idx % colors.length];
+        
+        return {
+            label: `${item.symbol} (${item.chain})`,
+            data: item.data.map(d => ({
+                x: new Date(d.timestamp),
+                y: d.apr
+            })),
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true
+        };
+    });
+    
+    const ctx = document.getElementById('aprChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#ffffff' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    ticks: { color: '#b0b3c1' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    ticks: {
+                        color: '#b0b3c1',
+                        callback: (value) => value + '%'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateTable(data) {
+    window.tableData = data.map(item => ({
+        symbol: item.symbol,
+        chain: item.chain,
+        protocol: item.protocol,
+        apr: item.apr,
+        market_type: item.market_type,
+        timestamp: new Date(item.timestamp),
+        change24h: null // Would need historical data to calculate
+    }));
+    
+    applySortToTable();
+}
+
+function applySortToTable() {
+    const tbody = document.getElementById('yieldTable');
+    tbody.innerHTML = '';
+    
+    let sorted = [...window.tableData];
+    
+    sorted.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(currentSortColumn) {
+            case 0: // Asset
+                return currentSortDirection === 'asc' ? 
+                    a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
+            case 1: // Chain
+                return currentSortDirection === 'asc' ? 
+                    a.chain.localeCompare(b.chain) : b.chain.localeCompare(a.chain);
+            case 2: // Protocol
+                return currentSortDirection === 'asc' ? 
+                    a.protocol.localeCompare(b.protocol) : b.protocol.localeCompare(a.protocol);
+            case 3: // APR
+                return currentSortDirection === 'asc' ? a.apr - b.apr : b.apr - a.apr;
+            case 4: // 24h Change
+                aVal = a.change24h ?? -Infinity;
+                bVal = b.change24h ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            default:
+                return 0;
+        }
+    });
+    
+    // Update column headers
+    for (let i = 0; i < 5; i++) {
+        const th = document.getElementById(`th-${i}`);
+        if (th) {
+            let text = th.textContent.replace(/ [↑↓]/g, '');
+            if (i === currentSortColumn) {
+                text += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+            th.textContent = text;
+        }
+    }
+    
+    sorted.forEach(item => {
+        const logo = protocolLogos[item.protocol] || '';
+        const chainClass = `chain-${item.chain}`;
+        const timeAgo = formatTimeAgo(item.timestamp);
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                ${logo ? `<img src="${logo}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;">` : ''}
+                <strong>${item.symbol}</strong>
+                ${item.market_type ? `<br><small class="text-muted">${item.market_type}</small>` : ''}
+            </td>
+            <td><span class="chain-pill ${chainClass}">${item.chain}</span></td>
+            <td>${item.protocol}</td>
+            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
+            <td><span class="text-muted">-</span></td>
+            <td class="text-secondary">${timeAgo}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function sortTable(columnIndex) {
+    if (currentSortColumn === columnIndex) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = columnIndex;
+        currentSortDirection = 'desc';
+    }
+    applySortToTable();
+}
+
+// Event listeners
+document.getElementById('timeRange').addEventListener('change', loadData);
+document.getElementById('chainFilter').addEventListener('change', loadData);
+
+// Initial load
+loadData();
+</script>
+{% endblock %}
+

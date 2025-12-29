@@ -91,6 +91,7 @@ def collect_and_store_minswap():
                 asset_id=asset_id,
                 apr=Decimal(apr),
                 timestamp=timestamp,
+                yield_type='lp',  # Minswap is a DEX - all pairs are liquidity pools
             )
             inserted += 1
             logger.info("Stored APR snapshot for %s: %s%%", asset, apr)
