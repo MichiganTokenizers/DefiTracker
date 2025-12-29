@@ -3,18 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}DeFi APR Tracker{% endblock %}</title>
+    <title>{% block title %}YieldLife - DeFi Yield Tracker{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link rel="icon" type="image/png" href="/static/YieldLife_Logo_transparent.png">
     <style>
         :root {
+            /* New color palette */
+            --carbon-black: #1f201f;
+            --sea-green: #0e8749;
+            --moss-green: #79cf55;
+            --crimson-carrot: #f74b03;
+            --sand-dune: #ddd6b9;
+            
+            /* Semantic mappings */
             --flare-color: #e84142;
             --cardano-color: #0033ad;
-            --primary-bg: #1a1d29;
-            --secondary-bg: #252938;
-            --text-primary: #ffffff;
-            --text-secondary: #b0b3c1;
+            --primary-bg: var(--sand-dune);
+            --secondary-bg: #ccc5a8;
+            --text-primary: var(--carbon-black);
+            --text-secondary: #4a4a4a;
+            --accent-primary: var(--sea-green);
+            --accent-secondary: var(--moss-green);
+            --accent-highlight: var(--crimson-carrot);
         }
         body {
             background: var(--primary-bg);
@@ -22,17 +34,29 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         .navbar {
-            background: var(--secondary-bg) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: var(--carbon-black) !important;
+            border-bottom: 1px solid rgba(31, 32, 31, 0.2);
+        }
+        .navbar-brand, .nav-link {
+            color: var(--sand-dune) !important;
+        }
+        .nav-link:hover {
+            color: var(--moss-green) !important;
         }
         .navbar-brand {
             font-weight: 700;
             font-size: 1.5rem;
         }
+        .navbar-brand img {
+            height: 32px;
+            margin-right: 8px;
+            border-radius: 6px;
+        }
         .card {
-            background: var(--secondary-bg);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: #fff;
+            border: 1px solid rgba(31, 32, 31, 0.15);
             border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(31, 32, 31, 0.08);
         }
         .chain-badge {
             padding: 4px 12px;
@@ -45,40 +69,55 @@
         .apr-value {
             font-size: 2rem;
             font-weight: 700;
-            color: #4ade80;
+            color: var(--moss-green);
         }
         .btn-primary {
-            background: #4ade80;
+            background: var(--sea-green);
             border: none;
-            color: #000;
+            color: #fff;
             font-weight: 600;
         }
         .btn-primary:hover {
-            background: #22c55e;
+            background: var(--moss-green);
+            color: #1f201f;
         }
         .form-select, .form-control {
-            background: var(--secondary-bg);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: #fff;
+            border: 1px solid rgba(31, 32, 31, 0.2);
             color: var(--text-primary);
         }
         .form-select:focus, .form-control:focus {
-            background: var(--secondary-bg);
+            background: #fff;
             color: var(--text-primary);
-            border-color: #4ade80;
-            box-shadow: 0 0 0 0.25rem rgba(74, 222, 128, 0.25);
+            border-color: var(--sea-green);
+            box-shadow: 0 0 0 0.25rem rgba(14, 135, 73, 0.25);
         }
         .form-label {
             color: var(--text-secondary);
             font-size: 0.875rem;
             font-weight: 600;
         }
+        .text-success, .positive { color: var(--sea-green) !important; }
+        .text-danger, .negative { color: var(--crimson-carrot) !important; }
+        a { color: var(--sea-green); }
+        a:hover { color: var(--moss-green); }
+        .dropdown-menu-dark {
+            background: var(--carbon-black);
+        }
+        .table { color: var(--text-primary); }
+        .table-dark { 
+            background: var(--carbon-black); 
+            color: var(--sand-dune);
+        }
+        .text-muted { color: var(--text-secondary) !important; }
+        .text-secondary { color: var(--text-secondary) !important; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">📊 DeFi APR Tracker</a>
+            <a class="navbar-brand" href="/"><img src="/static/YieldLife_Logo_transparent.png" alt="Logo"> YieldLife</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
