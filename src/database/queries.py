@@ -6,7 +6,7 @@ from psycopg2.extras import RealDictCursor
 import logging
 
 from src.database.connection import DatabaseConnection
-from src.database.models import APRSnapshot, KineticAPYSnapshot, PriceSnapshot
+from src.database.models import APRSnapshot, KineticAPYSnapshot, LiqwidAPYSnapshot, PriceSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -522,6 +522,177 @@ class APYQueries:
                 
         except Exception as e:
             logger.error(f"Error getting Kinetic APY history for {asset_symbol}: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+    
+    # ============================================
+    # Liqwid APY snapshot operations
+    # ============================================
+    
+    def insert_liqwid_apy_snapshot(self, snapshot: LiqwidAPYSnapshot) -> int:
+        """Insert a Liqwid APY snapshot and return its ID"""
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO liqwid_apy_snapshots (
+                        asset_id, market_id, supply_apy, lq_supply_apy, total_supply_apy,
+                        borrow_apy, total_supply, total_borrows, utilization_rate,
+                        available_liquidity, yield_type, timestamp
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING snapshot_id
+                """, (
+                    snapshot.asset_id,
+                    snapshot.market_id,
+                    snapshot.supply_apy,
+                    snapshot.lq_supply_apy,
+                    snapshot.total_supply_apy,
+                    snapshot.borrow_apy,
+                    snapshot.total_supply,
+                    snapshot.total_borrows,
+                    snapshot.utilization_rate,
+                    snapshot.available_liquidity,
+                    snapshot.yield_type or 'supply',
+                    snapshot.timestamp or datetime.utcnow()
+                ))
+                
+                snapshot_id = cur.fetchone()[0]
+                conn.commit()
+                logger.info(f"Inserted Liqwid APY snapshot for asset {snapshot.asset_symbol} (id={snapshot_id})")
+                return snapshot_id
+                
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error inserting Liqwid APY snapshot: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+    
+    def get_latest_liqwid_apy(self, asset_symbol: str) -> Optional[LiqwidAPYSnapshot]:
+        """Get the latest Liqwid APY snapshot for an asset"""
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT l.snapshot_id, l.asset_id, a.symbol, l.market_id,
+                           l.supply_apy, l.lq_supply_apy, l.total_supply_apy, l.borrow_apy,
+                           l.total_supply, l.total_borrows, l.utilization_rate,
+                           l.available_liquidity, l.yield_type, l.timestamp
+                    FROM liqwid_apy_snapshots l
+                    JOIN assets a ON l.asset_id = a.asset_id
+                    WHERE a.symbol = %s
+                    ORDER BY l.timestamp DESC
+                    LIMIT 1
+                """, (asset_symbol,))
+                
+                row = cur.fetchone()
+                if row:
+                    return LiqwidAPYSnapshot(
+                        snapshot_id=row[0],
+                        asset_id=row[1],
+                        asset_symbol=row[2],
+                        market_id=row[3],
+                        supply_apy=row[4],
+                        lq_supply_apy=row[5],
+                        total_supply_apy=row[6],
+                        borrow_apy=row[7],
+                        total_supply=row[8],
+                        total_borrows=row[9],
+                        utilization_rate=row[10],
+                        available_liquidity=row[11],
+                        yield_type=row[12],
+                        timestamp=row[13]
+                    )
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting latest Liqwid APY for {asset_symbol}: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+    
+    def get_liqwid_apy_history(self, asset_symbol: str, days: int = 30) -> List[LiqwidAPYSnapshot]:
+        """Get Liqwid APY history for an asset"""
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT l.snapshot_id, l.asset_id, a.symbol, l.market_id,
+                           l.supply_apy, l.lq_supply_apy, l.total_supply_apy, l.borrow_apy,
+                           l.total_supply, l.total_borrows, l.utilization_rate,
+                           l.available_liquidity, l.yield_type, l.timestamp
+                    FROM liqwid_apy_snapshots l
+                    JOIN assets a ON l.asset_id = a.asset_id
+                    WHERE a.symbol = %s
+                      AND l.timestamp >= NOW() - INTERVAL '%s days'
+                    ORDER BY l.timestamp DESC
+                """, (asset_symbol, days))
+                
+                results = []
+                for row in cur.fetchall():
+                    results.append(LiqwidAPYSnapshot(
+                        snapshot_id=row[0],
+                        asset_id=row[1],
+                        asset_symbol=row[2],
+                        market_id=row[3],
+                        supply_apy=row[4],
+                        lq_supply_apy=row[5],
+                        total_supply_apy=row[6],
+                        borrow_apy=row[7],
+                        total_supply=row[8],
+                        total_borrows=row[9],
+                        utilization_rate=row[10],
+                        available_liquidity=row[11],
+                        yield_type=row[12],
+                        timestamp=row[13]
+                    ))
+                return results
+                
+        except Exception as e:
+            logger.error(f"Error getting Liqwid APY history for {asset_symbol}: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+    
+    def get_all_latest_liqwid_apys(self) -> List[LiqwidAPYSnapshot]:
+        """Get the latest Liqwid APY snapshot for all markets"""
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT DISTINCT ON (a.symbol)
+                           l.snapshot_id, l.asset_id, a.symbol, l.market_id,
+                           l.supply_apy, l.lq_supply_apy, l.total_supply_apy, l.borrow_apy,
+                           l.total_supply, l.total_borrows, l.utilization_rate,
+                           l.available_liquidity, l.yield_type, l.timestamp
+                    FROM liqwid_apy_snapshots l
+                    JOIN assets a ON l.asset_id = a.asset_id
+                    ORDER BY a.symbol, l.timestamp DESC
+                """)
+                
+                results = []
+                for row in cur.fetchall():
+                    results.append(LiqwidAPYSnapshot(
+                        snapshot_id=row[0],
+                        asset_id=row[1],
+                        asset_symbol=row[2],
+                        market_id=row[3],
+                        supply_apy=row[4],
+                        lq_supply_apy=row[5],
+                        total_supply_apy=row[6],
+                        borrow_apy=row[7],
+                        total_supply=row[8],
+                        total_borrows=row[9],
+                        utilization_rate=row[10],
+                        available_liquidity=row[11],
+                        yield_type=row[12],
+                        timestamp=row[13]
+                    ))
+                return results
+                
+        except Exception as e:
+            logger.error(f"Error getting all latest Liqwid APYs: {e}")
             raise
         finally:
             self.db.return_connection(conn)

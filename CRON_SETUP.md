@@ -166,6 +166,57 @@ python scripts/collect_minswap_apr.py
 - Kinetic: `logs/kinetic_collection.log`
 - Minswap: `logs/minswap_collection.log`
 
+---
+
+# Cron Setup for Liqwid APY Collection
+
+## Overview
+
+The script `scripts/collect_liqwid_apy.py` pulls APY data from Liqwid Finance (Cardano lending protocol) and stores them in `liqwid_apy_snapshots`.
+
+Liqwid is similar to Kinetic but on Cardano. It provides:
+- Supply APY (base interest + LQ token rewards)
+- Borrow APY
+- Market utilization and liquidity data
+
+### Prerequisites
+
+1. Run migration `migrations/008_liqwid_apy_snapshots.sql` to create the table
+2. Ensure `liqwid` is enabled in `config/chains.yaml` under `chains.cardano.protocols`
+3. Database and virtualenv set up as above
+
+### Test the Script
+
+```bash
+cd /home/danladuke/Projects/DefiTracker
+source venv/bin/activate
+python scripts/collect_liqwid_apy.py
+```
+
+### Add to Crontab (daily at 1:00 AM UTC)
+
+```cron
+0 1 * * * cd /home/danladuke/Projects/DefiTracker && /home/danladuke/Projects/DefiTracker/venv/bin/python scripts/collect_liqwid_apy.py >> logs/liqwid_collection.log 2>&1
+```
+
+### Verify Data Collection
+
+```sql
+-- Latest Liqwid APY snapshots
+SELECT a.symbol, l.supply_apy, l.lq_supply_apy, l.total_supply_apy, 
+       l.borrow_apy, l.utilization_rate, l.timestamp
+FROM liqwid_apy_snapshots l
+JOIN assets a ON l.asset_id = a.asset_id
+ORDER BY l.timestamp DESC
+LIMIT 10;
+```
+
+### Logs
+
+- Kinetic: `logs/kinetic_collection.log`
+- Minswap: `logs/minswap_collection.log`
+- Liqwid: `logs/liqwid_collection.log`
+
 ## Upgrading to Celery (Future)
 
 When ready to upgrade to Celery for more robust task management:

@@ -126,3 +126,53 @@ class PriceSnapshot:
             'reserve_quote': float(self.reserve_quote) if self.reserve_quote else None,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
+
+
+@dataclass
+class LiqwidAPYSnapshot:
+    """Represents a Liqwid Finance protocol APY snapshot"""
+    asset_id: int
+    asset_symbol: str  # For convenience, not stored in DB
+    
+    # Market identification
+    market_id: Optional[str] = None
+    
+    # Supply side APY (what lenders earn)
+    supply_apy: Optional[Decimal] = None  # Base supply APY
+    lq_supply_apy: Optional[Decimal] = None  # LQ token reward APY
+    total_supply_apy: Optional[Decimal] = None  # Base + LQ rewards
+    
+    # Borrow side APY (what borrowers pay)
+    borrow_apy: Optional[Decimal] = None
+    
+    # Market state data
+    total_supply: Optional[Decimal] = None
+    total_borrows: Optional[Decimal] = None
+    utilization_rate: Optional[Decimal] = None
+    available_liquidity: Optional[Decimal] = None
+    
+    # Yield type (supply or borrow)
+    yield_type: Optional[str] = 'supply'
+    
+    # Timestamps
+    timestamp: Optional[datetime] = None
+    snapshot_id: Optional[int] = None
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'snapshot_id': self.snapshot_id,
+            'asset_id': self.asset_id,
+            'asset_symbol': self.asset_symbol,
+            'market_id': self.market_id,
+            'supply_apy': float(self.supply_apy) if self.supply_apy else None,
+            'lq_supply_apy': float(self.lq_supply_apy) if self.lq_supply_apy else None,
+            'total_supply_apy': float(self.total_supply_apy) if self.total_supply_apy else None,
+            'borrow_apy': float(self.borrow_apy) if self.borrow_apy else None,
+            'total_supply': float(self.total_supply) if self.total_supply else None,
+            'total_borrows': float(self.total_borrows) if self.total_borrows else None,
+            'utilization_rate': float(self.utilization_rate) if self.utilization_rate else None,
+            'available_liquidity': float(self.available_liquidity) if self.available_liquidity else None,
+            'yield_type': self.yield_type,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }

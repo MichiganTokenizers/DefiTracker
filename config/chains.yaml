@@ -252,6 +252,47 @@ chains:
             farm_id: "628718ccbdfaec8db0894f3ba25374374de672d487788e6158897070"
             pool_id: "555344542d695553442d534c50"
           # Add more pairs here; set enabled in code by naming them in schedules/scripts
+      
+      liqwid:
+        enabled: true
+        # Liqwid Finance - Cardano lending protocol
+        # Documentation: https://docs.liqwid.finance/
+        graphql_url: "https://v2.api.liqwid.finance/graphql"
+        timeout: 15
+        max_retries: 3
+        cache_ttl: 60  # Cache market data for 60 seconds
+        # Markets to track (leave empty to track all available markets)
+        # These are the main Liqwid markets (discovered from API)
+        markets:
+          - symbol: "ADA"
+            name: "Ada"
+          - symbol: "DJED"
+            name: "Djed"
+          - symbol: "iUSD"
+            name: "iUSD"
+          - symbol: "USDA"
+            name: "USDA"
+          - symbol: "SHEN"
+            name: "Shen"
+          - symbol: "MIN"
+            name: "Minswap"
+          - symbol: "SNEK"
+            name: "SNEK"
+          - symbol: "NIGHT"
+            name: "NIGHT"
+          - symbol: "wanUSDC"
+            name: "Wrapped USDC"
+          - symbol: "wanDAI"
+            name: "Wrapped DAI"
+          - symbol: "wanBTC"
+            name: "Wrapped BTC"
+          - symbol: "wanETH"
+            name: "Wrapped ETH"
+          - symbol: "LQ"
+            name: "Liqwid Token"
+          - symbol: "IAG"
+            name: "IAG"
+    
     # Add more chains here as they're implemented
     # ethereum:
     #   enabled: false
