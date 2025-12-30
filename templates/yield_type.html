@@ -188,7 +188,7 @@ function updateChart(data) {
             backgroundColor: color + '20',
             borderWidth: 2,
             tension: 0.4,
-            fill: true
+            fill: false
         };
     });
     
@@ -201,7 +201,12 @@ function updateChart(data) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    labels: { color: '#ffffff' }
+                    labels: { 
+                        color: '#1f201f',
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 20
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -213,14 +218,14 @@ function updateChart(data) {
                 x: {
                     type: 'time',
                     time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
-                    grid: { color: 'rgba(255,255,255,0.1)' },
-                    ticks: { color: '#b0b3c1' }
+                    grid: { display: false },
+                    ticks: { color: '#4a4a4a' }
                 },
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    grid: { color: 'rgba(31, 32, 31, 0.1)' },
                     ticks: {
-                        color: '#b0b3c1',
+                        color: '#4a4a4a',
                         callback: (value) => value + '%'
                     }
                 }
