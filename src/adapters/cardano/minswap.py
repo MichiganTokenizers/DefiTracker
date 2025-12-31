@@ -15,9 +15,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PoolMetrics:
-    """Container for pool metrics (APR and TVL)."""
+    """Container for pool metrics (APR, TVL, fees, volume)."""
     apr: Optional[Decimal] = None
     tvl_usd: Optional[Decimal] = None
+    fees_24h: Optional[Decimal] = None
+    volume_24h: Optional[Decimal] = None
 
 
 class MinswapAdapter(ProtocolAdapter):
@@ -50,6 +52,21 @@ class MinswapAdapter(ProtocolAdapter):
         "total_liquidity",
         "lockedValue",
         "locked_value",
+    ]
+
+    CANDIDATE_FEES_24H_KEYS = [
+        "trading_fee_24h",
+        "fees_24h",
+        "fees24h",
+        "tradingFee24h",
+        "fee24h",
+    ]
+
+    CANDIDATE_VOLUME_24H_KEYS = [
+        "volume_24h",
+        "volume24h",
+        "tradingVolume24h",
+        "trading_volume_24h",
     ]
 
     def __init__(self, protocol_name: str, config: Dict):
@@ -124,6 +141,22 @@ class MinswapAdapter(ProtocolAdapter):
                 metrics.tvl_usd = Decimal(str(tvl_value))
             except Exception:
                 logger.error("Could not convert TVL value %s for %s", tvl_value, asset)
+
+        # Extract 24h fees
+        fees_value = self._extract_field(payload, self.CANDIDATE_FEES_24H_KEYS)
+        if fees_value is not None:
+            try:
+                metrics.fees_24h = Decimal(str(fees_value))
+            except Exception:
+                logger.error("Could not convert fees_24h value %s for %s", fees_value, asset)
+
+        # Extract 24h volume
+        volume_value = self._extract_field(payload, self.CANDIDATE_VOLUME_24H_KEYS)
+        if volume_value is not None:
+            try:
+                metrics.volume_24h = Decimal(str(volume_value))
+            except Exception:
+                logger.error("Could not convert volume_24h value %s for %s", volume_value, asset)
 
         return metrics
 
@@ -315,10 +348,23 @@ class MinswapAdapter(ProtocolAdapter):
         Looks for common TVL keys in the Minswap API response.
         Returns value in USD if available, otherwise in ADA.
         """
+        return self._extract_field(payload, self.CANDIDATE_TVL_KEYS)
+
+    def _extract_field(self, payload: Dict, candidate_keys: List[str]) -> Optional[float]:
+        """
+        Extract a numeric field from the API payload by trying candidate keys.
+
+        Args:
+            payload: API response dict
+            candidate_keys: List of possible key names to try
+
+        Returns:
+            Field value or None if not found
+        """
         if not isinstance(payload, dict):
             return None
 
-        for key in self.CANDIDATE_TVL_KEYS:
+        for key in candidate_keys:
             if key in payload and payload[key] is not None:
                 return payload[key]
 
@@ -326,9 +372,9 @@ class MinswapAdapter(ProtocolAdapter):
         for nested in ("pool", "statistics", "data"):
             nested_value = payload.get(nested)
             if isinstance(nested_value, dict):
-                tvl = self._extract_tvl(nested_value)
-                if tvl is not None:
-                    return tvl
+                value = self._extract_field(nested_value, candidate_keys)
+                if value is not None:
+                    return value
 
         return None
 

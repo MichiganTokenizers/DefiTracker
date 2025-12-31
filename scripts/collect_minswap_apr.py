@@ -43,9 +43,9 @@ def load_config():
 
 
 def collect_and_store_minswap():
-    """Collect APRs and TVL from Minswap and persist to the database."""
+    """Collect APRs, TVL, fees, and volume from Minswap and persist to the database."""
     logger.info("=" * 60)
-    logger.info("Starting Minswap APR/TVL collection")
+    logger.info("Starting Minswap APR/TVL/Fees collection")
     logger.info("Timestamp: %s", datetime.utcnow().isoformat())
     logger.info("=" * 60)
 
@@ -102,10 +102,15 @@ def collect_and_store_minswap():
                 timestamp=timestamp,
                 yield_type='lp',  # Minswap is a DEX - all pairs are liquidity pools
                 tvl_usd=metrics.tvl_usd,
+                fees_24h=metrics.fees_24h,
+                volume_24h=metrics.volume_24h,
             )
             inserted += 1
             tvl_str = f"${metrics.tvl_usd:,.2f}" if metrics.tvl_usd else "N/A"
-            logger.info("Stored snapshot for %s: APR=%s%%, TVL=%s", asset, metrics.apr, tvl_str)
+            fees_str = f"${metrics.fees_24h:,.2f}" if metrics.fees_24h else "N/A"
+            vol_str = f"${metrics.volume_24h:,.2f}" if metrics.volume_24h else "N/A"
+            logger.info("Stored snapshot for %s: APR=%s%%, TVL=%s, Fees24h=%s, Vol24h=%s", 
+                       asset, metrics.apr, tvl_str, fees_str, vol_str)
 
         logger.info("Minswap collection complete. Snapshots inserted: %s", inserted)
         return 0
