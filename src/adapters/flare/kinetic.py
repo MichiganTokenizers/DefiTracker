@@ -195,7 +195,8 @@ class KineticAdapter(ProtocolAdapter):
             asset: Token symbol (e.g., FXRP, USDT0, stXRP, FLR, USDC, JOULE)
             
         Returns:
-            Dict with keys: 'supply_apr', 'distribution_apr', 'total_apy'
+            Dict with keys: 'supply_apr', 'distribution_apr', 'total_apy',
+            'total_supply_tokens', 'total_borrowed_tokens'
             or None if unavailable
         """
         if asset not in self._all_tokens:
@@ -715,6 +716,7 @@ class KineticAdapter(ProtocolAdapter):
             if isinstance(market_metadata, (list, tuple)) and len(market_metadata) >= 15:
                 supply_rate_per_block = market_metadata[1]
                 total_underlying_supply = market_metadata[8]
+                total_borrows_raw = market_metadata[9]  # totalBorrows (index 9)
                 underlying_token_decimals = market_metadata[12]
                 supply_reward_speeds = market_metadata[14]
                 
@@ -723,6 +725,10 @@ class KineticAdapter(ProtocolAdapter):
                 supply_rate_per_second = Decimal(supply_rate_per_block) / Decimal(10**18)
                 supply_apy = ((Decimal(1) + supply_rate_per_second) ** seconds_per_year - 1) * Decimal(100)
                 supply_apr = supply_apy
+                
+                # Convert volume data to token units
+                total_supply_tokens = Decimal(total_underlying_supply) / Decimal(10**underlying_token_decimals) if total_underlying_supply else None
+                total_borrowed_tokens = Decimal(total_borrows_raw) / Decimal(10**underlying_token_decimals) if total_borrows_raw else None
                 
                 # Calculate distribution APY
                 distribution_apr = Decimal(0)
@@ -746,7 +752,9 @@ class KineticAdapter(ProtocolAdapter):
                 return {
                     'supply_apr': supply_apr,
                     'distribution_apr': distribution_apr,
-                    'total_apy': total_apy
+                    'total_apy': total_apy,
+                    'total_supply_tokens': total_supply_tokens,
+                    'total_borrowed_tokens': total_borrowed_tokens,
                 }
             else:
                 return None
@@ -866,7 +874,8 @@ class KineticAdapter(ProtocolAdapter):
             asset: Token symbol (FLR, USDC, JOULE)
             
         Returns:
-            Dict with 'supply_apr', 'distribution_apr', 'total_apy'
+            Dict with 'supply_apr', 'distribution_apr', 'total_apy', 
+            'total_supply_tokens', 'total_borrowed_tokens'
         """
         supply_apr = self._get_apr_from_direct(asset)
         if supply_apr is None:
@@ -877,12 +886,44 @@ class KineticAdapter(ProtocolAdapter):
         distribution_apr = Decimal(0)
         total_apy = supply_apr + distribution_apr
         
+        # Try to get volume data from the ISO contract directly
+        total_supply_tokens = None
+        total_borrowed_tokens = None
+        token_config = self._all_tokens.get(asset)
+        if token_config:
+            iso_address = token_config.get('iso_address')
+            decimals = token_config.get('decimals', 18)
+            if iso_address:
+                try:
+                    iso_abi = [
+                        {"inputs":[],"name":"totalSupply","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
+                        {"inputs":[],"name":"totalBorrows","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
+                        {"inputs":[],"name":"exchangeRateStored","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
+                    ]
+                    iso_contract = self.web3.eth.contract(
+                        address=Web3.to_checksum_address(iso_address),
+                        abi=iso_abi
+                    )
+                    
+                    ctoken_supply = iso_contract.functions.totalSupply().call()
+                    exchange_rate = iso_contract.functions.exchangeRateStored().call()
+                    total_borrows_raw = iso_contract.functions.totalBorrows().call()
+                    
+                    # Convert cToken supply to underlying tokens
+                    underlying_supply = (Decimal(ctoken_supply) * Decimal(exchange_rate)) / Decimal(10**18)
+                    total_supply_tokens = underlying_supply / Decimal(10**decimals)
+                    total_borrowed_tokens = Decimal(total_borrows_raw) / Decimal(10**decimals)
+                except Exception as e:
+                    logger.warning(f"Could not get volume data for {asset}: {e}")
+        
         logger.info(f"Direct breakdown for {asset}: Supply APY={supply_apr:.4f}%, Distribution=0% (Lens not found)")
         
         return {
             'supply_apr': supply_apr,
             'distribution_apr': distribution_apr,
-            'total_apy': total_apy
+            'total_apy': total_apy,
+            'total_supply_tokens': total_supply_tokens,
+            'total_borrowed_tokens': total_borrowed_tokens,
         }
     
     def _get_rewards_paid(

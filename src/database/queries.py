@@ -175,11 +175,13 @@ class DatabaseQueries:
     def insert_apr_snapshot(self, blockchain_id: int, protocol_id: int, 
                            asset_id: int, apr: Decimal, 
                            timestamp: Optional[datetime] = None,
-                           yield_type: str = 'lp') -> int:
+                           yield_type: str = 'lp',
+                           tvl_usd: Optional[Decimal] = None) -> int:
         """Insert a new APR snapshot
         
         Args:
             yield_type: Type of yield - 'lp' (liquidity pool), 'supply' (lending earn), 'borrow' (lending cost)
+            tvl_usd: Total Value Locked in USD (for LPs: total pooled amount, for lending: supply/borrow value)
         """
         if timestamp is None:
             timestamp = datetime.utcnow()
@@ -189,10 +191,10 @@ class DatabaseQueries:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO apr_snapshots 
-                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type)
-                       VALUES (%s, %s, %s, %s, %s, %s)
+                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)
                        RETURNING snapshot_id""",
-                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type)
+                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd)
                 )
                 snapshot_id = cur.fetchone()[0]
                 conn.commit()

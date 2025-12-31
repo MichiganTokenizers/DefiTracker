@@ -200,6 +200,10 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             total_apy = cap_apy_value(Decimal(str(breakdown['total_apy'])), token, 'total_supply_apy')
             borrow_apy_capped = cap_apy_value(Decimal(str(borrow_apy)) if borrow_apy else None, token, 'borrow_apy')
             
+            # Get volume data from breakdown
+            total_supply_tokens = breakdown.get('total_supply_tokens')
+            total_borrowed_tokens = breakdown.get('total_borrowed_tokens')
+            
             snapshot = KineticAPYSnapshot(
                 asset_id=asset_id,
                 asset_symbol=token,
@@ -208,6 +212,8 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
                 total_supply_apy=total_apy,
                 borrow_apy=borrow_apy_capped,
                 borrow_distribution_apy=None,  # Kinetic doesn't have borrow rewards currently
+                total_supply_tokens=total_supply_tokens,
+                total_borrowed_tokens=total_borrowed_tokens,
                 price_snapshot_id=price_snapshot_id,
                 timestamp=timestamp,
                 market_type=market_type,
@@ -220,10 +226,13 @@ def collect_kinetic_apy(flare_adapter: FlareChainAdapter, db_queries: APYQueries
             snapshots.append(snapshot)
             
             borrow_str = f"{borrow_apy:.4f}%" if borrow_apy else "N/A"
+            supply_vol_str = f"{total_supply_tokens:,.2f}" if total_supply_tokens else "N/A"
+            borrow_vol_str = f"{total_borrowed_tokens:,.2f}" if total_borrowed_tokens else "N/A"
             logger.info(f"[{market_type}] {token}: Supply APY={breakdown['supply_apr']:.4f}%, "
                        f"Distribution APY={breakdown['distribution_apr']:.4f}%, "
                        f"Total={breakdown['total_apy']:.4f}%, "
-                       f"Borrow APY={borrow_str}")
+                       f"Borrow APY={borrow_str}, "
+                       f"Total Supply={supply_vol_str} tokens, Total Borrowed={borrow_vol_str} tokens")
             
         except Exception as e:
             logger.error(f"Error collecting APY for {token}: {e}")

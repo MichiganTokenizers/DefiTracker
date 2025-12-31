@@ -2,6 +2,7 @@
 
 import logging
 import time
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -10,6 +11,13 @@ import requests
 from src.adapters.base import ProtocolAdapter
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PoolMetrics:
+    """Container for pool metrics (APR and TVL)."""
+    apr: Optional[Decimal] = None
+    tvl_usd: Optional[Decimal] = None
 
 
 class MinswapAdapter(ProtocolAdapter):
@@ -29,6 +37,19 @@ class MinswapAdapter(ProtocolAdapter):
         "lp_apy",
         "combinedApr",
         "combinedApy",
+    ]
+
+    CANDIDATE_TVL_KEYS = [
+        "tvl",
+        "tvlAda",
+        "tvl_ada",
+        "tvlUsd",
+        "tvl_usd",
+        "liquidity",
+        "totalLiquidity",
+        "total_liquidity",
+        "lockedValue",
+        "locked_value",
     ]
 
     def __init__(self, protocol_name: str, config: Dict):
@@ -64,6 +85,19 @@ class MinswapAdapter(ProtocolAdapter):
         Returns:
             APR as Decimal (percentage) or None if unavailable.
         """
+        metrics = self.get_pool_metrics(asset)
+        return metrics.apr if metrics else None
+
+    def get_pool_metrics(self, asset: str) -> Optional[PoolMetrics]:
+        """
+        Fetch pool metrics (APR and TVL) for a configured pair.
+
+        Args:
+            asset: Display name configured for the pair (e.g., NIGHT-ADA)
+
+        Returns:
+            PoolMetrics with apr and tvl_usd, or None if unavailable.
+        """
         pair = self._find_pair_config(asset)
         if not pair:
             logger.warning("Asset %s not configured for Minswap", asset)
@@ -73,16 +107,25 @@ class MinswapAdapter(ProtocolAdapter):
         if payload is None:
             return None
 
-        apr_value = self._extract_apr(payload)
-        if apr_value is None:
-            logger.warning("APR not found in Minswap response for %s", asset)
-            return None
+        metrics = PoolMetrics()
 
-        try:
-            return Decimal(str(apr_value))
-        except Exception:
-            logger.error("Could not convert APR value %s for %s", apr_value, asset)
-            return None
+        # Extract APR
+        apr_value = self._extract_apr(payload)
+        if apr_value is not None:
+            try:
+                metrics.apr = Decimal(str(apr_value))
+            except Exception:
+                logger.error("Could not convert APR value %s for %s", apr_value, asset)
+
+        # Extract TVL
+        tvl_value = self._extract_tvl(payload)
+        if tvl_value is not None:
+            try:
+                metrics.tvl_usd = Decimal(str(tvl_value))
+            except Exception:
+                logger.error("Could not convert TVL value %s for %s", tvl_value, asset)
+
+        return metrics
 
     def compute_apr_from_onchain(self, asset: str, lookback_days: int = 7) -> Optional[Decimal]:
         """On-chain computation is not implemented for Cardano Minswap."""
@@ -262,6 +305,30 @@ class MinswapAdapter(ProtocolAdapter):
                 apr = self._extract_apr(nested_value)
                 if apr is not None:
                     return apr
+
+        return None
+
+    def _extract_tvl(self, payload: Dict) -> Optional[float]:
+        """
+        Extract TVL (Total Value Locked) from the API payload.
+
+        Looks for common TVL keys in the Minswap API response.
+        Returns value in USD if available, otherwise in ADA.
+        """
+        if not isinstance(payload, dict):
+            return None
+
+        for key in self.CANDIDATE_TVL_KEYS:
+            if key in payload and payload[key] is not None:
+                return payload[key]
+
+        # Nested locations we often see: 'pool', 'statistics', 'data'
+        for nested in ("pool", "statistics", "data"):
+            nested_value = payload.get(nested)
+            if isinstance(nested_value, dict):
+                tvl = self._extract_tvl(nested_value)
+                if tvl is not None:
+                    return tvl
 
         return None
 

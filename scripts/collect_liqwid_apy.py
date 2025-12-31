@@ -186,10 +186,17 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
             borrow_str = f"{borrow_apy:.4f}%" if borrow_apy else "N/A"
             utilization_str = f"{market_state.get('utilization', 0) * 100:.2f}%" if market_state.get('utilization') else "N/A"
             
+            # Format volume data
+            total_supply_val = snapshot.total_supply
+            total_borrows_val = snapshot.total_borrows
+            supply_vol_str = f"{total_supply_val:,.2f}" if total_supply_val else "N/A"
+            borrow_vol_str = f"{total_borrows_val:,.2f}" if total_borrows_val else "N/A"
+            
             logger.info(
                 f"{market_symbol}: Supply APY={supply_str} {lq_str} (Total: {total_str}), "
                 f"Borrow APY={borrow_str}, "
-                f"Utilization={utilization_str}"
+                f"Utilization={utilization_str}, "
+                f"Total Supply={supply_vol_str} tokens, Total Borrowed={borrow_vol_str} tokens"
             )
             
         except Exception as e:

@@ -43,9 +43,9 @@ def load_config():
 
 
 def collect_and_store_minswap():
-    """Collect APRs from Minswap and persist to the database."""
+    """Collect APRs and TVL from Minswap and persist to the database."""
     logger.info("=" * 60)
-    logger.info("Starting Minswap APR collection")
+    logger.info("Starting Minswap APR/TVL collection")
     logger.info("Timestamp: %s", datetime.utcnow().isoformat())
     logger.info("=" * 60)
 
@@ -59,6 +59,12 @@ def collect_and_store_minswap():
         chain_adapter = registry.get_chain("cardano")
         if not chain_adapter:
             logger.error("Cardano chain adapter not initialized or disabled")
+            return 1
+
+        # Get the Minswap protocol adapter directly for pool metrics
+        minswap_adapter = chain_adapter.protocols.get("minswap")
+        if not minswap_adapter:
+            logger.error("Minswap protocol adapter not found")
             return 1
 
         db = DatabaseConnection()
@@ -75,13 +81,16 @@ def collect_and_store_minswap():
             api_url=protocol_config.get("base_url"),
         )
 
-        apr_results = chain_adapter.collect_aprs().get("minswap", {})
+        # Get all configured assets and fetch their metrics
+        assets = minswap_adapter.get_supported_assets()
         timestamp = datetime.utcnow()
 
         inserted = 0
-        for asset, apr in apr_results.items():
-            if apr is None:
-                logger.warning("Skipping %s due to missing APR", asset)
+        for asset in assets:
+            metrics = minswap_adapter.get_pool_metrics(asset)
+            
+            if metrics is None or metrics.apr is None:
+                logger.warning("Skipping %s due to missing metrics", asset)
                 continue
 
             asset_id = queries.get_or_create_asset(symbol=asset, name=asset)
@@ -89,12 +98,14 @@ def collect_and_store_minswap():
                 blockchain_id=blockchain_id,
                 protocol_id=protocol_id,
                 asset_id=asset_id,
-                apr=Decimal(apr),
+                apr=metrics.apr,
                 timestamp=timestamp,
                 yield_type='lp',  # Minswap is a DEX - all pairs are liquidity pools
+                tvl_usd=metrics.tvl_usd,
             )
             inserted += 1
-            logger.info("Stored APR snapshot for %s: %s%%", asset, apr)
+            tvl_str = f"${metrics.tvl_usd:,.2f}" if metrics.tvl_usd else "N/A"
+            logger.info("Stored snapshot for %s: APR=%s%%, TVL=%s", asset, metrics.apr, tvl_str)
 
         logger.info("Minswap collection complete. Snapshots inserted: %s", inserted)
         return 0
