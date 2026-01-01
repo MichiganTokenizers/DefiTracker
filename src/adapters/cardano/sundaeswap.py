@@ -6,15 +6,19 @@ It uses a GraphQL API at https://api.sundae.fi/graphql
 API provides:
 - Pool data (TVL, reserves, fees)
 - Popular pools query (returns top 50)
+- Historical ticks data (hourly) for fees/volume
 - Protocol-wide stats
 
-Note: The API doesn't provide 24h volume/fees at pool level.
-APR can be estimated from the fee percentage and trading activity.
+HRA (Historic Returns Annualized) is calculated from:
+- 24h lpFees (fees returned to LPs) from hourly ticks
+- Current TVL
+- Formula: (daily_fees / tvl) * 365 * 100
 """
 
 import logging
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -72,6 +76,10 @@ class SundaePoolMetrics:
     fee_percent: Optional[Decimal] = None
     reserve_a: Optional[Decimal] = None
     reserve_b: Optional[Decimal] = None
+    # HRA (Historic Returns Annualized) from 24h fees
+    hra: Optional[Decimal] = None
+    fees_24h_usd: Optional[Decimal] = None
+    volume_24h_usd: Optional[Decimal] = None
 
 
 class SundaeSwapAdapter(ProtocolAdapter):
@@ -105,21 +113,20 @@ class SundaeSwapAdapter(ProtocolAdapter):
 
     def get_supply_apr(self, asset: str) -> Optional[Decimal]:
         """
-        Get the fee APR for a pool.
+        Get the HRA (Historic Returns Annualized) for a pool.
         
-        Note: SundaeSwap API doesn't provide trading volume, so we can't
-        calculate actual APR. We return the fee percentage as a reference.
+        HRA is calculated from actual 24h LP fees divided by TVL, annualized.
         
         Args:
             asset: Pool pair name (e.g., "ADA-NIGHT")
             
         Returns:
-            Fee percentage as Decimal, or None if not found
+            HRA as Decimal percentage, or None if not found
         """
         pools = self._get_pools()
         for pool in pools:
             if pool.pair == asset:
-                return pool.fee_percent
+                return pool.hra
         return None
 
     def get_pool_metrics(self, asset: str) -> Optional[SundaePoolMetrics]:
@@ -278,5 +285,111 @@ class SundaeSwapAdapter(ProtocolAdapter):
         
         logger.info("Parsed %d SundaeSwap pools with TVL >= $%s", 
                    len(pools), self.min_tvl_usd)
+        
+        # Fetch 24h fees for HRA calculation
+        self._enrich_pools_with_hra(pools)
+        
         return pools
+
+    def _enrich_pools_with_hra(self, pools: List[SundaePoolMetrics]) -> None:
+        """
+        Fetch 24h LP fees from hourly ticks and calculate HRA for each pool.
+        
+        HRA = (daily_fees_usd / tvl_usd) * 365 * 100
+        """
+        # Calculate time range for last 24 hours
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(hours=24)
+        start_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
+        end_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
+        
+        for pool in pools:
+            try:
+                fees_24h, volume_24h = self._fetch_24h_fees(
+                    pool.pool_id, start_str, end_str
+                )
+                
+                if fees_24h is not None:
+                    # Convert lovelace to ADA then to USD
+                    fees_ada = Decimal(fees_24h) / Decimal(1_000_000)
+                    fees_usd = fees_ada * Decimal(str(self.ada_price_usd))
+                    pool.fees_24h_usd = fees_usd
+                    
+                    # Calculate HRA: (daily_fees / tvl) * 365 * 100
+                    if pool.tvl_usd and pool.tvl_usd > 0:
+                        pool.hra = (fees_usd / pool.tvl_usd) * Decimal(365) * Decimal(100)
+                
+                if volume_24h is not None:
+                    volume_ada = Decimal(volume_24h) / Decimal(1_000_000)
+                    pool.volume_24h_usd = volume_ada * Decimal(str(self.ada_price_usd))
+                    
+            except Exception as e:
+                logger.warning("Error fetching HRA for %s: %s", pool.pair, e)
+                continue
+
+    def _fetch_24h_fees(
+        self, pool_id: str, start_str: str, end_str: str
+    ) -> tuple[Optional[float], Optional[float]]:
+        """
+        Fetch 24h LP fees and volume for a specific pool from hourly ticks.
+        
+        Returns:
+            Tuple of (total_fees_lovelace, total_volume_lovelace)
+        """
+        query = """
+        {
+          pools {
+            byId(id: "%s") {
+              ticks(interval: Hourly, start: "%s", end: "%s") {
+                rich {
+                  lpFees(unit: Natural) { quantity }
+                  volume(unit: Natural) { quantity }
+                }
+              }
+            }
+          }
+        }
+        """ % (pool_id, start_str, end_str)
+        
+        try:
+            resp = self.session.post(
+                self.graphql_url,
+                json={"query": query},
+                timeout=self.timeout
+            )
+            
+            if resp.status_code != 200:
+                return None, None
+            
+            data = resp.json()
+            
+            if "errors" in data and data["errors"]:
+                # Log but don't fail - some pools may not have ticks data
+                logger.debug("Ticks query error for pool %s: %s", 
+                           pool_id, data["errors"][0].get("message", ""))
+                return None, None
+            
+            ticks = (data.get("data", {})
+                        .get("pools", {})
+                        .get("byId", {})
+                        .get("ticks", {})
+                        .get("rich", []))
+            
+            if not ticks:
+                return None, None
+            
+            total_fees = sum(
+                float(t.get("lpFees", {}).get("quantity", 0) or 0) 
+                for t in ticks
+            )
+            total_volume = sum(
+                float(t.get("volume", {}).get("quantity", 0) or 0) 
+                for t in ticks
+            )
+            
+            return total_fees, total_volume
+            
+        except Exception as e:
+            logger.debug("Error fetching ticks for pool %s: %s", pool_id, e)
+            return None, None
 

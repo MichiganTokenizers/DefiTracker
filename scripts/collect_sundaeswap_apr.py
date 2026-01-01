@@ -5,6 +5,12 @@ SundaeSwap APR Collection Script
 This script pulls pool data from SundaeSwap DEX on Cardano
 and stores it in the `apr_snapshots` table.
 
+Collects:
+- HRA (Historic Returns Annualized) - calculated from 24h LP fees / TVL * 365
+- TVL in USD
+- 24h fees in USD
+- 24h volume in USD
+
 Collects pools with TVL > $10k (configurable).
 
 Designed to be run daily via cron.
@@ -96,9 +102,8 @@ def collect_and_store_sundaeswap():
 
         inserted = 0
         for pool in pools:
-            # Use fee_percent as APR (trading fee rate)
-            # Note: This isn't a true APR since we don't have volume data
-            apr = pool.fee_percent if pool.fee_percent else Decimal(0)
+            # Use HRA (Historic Returns Annualized) calculated from 24h LP fees
+            apr = pool.hra if pool.hra else Decimal(0)
 
             asset_id = queries.get_or_create_asset(
                 symbol=pool.pair, 
@@ -113,13 +118,17 @@ def collect_and_store_sundaeswap():
                 timestamp=timestamp,
                 yield_type='lp',  # SundaeSwap is a DEX - all pairs are liquidity pools
                 tvl_usd=pool.tvl_usd,
+                fees_24h=pool.fees_24h_usd,
+                volume_24h=pool.volume_24h_usd,
             )
             inserted += 1
             
             tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
-            fee_str = f"{pool.fee_percent:.2f}%" if pool.fee_percent else "N/A"
-            logger.info("Stored snapshot for %s (%s): Fee=%s, TVL=%s", 
-                       pool.pair, pool.version, fee_str, tvl_str)
+            hra_str = f"{pool.hra:.2f}%" if pool.hra else "N/A"
+            fees_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
+            vol_str = f"${pool.volume_24h_usd:,.0f}" if pool.volume_24h_usd else "N/A"
+            logger.info("Stored %s (%s): HRA=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
+                       pool.pair, pool.version, hra_str, tvl_str, fees_str, vol_str)
 
         logger.info("SundaeSwap collection complete. Snapshots inserted: %s", inserted)
         return 0
