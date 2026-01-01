@@ -292,6 +292,17 @@ chains:
             name: "Liqwid Token"
           - symbol: "IAG"
             name: "IAG"
+      
+      sundaeswap:
+        enabled: true
+        # SundaeSwap DEX - Cardano decentralized exchange
+        # Documentation: https://sundaeswap-finance.github.io/sundae-sdk/
+        graphql_url: "https://api.sundae.fi/graphql"
+        timeout: 30
+        max_retries: 3
+        cache_ttl: 300  # Cache pool data for 5 minutes
+        min_tvl_usd: 10000  # Only track pools with TVL > $10k
+        ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
     
     # Add more chains here as they're implemented
     # ethereum:

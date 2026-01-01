@@ -6,6 +6,7 @@ from typing import Dict
 from src.adapters.base import ChainAdapter
 from src.adapters.cardano.minswap import MinswapAdapter
 from src.adapters.cardano.liqwid import LiqwidAdapter
+from src.adapters.cardano.sundaeswap import SundaeSwapAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,12 @@ class CardanoChainAdapter(ChainAdapter):
             if liqwid_cfg.get("enabled", False):
                 self.protocols["liqwid"] = LiqwidAdapter("liqwid", liqwid_cfg)
                 logger.info("Initialized Liqwid adapter for Cardano")
+
+        if "sundaeswap" in protocols_cfg:
+            sundae_cfg = protocols_cfg["sundaeswap"]
+            if sundae_cfg.get("enabled", False):
+                self.protocols["sundaeswap"] = SundaeSwapAdapter("sundaeswap", sundae_cfg)
+                logger.info("Initialized SundaeSwap adapter for Cardano")
 
     def get_web3_instance(self):
         """
