@@ -15,6 +15,56 @@ queries = DatabaseQueries(db)
 apy_queries = APYQueries(db)
 
 # ============================================
+# Token Pair Normalization
+# ============================================
+
+# Tokens that should always be listed SECOND in a pair
+QUOTE_TOKENS = {
+    # Native chain tokens
+    'ADA',
+    # Stablecoins (USD-pegged)
+    'USDM', 'USDA', 'USDC', 'USDT', 'DJED', 'iUSD', 'IUSD', 'DAI', 'BUSD',
+    'USDC.e', 'USDT.e', 'USDT0',
+    # Wrapped versions
+    'wADA', 'WADA',
+}
+
+def normalize_pair(symbol: str) -> str:
+    """Normalize token pair ordering for consistent comparison across DEXs.
+    
+    Rules:
+    1. ADA should always be second (e.g., NIGHT-ADA not ADA-NIGHT)
+    2. Stablecoins should be second (e.g., NIGHT-USDM not USDM-NIGHT)
+    3. If both tokens are quote tokens, prefer ADA > stablecoins
+    """
+    # Try common separators
+    for sep in ['-', '/', '_']:
+        if sep in symbol:
+            parts = symbol.split(sep)
+            if len(parts) == 2:
+                token_a, token_b = parts[0].strip(), parts[1].strip()
+                
+                a_is_quote = token_a.upper() in QUOTE_TOKENS
+                b_is_quote = token_b.upper() in QUOTE_TOKENS
+                
+                # If first token is a quote token but second isn't, swap
+                if a_is_quote and not b_is_quote:
+                    return f"{token_b}-{token_a}"
+                
+                # If both are quote tokens, prioritize ADA as second
+                if a_is_quote and b_is_quote:
+                    if token_a.upper() == 'ADA':
+                        return f"{token_b}-{token_a}"
+                    # Keep as-is if token_b is ADA or neither is ADA
+                    return f"{token_a}-{token_b}"
+                
+                # Normalize separator to dash
+                return f"{token_a}-{token_b}"
+    
+    # Single token or no separator - return as-is
+    return symbol
+
+# ============================================
 # API Endpoints for Charts
 # ============================================
 
@@ -183,6 +233,8 @@ def api_get_all_assets_for_chain(chain):
     
     Query params:
         yield_type: Filter by yield type ('lp', 'supply', 'borrow')
+    
+    Returns normalized pair names (e.g., NIGHT-ADA not ADA-NIGHT)
     """
     yield_type = request.args.get('yield_type', default=None, type=str)
     
@@ -206,7 +258,17 @@ def api_get_all_assets_for_chain(chain):
             query += " ORDER BY a.symbol, p.name"
             cur.execute(query, params)
             
-            assets = [{'symbol': r[0], 'name': r[1], 'protocol': r[2]} for r in cur.fetchall()]
+            # Normalize pair names and deduplicate
+            seen = set()
+            assets = []
+            for r in cur.fetchall():
+                normalized = normalize_pair(r[0])
+                if normalized not in seen:
+                    seen.add(normalized)
+                    assets.append({'symbol': normalized, 'name': r[1], 'protocol': r[2]})
+            
+            # Sort by normalized symbol
+            assets.sort(key=lambda x: x['symbol'])
         return jsonify(assets)
     finally:
         db.return_connection(conn)
@@ -251,11 +313,11 @@ def api_get_all_history_for_chain(chain):
             query += " ORDER BY s.timestamp ASC"
             cur.execute(query, params)
             
-            # Group by protocol and symbol
+            # Group by protocol and normalized symbol
             data = {}
             for row in cur.fetchall():
                 protocol = row[0]
-                symbol = row[1]
+                raw_symbol = row[1]
                 apr_value = row[2]
                 timestamp = row[3]
                 row_yield_type = row[4]
@@ -263,6 +325,9 @@ def api_get_all_history_for_chain(chain):
                 
                 if apr_value is None:
                     continue
+                
+                # Normalize pair name for consistent grouping across DEXs
+                symbol = normalize_pair(raw_symbol)
                 
                 # Key by protocol_symbol for unique lines
                 key = f"{protocol}_{symbol}"
