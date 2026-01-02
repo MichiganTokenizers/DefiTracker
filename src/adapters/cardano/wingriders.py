@@ -1,16 +1,17 @@
 """WingRiders protocol adapter for Cardano.
 
-WingRiders is a DEX on Cardano with embedded staking rewards.
+WingRiders is a DEX on Cardano with embedded staking rewards and farming.
 It uses a GraphQL API at https://api.mainnet.wingriders.com/graphql
 
 API provides:
 - Pool data (TVL, reserves, fees)
 - feesAPR: Trading fee APR (similar to HRA on other DEXs)
 - stakingAPR: Additional yield from embedded ADA staking
+- Farm yield APR: Additional rewards for farming LP tokens
+- Boosting APR: Additional rewards for WRT token boosting
 - Token metadata for display names
 
-Note: WingRiders provides APR directly from the API, no calculation needed.
-Total APR = feesAPR + stakingAPR
+Total APR = feesAPR + stakingAPR + farmAPR + boostingAPR
 """
 
 import logging
@@ -59,6 +60,32 @@ POOLS_QUERY = """
 }
 """
 
+# GraphQL query to get active farms with yield APRs
+FARMS_QUERY = """
+{
+  activeFarms {
+    poolId
+    isDoubleYield
+    yieldAPR(timeframe: CURRENT_EPOCH) {
+      regular { apr }
+      boosting { apr }
+    }
+    liquidityPool {
+      ... on LiquidityPoolV1 {
+        version
+        tokenA { policyId assetName }
+        tokenB { policyId assetName }
+      }
+      ... on LiquidityPoolV2 {
+        version
+        tokenA { policyId assetName }
+        tokenB { policyId assetName }
+      }
+    }
+  }
+}
+"""
+
 
 @dataclass
 class WingRidersPoolMetrics:
@@ -70,11 +97,14 @@ class WingRidersPoolMetrics:
     tvl_usd: Optional[Decimal] = None
     fees_apr: Optional[Decimal] = None  # Trading fee APR
     staking_apr: Optional[Decimal] = None  # Embedded staking APR
-    total_apr: Optional[Decimal] = None  # fees_apr + staking_apr
+    farm_apr: Optional[Decimal] = None  # Farm yield APR (regular rewards)
+    boosting_apr: Optional[Decimal] = None  # Boosting APR (WRT token boost)
+    total_apr: Optional[Decimal] = None  # Sum of all APR components
     reserve_a: Optional[Decimal] = None
     reserve_b: Optional[Decimal] = None
     ticker_a: str = ""
     ticker_b: str = ""
+    has_farm: bool = False  # Whether pool has active farm
 
 
 class WingRidersAdapter(ProtocolAdapter):
@@ -165,11 +195,12 @@ class WingRidersAdapter(ProtocolAdapter):
         return self._pool_cache
 
     def _fetch_pools(self) -> List[WingRidersPoolMetrics]:
-        """Fetch pools from the GraphQL API."""
+        """Fetch pools and farms from the GraphQL API."""
         backoff = 2
 
         for attempt in range(1, self.max_retries + 1):
             try:
+                # Fetch pools
                 resp = self.session.post(
                     self.graphql_url,
                     json={"query": POOLS_QUERY},
@@ -203,7 +234,10 @@ class WingRidersAdapter(ProtocolAdapter):
                 raw_pools = result.get("pools", [])
                 metadata = result.get("metadata", [])
                 
-                return self._parse_pools(raw_pools, metadata)
+                # Fetch active farms for additional APRs
+                farms_data = self._fetch_farms()
+                
+                return self._parse_pools(raw_pools, metadata, farms_data)
 
             except requests.RequestException as exc:
                 logger.error(
@@ -215,8 +249,61 @@ class WingRidersAdapter(ProtocolAdapter):
 
         return []
 
+    def _fetch_farms(self) -> Dict[str, Dict]:
+        """Fetch active farms and return mapping of pool pair to farm APRs."""
+        try:
+            resp = self.session.post(
+                self.graphql_url,
+                json={"query": FARMS_QUERY},
+                timeout=self.timeout
+            )
+            
+            if resp.status_code != 200:
+                logger.warning("Failed to fetch farms: %s", resp.status_code)
+                return {}
+            
+            data = resp.json()
+            
+            if "errors" in data and data["errors"]:
+                logger.warning("Farms query errors: %s", data["errors"][:200])
+                return {}
+            
+            farms = data.get("data", {}).get("activeFarms", [])
+            
+            # Build mapping from pair+version to farm APRs
+            farm_map = {}
+            for farm in farms:
+                pool = farm.get("liquidityPool")
+                if not pool:
+                    continue
+                
+                token_a = pool.get("tokenA", {})
+                token_b = pool.get("tokenB", {})
+                version = pool.get("version", "V1")
+                
+                # Build key from token identifiers
+                key_a = f"{token_a.get('policyId', '')}_{token_a.get('assetName', '')}"
+                key_b = f"{token_b.get('policyId', '')}_{token_b.get('assetName', '')}"
+                pool_key = f"{key_a}|{key_b}|{version}"
+                
+                yield_apr = farm.get("yieldAPR") or {}
+                regular = yield_apr.get("regular") or {}
+                boosting = yield_apr.get("boosting") or {}
+                
+                farm_map[pool_key] = {
+                    "farm_apr": regular.get("apr") or 0,
+                    "boosting_apr": boosting.get("apr") or 0,
+                }
+            
+            logger.info("Fetched %d active farms with yield programs", len(farm_map))
+            return farm_map
+            
+        except Exception as e:
+            logger.warning("Error fetching farms: %s", e)
+            return {}
+
     def _parse_pools(
-        self, raw_pools: List[Dict], metadata: List[Dict]
+        self, raw_pools: List[Dict], metadata: List[Dict], farms_data: Dict[str, Dict]
     ) -> List[WingRidersPoolMetrics]:
         """Parse raw pool data into WingRidersPoolMetrics objects."""
         # Build ticker lookup from metadata
@@ -261,10 +348,22 @@ class WingRidersAdapter(ProtocolAdapter):
                 if tvl_usd < self.min_tvl_usd:
                     continue
 
-                # Parse APRs (already in percentage form)
+                # Parse base APRs (already in percentage form)
                 fees_apr = Decimal(str(p.get("feesAPR") or 0))
                 staking_apr = Decimal(str(p.get("stakingAPR") or 0))
-                total_apr = fees_apr + staking_apr
+                
+                # Look up farm APRs using token identifiers
+                key_a = f"{token_a.get('policyId', '')}_{token_a.get('assetName', '')}"
+                key_b = f"{token_b.get('policyId', '')}_{token_b.get('assetName', '')}"
+                farm_key = f"{key_a}|{key_b}|{version}"
+                
+                farm_info = farms_data.get(farm_key, {})
+                farm_apr = Decimal(str(farm_info.get("farm_apr", 0)))
+                boosting_apr = Decimal(str(farm_info.get("boosting_apr", 0)))
+                has_farm = bool(farm_info)
+                
+                # Total APR = fees + staking + farm + boosting
+                total_apr = fees_apr + staking_apr + farm_apr + boosting_apr
 
                 # Parse reserves
                 reserve_a = Decimal(token_a.get("quantity", 0)) if token_a.get("quantity") else None
@@ -278,11 +377,14 @@ class WingRidersAdapter(ProtocolAdapter):
                     tvl_usd=tvl_usd,
                     fees_apr=fees_apr,
                     staking_apr=staking_apr,
+                    farm_apr=farm_apr,
+                    boosting_apr=boosting_apr,
                     total_apr=total_apr,
                     reserve_a=reserve_a,
                     reserve_b=reserve_b,
                     ticker_a=ticker_a,
                     ticker_b=ticker_b,
+                    has_farm=has_farm,
                 )
                 pools.append(pool_metrics)
                 seen_pairs.add(pair_key)
@@ -294,8 +396,9 @@ class WingRidersAdapter(ProtocolAdapter):
         # Sort by TVL descending
         pools.sort(key=lambda x: x.tvl_usd or Decimal(0), reverse=True)
         
-        logger.info("Parsed %d WingRiders pools with TVL >= $%s", 
-                   len(pools), self.min_tvl_usd)
+        farms_count = sum(1 for p in pools if p.has_farm)
+        logger.info("Parsed %d WingRiders pools with TVL >= $%s (%d with active farms)", 
+                   len(pools), self.min_tvl_usd, farms_count)
         return pools
 
     def _build_ticker_map(self, metadata: List[Dict]) -> Dict[str, str]:

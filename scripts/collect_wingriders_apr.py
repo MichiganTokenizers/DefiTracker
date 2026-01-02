@@ -101,8 +101,9 @@ def collect_and_store_wingriders():
                    len(pools), protocol_config.get("min_tvl_usd", 10000))
 
         inserted = 0
+        farms_count = 0
         for pool in pools:
-            # Use total_apr (feesAPR + stakingAPR) as the APR
+            # Use total_apr (fees + staking + farm + boosting) as the APR
             apr = pool.total_apr if pool.total_apr else Decimal(0)
 
             asset_id = queries.get_or_create_asset(
@@ -120,15 +121,25 @@ def collect_and_store_wingriders():
                 tvl_usd=pool.tvl_usd,
             )
             inserted += 1
+            if pool.has_farm:
+                farms_count += 1
             
             tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
             fees_str = f"{pool.fees_apr:.2f}%" if pool.fees_apr else "0.00%"
             staking_str = f"{pool.staking_apr:.2f}%" if pool.staking_apr else "0.00%"
+            farm_str = f"{pool.farm_apr:.2f}%" if pool.farm_apr else "0.00%"
+            boost_str = f"{pool.boosting_apr:.2f}%" if pool.boosting_apr else "0.00%"
             total_str = f"{pool.total_apr:.2f}%" if pool.total_apr else "0.00%"
-            logger.info("Stored %s (%s): Fees=%s, Staking=%s, Total=%s, TVL=%s", 
-                       pool.pair, pool.version, fees_str, staking_str, total_str, tvl_str)
+            
+            if pool.has_farm:
+                logger.info("Stored %s (%s): Fees=%s, Stake=%s, Farm=%s, Boost=%s, TOTAL=%s, TVL=%s", 
+                           pool.pair, pool.version, fees_str, staking_str, farm_str, boost_str, total_str, tvl_str)
+            else:
+                logger.info("Stored %s (%s): Fees=%s, Staking=%s, Total=%s, TVL=%s", 
+                           pool.pair, pool.version, fees_str, staking_str, total_str, tvl_str)
 
-        logger.info("WingRiders collection complete. Snapshots inserted: %s", inserted)
+        logger.info("WingRiders collection complete. Snapshots inserted: %s (%s with active farms)", 
+                   inserted, farms_count)
         return 0
 
     except Exception as exc:
