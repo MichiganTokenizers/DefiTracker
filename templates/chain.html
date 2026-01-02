@@ -199,29 +199,40 @@ let currentSortDirection = 'asc'; // Default to ascending (lowest first)
 let allAssets = [];
 let selectedAssets = new Set();
 
-// Get protocol name based on chain
-const protocolMap = {
-    'flare': 'kinetic',
-    'cardano': 'minswap'
-};
-const protocol = protocolMap[chain];
-
 // Protocol logo mapping
 const protocolLogos = {
     'kinetic': '/static/kinetic-logo.svg',
-    'minswap': '/static/minswap-logo.webp'
+    'minswap': '/static/minswap-logo.webp',
+    'sundaeswap': '/static/sundaeswap-logo.png',
+    'wingriders': '/static/wingriders-logo.png',
+    'liqwid': '/static/liqwid-logo.png'
 };
-const protocolLogo = protocolLogos[protocol];
+
+// Line styles per DEX (for chart differentiation)
+const protocolLineStyles = {
+    'minswap': { borderDash: [], pointStyle: 'circle' },      // Solid
+    'sundaeswap': { borderDash: [5, 5], pointStyle: 'rect' },  // Dashed
+    'wingriders': { borderDash: [2, 2], pointStyle: 'triangle' }, // Dotted
+    'liqwid': { borderDash: [10, 5], pointStyle: 'star' }      // Long dash
+};
+
+// Color palette for token pairs
+const pairColors = [
+    '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
+    '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4',
+    '#84cc16', '#f43f5e', '#22d3d8', '#fb923c', '#c084fc'
+];
+const pairColorMap = {};  // Will be populated dynamically
 
 // Default asset selections by chain
 const defaultAssets = {
     'cardano': [
         // NIGHT pairs
-        'NIGHT-ADA', 'NIGHT-USDM', 'NIGHT-USDA',
+        'NIGHT-ADA', 'NIGHT-USDM', 'NIGHT-USDA', 'ADA-NIGHT',
         // ADA/stablecoin pairs  
-        'USDM/ADA', 'USDA/ADA', 'DJED/ADA', 'iUSD/ADA',
+        'ADA-USDM', 'ADA-USDA', 'ADA-DJED', 'ADA-iUSD', 'USDM-ADA', 'USDA-ADA',
         // Other key pairs
-        'MIN/ADA', 'SNEK/ADA'
+        'ADA-SNEK', 'ADA-IAG', 'ADA-WMTX'
     ],
     'flare': [
         // FXRP and stablecoin supply returns
@@ -241,8 +252,14 @@ function isDefaultAsset(symbol) {
 }
 
 async function loadAssets() {
-    const response = await fetch(`/api/${chain}/${protocol}/assets`);
-    allAssets = await response.json();
+    // Fetch assets from ALL protocols on this chain
+    const response = await fetch(`/api/${chain}/all/assets`);
+    const rawAssets = await response.json();
+    
+    // Get unique symbols (same pair may exist on multiple DEXs)
+    const symbolSet = new Set();
+    rawAssets.forEach(a => symbolSet.add(a.symbol));
+    allAssets = Array.from(symbolSet).map(s => ({ symbol: s }));
     
     const optionsContainer = document.getElementById('assetOptions');
     optionsContainer.innerHTML = '';
@@ -341,26 +358,34 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Store all data globally for table (unfiltered)
+// Store all data globally for table
 let allHistoryData = [];
+
+// Get color for a token pair (consistent across DEXs)
+function getPairColor(symbol) {
+    if (!pairColorMap[symbol]) {
+        const colorIndex = Object.keys(pairColorMap).length % pairColors.length;
+        pairColorMap[symbol] = pairColors[colorIndex];
+    }
+    return pairColorMap[symbol];
+}
 
 async function loadChart() {
     const days = document.getElementById('timeRange').value;
-    const chartType = 'line';  // Fixed to line chart
+    const chartType = 'line';
     const selected = getSelectedAssets();
     
-    // Always fetch all data, filter client-side (API only supports single asset)
-    const url = `/api/${chain}/${protocol}/history?days=${days}`;
+    // Fetch from ALL protocols on this chain
+    const url = `/api/${chain}/all/history?days=${days}`;
     
     const response = await fetch(url);
-    allHistoryData = await response.json();  // Store unfiltered data
+    allHistoryData = await response.json();  // Store all data
     
-    // Filter for chart only
+    // Filter by selected assets
     let chartData = allHistoryData;
     if (selected.length > 0 && selected.length < allAssets.length) {
         chartData = allHistoryData.filter(d => selected.includes(d.symbol));
     } else if (selected.length === 0) {
-        // No assets selected - show nothing in chart
         chartData = [];
     }
     
@@ -369,16 +394,16 @@ async function loadChart() {
         chart.destroy();
     }
     
-    // Prepare datasets
-    const datasets = chartData.map((assetData, idx) => {
-        const colors = [
-            '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
-            '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4'
-        ];
-        const color = colors[idx % colors.length];
+    // Prepare datasets - each DEX+pair combo is a separate line
+    // Color by pair, line style by DEX
+    const datasets = chartData.map((assetData) => {
+        const protocol = assetData.protocol;
+        const symbol = assetData.symbol;
+        const color = getPairColor(symbol);
+        const lineStyle = protocolLineStyles[protocol] || { borderDash: [], pointStyle: 'circle' };
         
         return {
-            label: assetData.symbol,
+            label: `${symbol} (${protocol})`,
             data: assetData.data.map(d => ({
                 x: new Date(d.timestamp),
                 y: d.apr
@@ -386,6 +411,8 @@ async function loadChart() {
             borderColor: color,
             backgroundColor: color + '20',
             borderWidth: 2,
+            borderDash: lineStyle.borderDash,
+            pointStyle: lineStyle.pointStyle,
             tension: 0.4,
             fill: false
         };
@@ -404,8 +431,8 @@ async function loadChart() {
                     labels: { 
                         color: '#1f201f',
                         usePointStyle: true,
-                        pointStyle: 'circle',
-                        padding: 20
+                        padding: 15,
+                        font: { size: 11 }
                     }
                 },
                 tooltip: {
@@ -437,8 +464,8 @@ async function loadChart() {
         }
     });
     
-    // Update current APRs table with ALL data (unfiltered)
-    updateCurrentAprs(allHistoryData);
+    // Update current APRs table - ALSO filtered by selected assets
+    updateCurrentAprs(chartData);
 }
 
 function updateCurrentAprs(data) {
@@ -473,7 +500,9 @@ function updateCurrentAprs(data) {
         
         return {
             symbol: assetData.symbol,
+            protocol: assetData.protocol,
             apr: latest.apr,
+            tvl_usd: latest.tvl_usd,
             change24h: change24h,
             timestamp: new Date(latest.timestamp)
         };
@@ -545,10 +574,17 @@ function applySortToTable() {
         // Format timestamp
         const timeAgo = formatTimeAgo(item.timestamp);
         
+        // Get protocol logo
+        const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
+        
+        // Format TVL if available
+        const tvlStr = item.tvl_usd ? `$${item.tvl_usd.toLocaleString(undefined, {maximumFractionDigits: 0})}` : '-';
+        
         row.innerHTML = `
             <td>
-                <img src="${protocolLogo}" alt="${protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;">
+                <img src="${logo}" alt="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${item.symbol}</strong>
+                <span class="text-muted" style="font-size: 0.8rem; margin-left: 5px;">${item.protocol}</span>
             </td>
             <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
             <td>${changeHtml}</td>

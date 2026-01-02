@@ -177,6 +177,112 @@ def api_get_apr_history(chain, protocol):
     finally:
         db.return_connection(conn)
 
+@app.route('/api/<chain>/all/assets')
+def api_get_all_assets_for_chain(chain):
+    """Get all assets from all protocols on a chain
+    
+    Query params:
+        yield_type: Filter by yield type ('lp', 'supply', 'borrow')
+    """
+    yield_type = request.args.get('yield_type', default=None, type=str)
+    
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """
+                SELECT DISTINCT a.symbol, a.name, p.name as protocol
+                FROM apr_snapshots s
+                JOIN assets a ON s.asset_id = a.asset_id
+                JOIN protocols p ON s.protocol_id = p.protocol_id
+                JOIN blockchains b ON s.blockchain_id = b.blockchain_id
+                WHERE b.name = %s
+            """
+            params = [chain]
+            
+            if yield_type:
+                query += " AND s.yield_type = %s"
+                params.append(yield_type)
+            
+            query += " ORDER BY a.symbol, p.name"
+            cur.execute(query, params)
+            
+            assets = [{'symbol': r[0], 'name': r[1], 'protocol': r[2]} for r in cur.fetchall()]
+        return jsonify(assets)
+    finally:
+        db.return_connection(conn)
+
+@app.route('/api/<chain>/all/history')
+def api_get_all_history_for_chain(chain):
+    """Get APR history from ALL protocols on a chain
+    
+    Query params:
+        days: Number of days of history (default: 30)
+        yield_type: Filter by yield type ('lp', 'supply', 'borrow')
+    
+    Returns data grouped by protocol and symbol for multi-DEX comparison
+    """
+    days = request.args.get('days', default=30, type=int)
+    yield_type = request.args.get('yield_type', default=None, type=str)
+    
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """
+                SELECT 
+                    p.name as protocol,
+                    a.symbol,
+                    s.apr,
+                    s.timestamp,
+                    s.yield_type,
+                    s.tvl_usd
+                FROM apr_snapshots s
+                JOIN assets a ON s.asset_id = a.asset_id
+                JOIN protocols p ON s.protocol_id = p.protocol_id
+                JOIN blockchains b ON s.blockchain_id = b.blockchain_id
+                WHERE b.name = %s
+                  AND s.timestamp >= NOW() - INTERVAL '%s days'
+            """
+            params = [chain, days]
+            
+            if yield_type:
+                query += " AND s.yield_type = %s"
+                params.append(yield_type)
+            
+            query += " ORDER BY s.timestamp ASC"
+            cur.execute(query, params)
+            
+            # Group by protocol and symbol
+            data = {}
+            for row in cur.fetchall():
+                protocol = row[0]
+                symbol = row[1]
+                apr_value = row[2]
+                timestamp = row[3]
+                row_yield_type = row[4]
+                tvl_usd = row[5]
+                
+                if apr_value is None:
+                    continue
+                
+                # Key by protocol_symbol for unique lines
+                key = f"{protocol}_{symbol}"
+                if key not in data:
+                    data[key] = {
+                        'protocol': protocol,
+                        'symbol': symbol,
+                        'yield_type': row_yield_type,
+                        'data': []
+                    }
+                data[key]['data'].append({
+                    'timestamp': timestamp.isoformat(),
+                    'apr': float(apr_value),
+                    'tvl_usd': float(tvl_usd) if tvl_usd else None
+                })
+            
+        return jsonify(list(data.values()))
+    finally:
+        db.return_connection(conn)
+
 # ============================================
 # Cross-chain Yield Type Endpoints
 # ============================================
