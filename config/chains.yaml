@@ -303,6 +303,18 @@ chains:
         cache_ttl: 300  # Cache pool data for 5 minutes
         min_tvl_usd: 10000  # Only track pools with TVL > $10k
         ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
+      
+      wingriders:
+        enabled: true
+        # WingRiders DEX - Cardano decentralized exchange with embedded staking
+        # Documentation: https://docs.wingriders.com/
+        # GitHub: https://github.com/WingRiders
+        graphql_url: "https://api.mainnet.wingriders.com/graphql"
+        timeout: 30
+        max_retries: 3
+        cache_ttl: 300  # Cache pool data for 5 minutes
+        min_tvl_usd: 10000  # Only track pools with TVL > $10k
+        ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
     
     # Add more chains here as they're implemented
     # ethereum:

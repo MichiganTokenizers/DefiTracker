@@ -7,6 +7,7 @@ from src.adapters.base import ChainAdapter
 from src.adapters.cardano.minswap import MinswapAdapter
 from src.adapters.cardano.liqwid import LiqwidAdapter
 from src.adapters.cardano.sundaeswap import SundaeSwapAdapter
+from src.adapters.cardano.wingriders import WingRidersAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,12 @@ class CardanoChainAdapter(ChainAdapter):
             if sundae_cfg.get("enabled", False):
                 self.protocols["sundaeswap"] = SundaeSwapAdapter("sundaeswap", sundae_cfg)
                 logger.info("Initialized SundaeSwap adapter for Cardano")
+
+        if "wingriders" in protocols_cfg:
+            wingriders_cfg = protocols_cfg["wingriders"]
+            if wingriders_cfg.get("enabled", False):
+                self.protocols["wingriders"] = WingRidersAdapter("wingriders", wingriders_cfg)
+                logger.info("Initialized WingRiders adapter for Cardano")
 
     def get_web3_instance(self):
         """
