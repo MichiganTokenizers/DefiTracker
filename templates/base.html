@@ -29,19 +29,21 @@
             --accent-highlight: var(--crimson-carrot);
         }
         body {
-            background: 
-                /* Subtle noise texture overlay */
-                url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"),
-                /* Modern gradient background */
-                linear-gradient(135deg, #e8e1c8 0%, #ddd6b9 25%, #d4cdb0 50%, #cfc8a5 75%, #e0d9be 100%);
+            background: url('/static/YieldLife_background_leaf.png');
+            background-size: cover;
+            background-position: center;
             background-attachment: fixed;
+            background-repeat: no-repeat;
             color: var(--text-primary);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
         }
         .navbar {
             background: var(--carbon-black) !important;
-            border-bottom: 1px solid rgba(31, 32, 31, 0.2);
+            border-bottom: none;
+            border-radius: 16px;
+            margin: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
         .navbar-brand, .nav-link {
             color: var(--sand-dune) !important;

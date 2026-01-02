@@ -5,10 +5,13 @@ WingRiders APR Collection Script
 This script pulls pool data from WingRiders DEX on Cardano
 and stores it in the `apr_snapshots` table.
 
-Collects:
+Stores Base APR = feesAPR + stakingAPR (passive LP returns):
 - feesAPR: Trading fee APR (similar to HRA on other DEXs)
 - stakingAPR: Additional yield from embedded ADA staking
-- TVL in USD
+
+Note: Farm APR and Boosting APR are NOT included as they require
+active participation (staking LP tokens or WRT tokens). This matches
+how other DEXs (Minswap, SundaeSwap) report their base LP APR.
 
 WingRiders provides APR directly from their API, no calculation needed.
 Collects pools with TVL > $10k (configurable).
@@ -103,8 +106,12 @@ def collect_and_store_wingriders():
         inserted = 0
         farms_count = 0
         for pool in pools:
-            # Use total_apr (fees + staking + farm + boosting) as the APR
-            apr = pool.total_apr if pool.total_apr else Decimal(0)
+            # Use base APR (fees + staking) - these are passive returns for LP holders
+            # Farm and boosting APRs require active participation and are NOT included
+            # This matches how other DEXs (Minswap, SundaeSwap) report their LP APR
+            fees_apr = pool.fees_apr if pool.fees_apr else Decimal(0)
+            staking_apr = pool.staking_apr if pool.staking_apr else Decimal(0)
+            base_apr = fees_apr + staking_apr
 
             asset_id = queries.get_or_create_asset(
                 symbol=pool.pair, 
@@ -115,7 +122,7 @@ def collect_and_store_wingriders():
                 blockchain_id=blockchain_id,
                 protocol_id=protocol_id,
                 asset_id=asset_id,
-                apr=apr,
+                apr=base_apr,  # Only passive LP returns (fees + embedded staking)
                 timestamp=timestamp,
                 yield_type='lp',  # WingRiders is a DEX - all pairs are liquidity pools
                 tvl_usd=pool.tvl_usd,
@@ -125,18 +132,18 @@ def collect_and_store_wingriders():
                 farms_count += 1
             
             tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
-            fees_str = f"{pool.fees_apr:.2f}%" if pool.fees_apr else "0.00%"
-            staking_str = f"{pool.staking_apr:.2f}%" if pool.staking_apr else "0.00%"
-            farm_str = f"{pool.farm_apr:.2f}%" if pool.farm_apr else "0.00%"
-            boost_str = f"{pool.boosting_apr:.2f}%" if pool.boosting_apr else "0.00%"
-            total_str = f"{pool.total_apr:.2f}%" if pool.total_apr else "0.00%"
+            fees_str = f"{fees_apr:.2f}%" if fees_apr else "0.00%"
+            staking_str = f"{staking_apr:.2f}%" if staking_apr else "0.00%"
+            base_str = f"{base_apr:.2f}%"
             
             if pool.has_farm:
-                logger.info("Stored %s (%s): Fees=%s, Stake=%s, Farm=%s, Boost=%s, TOTAL=%s, TVL=%s", 
-                           pool.pair, pool.version, fees_str, staking_str, farm_str, boost_str, total_str, tvl_str)
+                farm_str = f"{pool.farm_apr:.2f}%" if pool.farm_apr else "0.00%"
+                boost_str = f"{pool.boosting_apr:.2f}%" if pool.boosting_apr else "0.00%"
+                logger.info("Stored %s (%s): Base APR=%s (Fees=%s + Stake=%s), [Farm=%s, Boost=%s available], TVL=%s", 
+                           pool.pair, pool.version, base_str, fees_str, staking_str, farm_str, boost_str, tvl_str)
             else:
-                logger.info("Stored %s (%s): Fees=%s, Staking=%s, Total=%s, TVL=%s", 
-                           pool.pair, pool.version, fees_str, staking_str, total_str, tvl_str)
+                logger.info("Stored %s (%s): Base APR=%s (Fees=%s + Stake=%s), TVL=%s", 
+                           pool.pair, pool.version, base_str, fees_str, staking_str, tvl_str)
 
         logger.info("WingRiders collection complete. Snapshots inserted: %s (%s with active farms)", 
                    inserted, farms_count)
