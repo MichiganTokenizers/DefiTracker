@@ -403,16 +403,21 @@ async function loadChart() {
         chart.destroy();
     }
     
-    // Prepare datasets - each DEX+pair combo is a separate line
+    // Prepare datasets - each DEX+pair+version combo is a separate line
     // Color by pair, line style by DEX
     const datasets = chartData.map((assetData) => {
         const protocol = assetData.protocol;
         const symbol = assetData.symbol;
+        const version = assetData.version;
         const color = getPairColor(symbol);
         const lineStyle = protocolLineStyles[protocol] || { borderDash: [], pointStyle: 'circle' };
         
+        // Include version in label if present
+        const versionSuffix = version ? ` ${version}` : '';
+        const label = `${symbol} (${protocol}${versionSuffix})`;
+        
         return {
-            label: `${symbol} (${protocol})`,
+            label: label,
             data: assetData.data.map(d => ({
                 x: new Date(d.timestamp),
                 y: d.apr
@@ -510,6 +515,7 @@ function updateCurrentAprs(data) {
         return {
             symbol: assetData.symbol,
             protocol: assetData.protocol,
+            version: assetData.version,
             apr: latest.apr,
             tvl_usd: latest.tvl_usd,
             change24h: change24h,
@@ -589,11 +595,14 @@ function applySortToTable() {
         // Format TVL if available
         const tvlStr = item.tvl_usd ? `$${item.tvl_usd.toLocaleString(undefined, {maximumFractionDigits: 0})}` : '-';
         
+        // Include version if present
+        const versionStr = item.version ? ` ${item.version}` : '';
+        
         row.innerHTML = `
             <td>
                 <img src="${logo}" alt="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${item.symbol}</strong>
-                <span class="text-muted" style="font-size: 0.8rem; margin-left: 5px;">${item.protocol}</span>
+                <span class="text-muted" style="font-size: 0.8rem; margin-left: 5px;">${item.protocol}${versionStr}</span>
             </td>
             <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
             <td>${changeHtml}</td>

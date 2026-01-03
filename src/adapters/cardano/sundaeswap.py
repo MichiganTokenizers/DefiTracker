@@ -230,9 +230,9 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 ticker_b = p.get("assetB", {}).get("ticker", "???")
                 version = p.get("version", "V1")
                 
-                # Create pair name with version in parentheses
-                pair = f"{ticker_a}-{ticker_b} ({version})"
-                pair_key = pair  # Pair name now includes version
+                # Create pair name (version stored separately)
+                pair = f"{ticker_a}-{ticker_b}"
+                pair_key = f"{pair}-{version}"  # Unique key includes version
                 
                 # Skip if we've already seen this pair+version
                 if pair_key in seen_pairs:

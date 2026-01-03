@@ -125,6 +125,7 @@ def collect_and_store_wingriders():
                 timestamp=timestamp,
                 yield_type='lp',  # WingRiders is a DEX - all pairs are liquidity pools
                 tvl_usd=pool.tvl_usd,
+                version=pool.version,
             )
             inserted += 1
             if pool.has_farm:

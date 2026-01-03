@@ -120,6 +120,7 @@ def collect_and_store_sundaeswap():
                 tvl_usd=pool.tvl_usd,
                 fees_24h=pool.fees_24h_usd,
                 volume_24h=pool.volume_24h_usd,
+                version=pool.version,
             )
             inserted += 1
             

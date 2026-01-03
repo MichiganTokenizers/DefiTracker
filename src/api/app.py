@@ -296,7 +296,8 @@ def api_get_all_history_for_chain(chain):
                     s.apr,
                     s.timestamp,
                     s.yield_type,
-                    s.tvl_usd
+                    s.tvl_usd,
+                    s.version
                 FROM apr_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
                 JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -313,7 +314,7 @@ def api_get_all_history_for_chain(chain):
             query += " ORDER BY s.timestamp ASC"
             cur.execute(query, params)
             
-            # Group by protocol and normalized symbol
+            # Group by protocol, normalized symbol, and version
             data = {}
             for row in cur.fetchall():
                 protocol = row[0]
@@ -322,6 +323,7 @@ def api_get_all_history_for_chain(chain):
                 timestamp = row[3]
                 row_yield_type = row[4]
                 tvl_usd = row[5]
+                version = row[6]
                 
                 if apr_value is None:
                     continue
@@ -329,12 +331,14 @@ def api_get_all_history_for_chain(chain):
                 # Normalize pair name for consistent grouping across DEXs
                 symbol = normalize_pair(raw_symbol)
                 
-                # Key by protocol_symbol for unique lines
-                key = f"{protocol}_{symbol}"
+                # Key by protocol_symbol_version for unique lines (version can differentiate same pair)
+                version_suffix = f"_{version}" if version else ""
+                key = f"{protocol}_{symbol}{version_suffix}"
                 if key not in data:
                     data[key] = {
                         'protocol': protocol,
                         'symbol': symbol,
+                        'version': version,
                         'yield_type': row_yield_type,
                         'data': []
                     }
