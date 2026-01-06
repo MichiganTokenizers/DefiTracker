@@ -315,6 +315,20 @@ chains:
         cache_ttl: 300  # Cache pool data for 5 minutes
         min_tvl_usd: 10000  # Only track pools with TVL > $10k
         ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
+      
+      muesliswap:
+        enabled: true
+        # MuesliSwap DEX - Cardano decentralized exchange and aggregator
+        # Documentation: https://docs.muesliswap.com/
+        # GitHub: https://github.com/MuesliSwapTeam
+        base_url: "https://onchain2.muesliswap.com"
+        timeout: 30
+        max_retries: 3
+        cache_ttl: 300  # Cache pool data for 5 minutes
+        min_tvl_ada: 10000  # Only track pools with TVL >= 10,000 ADA
+        min_tvl_usd: 0  # Optional USD filter (set to filter by USD instead)
+        ada_price_usd: 0.35  # Approximate ADA price for conversions
+        default_fee_percent: 0.3  # Default trading fee if not provided
     
     # Add more chains here as they're implemented
     # ethereum:
