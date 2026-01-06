@@ -1,8 +1,10 @@
-# Cron Setup for DefiTracker APY/APR Collection
+# Cron Setup for YieldLife APY/APR Collection
 
 ## Overview
 
-DefiTracker uses cron jobs to collect APY/APR data from multiple DeFi protocols across different blockchains. This guide covers setup for both development machines and Raspberry Pi servers.
+YieldLife uses cron jobs to collect APY/APR data from Cardano DeFi protocols. This guide covers setup for both development machines and Raspberry Pi servers.
+
+> **Note:** The web UI is currently Cardano-focused. Kinetic (Flare) data collection continues in the background for future use.
 
 ---
 

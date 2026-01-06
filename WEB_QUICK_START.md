@@ -20,8 +20,9 @@ Open your browser and visit:
 
 ### Main Pages
 - **Home:** http://localhost:5000
-- **Flare Chain:** http://localhost:5000/chain/flare
-- **Cardano Chain:** http://localhost:5000/chain/cardano
+- **Cardano:** http://localhost:5000/chain/cardano
+- **Liquidity Pools:** http://localhost:5000/lps
+- **Liqwid Lending:** http://localhost:5000/earn
 
 ### API Endpoints (for testing)
 - **Health Check:** http://localhost:5000/health
@@ -35,7 +36,7 @@ http://localhost:5000/embed/cardano/minswap?asset=NIGHT-ADA&days=30
 ## 📊 What You Can Do
 
 ### View Historical APR Charts
-1. Navigate to a chain page (Flare or Cardano)
+1. Navigate to the Cardano page or strategy pages (LPs, Earn)
 2. Use filters:
    - **Time Range:** 7/30/90/365 days
    - **Asset Filter:** Select specific asset or view all
@@ -43,7 +44,7 @@ http://localhost:5000/embed/cardano/minswap?asset=NIGHT-ADA&days=30
 3. Hover over charts for detailed tooltips
 
 ### Embed Widgets
-1. Click "Embed Widget" in navbar
+1. Click "Embed" in navbar
 2. Copy the iframe code
 3. Paste into any website
 
@@ -76,7 +77,7 @@ curl "http://localhost:5000/api/cardano/minswap/history?days=7&asset=NIGHT-ADA"
 
 ### Test in Browser
 1. Visit http://localhost:5000
-2. Click "Cardano" card
+2. Click a Cardano protocol card
 3. Select different time ranges
 4. Filter by specific asset
 5. Try different chart types
@@ -84,14 +85,13 @@ curl "http://localhost:5000/api/cardano/minswap/history?days=7&asset=NIGHT-ADA"
 ## 📱 Features Checklist
 
 - ✅ Interactive charts with Chart.js
-- ✅ Multi-chain support (Flare, Cardano)
+- ✅ Cardano-focused DeFi coverage
+- ✅ Multiple protocols (Minswap, SundaeSwap, WingRiders, Liqwid)
 - ✅ Time range filtering (7/30/90/365 days)
 - ✅ Asset filtering (individual or all)
-- ✅ Chart type toggle (line/bar)
 - ✅ Current APR summary cards
 - ✅ Embeddable widgets
 - ✅ Responsive design
-- ✅ Dark theme
 
 ## 🎨 Customization
 
@@ -100,20 +100,12 @@ Edit `templates/base.html`, CSS variables section:
 
 ```css
 :root {
-    --flare-color: #e84142;       /* Flare badge color */
     --cardano-color: #0033ad;     /* Cardano badge color */
-    --primary-bg: #1a1d29;        /* Main background */
-    --secondary-bg: #252938;      /* Card background */
-    --text-primary: #ffffff;      /* Primary text */
-    --text-secondary: #b0b3c1;    /* Secondary text */
+    --primary-bg: var(--sand-dune);  /* Main background */
+    --text-primary: var(--carbon-black);
+    --text-secondary: #4a4a4a;
 }
 ```
-
-### Add More Chains
-1. Collect data for new chain
-2. Add to `protocolMap` in `templates/chain.html`
-3. Add badge color in `templates/base.html`
-4. Update navbar dropdown
 
 ## 🐛 Troubleshooting
 
@@ -126,7 +118,9 @@ Edit `templates/base.html`, CSS variables section:
 - Run collection scripts:
   ```bash
   python scripts/collect_minswap_apr.py
-  python scripts/collect_kinetic_apy.py
+  python scripts/collect_sundaeswap_apr.py
+  python scripts/collect_wingriders_apr.py
+  python scripts/collect_liqwid_apy.py
   ```
 - Verify data in database:
   ```sql
@@ -165,15 +159,15 @@ Edit `templates/base.html`, CSS variables section:
 - All API endpoints functional
 - Charts displaying historical data
 - Embeddable widgets ready
-- Cardano (35 pools) and Flare (6 assets) tracked
 
-📊 **Data Available:**
-- Cardano/Minswap: 35 pools with APR history
-- Flare/Kinetic: 6 assets with APY history
-- Daily snapshots from manual runs
+📊 **Cardano Protocols Tracked:**
+- Minswap: 35+ pools with APR history
+- SundaeSwap: Liquidity pools
+- WingRiders: Liquidity pools
+- Liqwid: Lending supply rates
+- Daily snapshots from automated runs
 
 🔄 **To Do:**
-- Set up automated daily collection (cron or Raspberry Pi)
 - Deploy to public server
-- Add more chains as needed
+- Expand Cardano protocol coverage
 

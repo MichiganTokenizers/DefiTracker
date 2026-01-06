@@ -21,7 +21,6 @@
         font-weight: 600;
         text-transform: uppercase;
     }
-    .chain-flare { background: #e84142; }
     .chain-cardano { background: #0033ad; }
     #aprTable th {
         border-top: none;
@@ -68,9 +67,7 @@
     <div class="col-md-3">
         <label class="form-label">Chain</label>
         <select id="chainFilter" class="form-select">
-            <option value="all">All Chains</option>
-            <option value="flare">Flare</option>
-            <option value="cardano">Cardano</option>
+            <option value="cardano" selected>Cardano</option>
         </select>
     </div>
     <div class="col-md-3 d-flex align-items-end">
@@ -149,13 +146,12 @@ let currentSortDirection = 'desc';
 
 // Protocol logo mapping
 const protocolLogos = {
-    'kinetic': '/static/kinetic-logo.svg',
-    'minswap': '/static/minswap-logo.webp'
+    'minswap': '/static/minswap-logo.webp',
+    'sundaeswap': '/static/sundaeswap_logo.png'
 };
 
 // Chain colors
 const chainColors = {
-    'flare': '#e84142',
     'cardano': '#0033ad'
 };
 

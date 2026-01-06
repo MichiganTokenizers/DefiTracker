@@ -145,11 +145,11 @@
         <!-- Left Card: About -->
         <div class="col-md-4">
             <div class="hero-card">
-                <h5>📊 DeFi Yield Tracking</h5>
-                <p>Daily snapshots of APR/APY across multiple chains and protocols.</p>
-                <p>Track liquidity pools, lending supply rates, and borrow costs in one place.</p>
-                <p><strong>Chains:</strong> Cardano, Flare</p>
-                <p><strong>Protocols:</strong> Minswap, SundaeSwap, WingRiders, Kinetic</p>
+                <h5>📊 Cardano DeFi Yield Tracking</h5>
+                <p>Daily snapshots of APR/APY across Cardano's top DEXs.</p>
+                <p>Track liquidity pools, lending supply rates, and earning opportunities in one place.</p>
+                <p><strong>Chain:</strong> Cardano</p>
+                <p><strong>Protocols:</strong> Minswap, SundaeSwap, WingRiders, Liqwid</p>
             </div>
         </div>
         
@@ -164,11 +164,9 @@
         <div class="col-md-4">
             <div class="hero-card">
                 <h5>🔗 Quick Links</h5>
-                <a href="/chain/cardano" class="preset-link"><span class="preset-icon">♠️</span> Cardano DEX Pools</a>
-                <a href="/chain/flare" class="preset-link"><span class="preset-icon">🔥</span> Flare Lending Markets</a>
-                <a href="/lps" class="preset-link"><span class="preset-icon">🌊</span> All Liquidity Pools</a>
-                <a href="/earn" class="preset-link"><span class="preset-icon">💰</span> Best Earn Rates</a>
-                <a href="/borrow" class="preset-link"><span class="preset-icon">🏦</span> Lowest Borrow Rates</a>
+                <a href="/chain/cardano" class="preset-link"><span class="preset-icon">♠️</span> All Cardano Pools</a>
+                <a href="/lps" class="preset-link"><span class="preset-icon">🌊</span> Liquidity Pools</a>
+                <a href="/earn" class="preset-link"><span class="preset-icon">💰</span> Liqwid Lending Rates</a>
             </div>
         </div>
     </div>
@@ -198,8 +196,8 @@
     <div class="col-md-4">
         <a href="/earn" class="strategy-card">
             <div class="strategy-icon">💰</div>
-            <div class="strategy-title">Earn (Lend)</div>
-            <div class="strategy-desc">Supply assets to lending markets and earn interest</div>
+            <div class="strategy-title">Liqwid Lending</div>
+            <div class="strategy-desc">Supply assets to Liqwid and earn interest</div>
             <div class="best-apr" id="supply-best">
                 <div>
                     <div class="best-apr-value" id="supply-apr">--</div>
@@ -215,44 +213,64 @@
     </div>
     
     <div class="col-md-4">
-        <a href="/borrow" class="strategy-card">
-            <div class="strategy-icon">🏦</div>
-            <div class="strategy-title">Borrow Rates</div>
-            <div class="strategy-desc">Compare borrowing costs across lending markets</div>
-            <div class="best-apr" id="borrow-best" style="background: rgba(247, 75, 3, 0.15);">
+        <a href="/chain/cardano" class="strategy-card">
+            <div class="strategy-icon">♠️</div>
+            <div class="strategy-title">All Cardano Yields</div>
+            <div class="strategy-desc">Complete view of all Cardano DeFi opportunities</div>
+            <div class="best-apr" id="cardano-best">
                 <div>
-                    <div class="best-apr-value" id="borrow-apr" style="color: var(--crimson-carrot);">--</div>
-                    <div class="best-apr-label">Lowest Rate</div>
+                    <div class="best-apr-value" id="cardano-count-value">--</div>
+                    <div class="best-apr-label">Protocols Tracked</div>
                 </div>
                 <div class="ms-auto text-end">
-                    <div class="best-apr-asset" id="borrow-asset">Loading...</div>
-                    <div id="borrow-chain"></div>
+                    <div class="best-apr-asset">Minswap, SundaeSwap</div>
+                    <div><span class="chain-mini chain-cardano">cardano</span></div>
                 </div>
             </div>
-            <small class="text-muted" id="borrow-count">-- assets tracked</small>
+            <small class="text-muted">WingRiders, Liqwid</small>
         </a>
     </div>
 </div>
 
-<!-- Chain Quick Links -->
-<h4 class="mb-3">Browse by Chain</h4>
+<!-- Cardano Protocols -->
+<h4 class="mb-3">Cardano DeFi Protocols</h4>
 <div class="row g-3 mb-5">
-    <div class="col-md-6">
-        <a href="/chain/flare" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <span class="chain-badge chain-flare me-3">FLARE</span>
+    <div class="col-md-3">
+        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
+            <img src="/static/minswap-logo.webp" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 12px;">
             <div>
-                <strong>Flare Network</strong>
-                <br><small class="text-muted">Kinetic lending markets</small>
+                <strong>Minswap</strong>
+                <br><small class="text-muted">LP Farming</small>
             </div>
             <span class="ms-auto">→</span>
         </a>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-3">
         <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <span class="chain-badge chain-cardano me-3">CARDANO</span>
+            <img src="/static/sundaeswap_logo.png" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 12px;">
             <div>
-                <strong>Cardano</strong>
-                <br><small class="text-muted">Minswap liquidity pools</small>
+                <strong>SundaeSwap</strong>
+                <br><small class="text-muted">LP Farming</small>
+            </div>
+            <span class="ms-auto">→</span>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
+            <span class="chain-badge chain-cardano me-3">WR</span>
+            <div>
+                <strong>WingRiders</strong>
+                <br><small class="text-muted">LP Farming</small>
+            </div>
+            <span class="ms-auto">→</span>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/earn" class="chain-card d-flex align-items-center text-decoration-none text-white">
+            <span class="chain-badge chain-cardano me-3">LQ</span>
+            <div>
+                <strong>Liqwid</strong>
+                <br><small class="text-muted">Lending</small>
             </div>
             <span class="ms-auto">→</span>
         </a>
@@ -268,12 +286,12 @@
             <p class="text-secondary small">Track APR/APY changes over time with interactive charts</p>
         </div>
         <div class="col-md-3">
-            <h6>🔗 Multi-Chain</h6>
-            <p class="text-secondary small">Compare yields across Flare, Cardano, and more</p>
+            <h6>♠️ Cardano Focused</h6>
+            <p class="text-secondary small">Deep coverage of Cardano's top DeFi protocols</p>
         </div>
         <div class="col-md-3">
             <h6>📊 Strategy Views</h6>
-            <p class="text-secondary small">Filter by LPs, lending supply, or borrow rates</p>
+            <p class="text-secondary small">Filter by LPs, lending supply, and yield opportunities</p>
         </div>
         <div class="col-md-3">
             <h6>🔄 Daily Updates</h6>
@@ -286,46 +304,38 @@
 {% block extra_js %}
 <script>
 async function loadBestYields() {
-    // Load LP best
+    // Load LP best (Cardano only)
     try {
         const lpResponse = await fetch('/api/yields/lp/latest');
         const lpData = await lpResponse.json();
-        if (lpData.length > 0) {
-            const best = lpData[0];
+        // Filter to Cardano only
+        const cardanoLPs = lpData.filter(d => d.chain === 'cardano');
+        if (cardanoLPs.length > 0) {
+            const best = cardanoLPs[0];
             document.getElementById('lp-apr').textContent = best.apr.toFixed(1) + '%';
             document.getElementById('lp-asset').textContent = best.symbol;
             document.getElementById('lp-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
-            document.getElementById('lp-count').textContent = `${lpData.length} pools tracked`;
+            document.getElementById('lp-count').textContent = `${cardanoLPs.length} pools tracked`;
         }
     } catch (e) { console.error('Error loading LP data', e); }
     
-    // Load Supply best
+    // Load Supply best (Liqwid on Cardano)
     try {
         const supplyResponse = await fetch('/api/yields/supply/latest');
         const supplyData = await supplyResponse.json();
-        if (supplyData.length > 0) {
-            const best = supplyData[0];
+        // Filter to Cardano only (Liqwid)
+        const cardanoSupply = supplyData.filter(d => d.chain === 'cardano');
+        if (cardanoSupply.length > 0) {
+            const best = cardanoSupply[0];
             document.getElementById('supply-apr').textContent = best.apr.toFixed(1) + '%';
             document.getElementById('supply-asset').textContent = best.symbol;
             document.getElementById('supply-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
-            document.getElementById('supply-count').textContent = `${supplyData.length} assets tracked`;
+            document.getElementById('supply-count').textContent = `${cardanoSupply.length} assets tracked`;
         }
     } catch (e) { console.error('Error loading supply data', e); }
     
-    // Load Borrow best (lowest rate)
-    try {
-        const borrowResponse = await fetch('/api/yields/borrow/latest');
-        const borrowData = await borrowResponse.json();
-        if (borrowData.length > 0) {
-            // Sort ascending to get lowest rate
-            borrowData.sort((a, b) => a.apr - b.apr);
-            const best = borrowData[0];
-            document.getElementById('borrow-apr').textContent = best.apr.toFixed(1) + '%';
-            document.getElementById('borrow-asset').textContent = best.symbol;
-            document.getElementById('borrow-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
-            document.getElementById('borrow-count').textContent = `${borrowData.length} assets tracked`;
-        }
-    } catch (e) { console.error('Error loading borrow data', e); }
+    // Update protocol count
+    document.getElementById('cardano-count-value').textContent = '4';
 }
 
 // Load on page load

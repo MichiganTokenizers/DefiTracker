@@ -1,14 +1,14 @@
-# DeFi APR Tracker Web UI
+# YieldLife - Cardano DeFi Yield Tracker Web UI
 
-Interactive web interface for viewing historical APR data across multiple blockchains.
+Interactive web interface for viewing historical APR data across Cardano DeFi protocols.
 
 ## Features
 
 - 📊 **Interactive Charts** - View APR trends with Chart.js
-- 🔗 **Multi-Chain Support** - Flare (Kinetic) and Cardano (Minswap)
+- ♠️ **Cardano Focused** - Deep coverage of Cardano's top DEXs and lending protocols
 - 🎨 **Embeddable Widgets** - Add charts to any website via iframe
 - 📱 **Responsive Design** - Works on mobile and desktop
-- 🎯 **Filtering** - Time range, asset, and chart type selection
+- 🎯 **Filtering** - Time range, asset, and protocol selection
 
 ## Quick Start
 
@@ -25,23 +25,24 @@ python src/api/app.py
 
 Then visit:
 - **Main page:** http://localhost:5000
-- **Flare chain:** http://localhost:5000/chain/flare
-- **Cardano chain:** http://localhost:5000/chain/cardano
+- **Cardano:** http://localhost:5000/chain/cardano
+- **Liquidity Pools:** http://localhost:5000/lps
+- **Liqwid Lending:** http://localhost:5000/earn
 
 ## Pages
 
 ### Home Page (`/`)
-Landing page with chain selection cards.
+Landing page with protocol cards and quick links.
 
-### Chain Pages (`/chain/<name>`)
-Interactive charts for each blockchain:
-- **Flare** (`/chain/flare`) - Kinetic Markets (6 assets)
-- **Cardano** (`/chain/cardano`) - Minswap DEX (35 pools)
+### Cardano Page (`/chain/cardano`)
+Interactive charts for all Cardano protocols:
+- Minswap, SundaeSwap, WingRiders LP pools
+- Multi-DEX comparison on single charts
 
 Features:
 - Time range selector (7/30/90/365 days)
 - Asset filter (individual or all)
-- Chart type toggle (line/bar)
+- Protocol comparison
 - Current APR summary cards
 
 ### Embed Widget (`/embed/<chain>/<protocol>`)
@@ -177,22 +178,12 @@ Edit `templates/base.html` CSS variables:
 └── run_web.sh              # Startup script
 ```
 
-### Adding New Chains
+### Adding New Cardano Protocols
 
-1. Add chain to database (via collection scripts)
-2. Update `protocolMap` in `chain.html`:
-   ```javascript
-   const protocolMap = {
-       'flare': 'kinetic',
-       'cardano': 'minswap',
-       'newchain': 'newprotocol'  // Add here
-   };
-   ```
-3. Add chain badge color in `base.html`:
-   ```css
-   .chain-newchain { background: #your-color; }
-   ```
-4. Add to navbar dropdown
+1. Create a collection script in `scripts/`
+2. Add protocol to `config/chains.yaml`
+3. Add protocol logo to `static/`
+4. Update `protocolLogos` in templates
 
 ## Production Deployment
 

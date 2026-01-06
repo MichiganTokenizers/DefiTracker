@@ -148,38 +148,28 @@ def api_get_assets(chain, protocol):
     """
     yield_type = request.args.get('yield_type', default=None, type=str)
     
+    # Note: Kinetic/Flare data hidden from UI but still collected
+    if protocol == 'kinetic':
+        return jsonify([])
+    
     conn = db.get_connection()
     try:
         with conn.cursor() as cur:
-            # Kinetic uses kinetic_apy_snapshots table
-            if protocol == 'kinetic':
-                query = """
-                    SELECT DISTINCT a.symbol, a.name, s.yield_type
-                    FROM kinetic_apy_snapshots s
-                    JOIN assets a ON s.asset_id = a.asset_id
-                """
-                params = []
-                if yield_type:
-                    query += " WHERE s.yield_type = %s"
-                    params.append(yield_type)
-                query += " ORDER BY a.symbol"
-                cur.execute(query, params)
-            else:
-                # Other protocols use apr_snapshots
-                query = """
-                    SELECT DISTINCT a.symbol, a.name, s.yield_type
-                    FROM apr_snapshots s
-                    JOIN assets a ON s.asset_id = a.asset_id
-                    JOIN protocols p ON s.protocol_id = p.protocol_id
-                    JOIN blockchains b ON s.blockchain_id = b.blockchain_id
-                    WHERE b.name = %s AND p.name = %s
-                """
-                params = [chain, protocol]
-                if yield_type:
-                    query += " AND s.yield_type = %s"
-                    params.append(yield_type)
-                query += " ORDER BY a.symbol"
-                cur.execute(query, params)
+            # Other protocols use apr_snapshots
+            query = """
+                SELECT DISTINCT a.symbol, a.name, s.yield_type
+                FROM apr_snapshots s
+                JOIN assets a ON s.asset_id = a.asset_id
+                JOIN protocols p ON s.protocol_id = p.protocol_id
+                JOIN blockchains b ON s.blockchain_id = b.blockchain_id
+                WHERE b.name = %s AND p.name = %s
+            """
+            params = [chain, protocol]
+            if yield_type:
+                query += " AND s.yield_type = %s"
+                params.append(yield_type)
+            query += " ORDER BY a.symbol"
+            cur.execute(query, params)
             assets = [{'symbol': r[0], 'name': r[1], 'yield_type': r[2]} for r in cur.fetchall()]
         return jsonify(assets)
     finally:
@@ -201,29 +191,11 @@ def api_get_apr_history(chain, protocol):
     conn = db.get_connection()
     try:
         with conn.cursor() as cur:
-            # Kinetic uses kinetic_apy_snapshots table with total_supply_apy
+            # Note: Kinetic/Flare data hidden from UI but still collected
+            # To re-enable, restore the kinetic_apy_snapshots query
             if protocol == 'kinetic':
-                query = """
-                    SELECT 
-                        a.symbol,
-                        s.total_supply_apy,
-                        s.timestamp,
-                        s.yield_type
-                    FROM kinetic_apy_snapshots s
-                    JOIN assets a ON s.asset_id = a.asset_id
-                    WHERE s.timestamp >= NOW() - INTERVAL '%s days'
-                """
-                params = [days]
-                
-                if asset:
-                    query += " AND a.symbol = %s"
-                    params.append(asset)
-                
-                if yield_type:
-                    query += " AND s.yield_type = %s"
-                    params.append(yield_type)
-                
-                query += " ORDER BY s.timestamp ASC"
+                # Return empty for now - data is collected but hidden
+                return jsonify([])
             else:
                 # Other protocols use apr_snapshots
                 query = """
@@ -450,39 +422,40 @@ def api_get_yields_by_type(yield_type):
                         'yield_type': row[5]
                     })
             
-            # Get from kinetic_apy_snapshots (lending markets)
-            if yield_type in ('supply', 'borrow'):
-                cur.execute("""
-                    SELECT 
-                        'flare' as chain,
-                        'kinetic' as protocol,
-                        a.symbol,
-                        CASE 
-                            WHEN %s = 'supply' THEN s.total_supply_apy
-                            ELSE s.borrow_apy
-                        END as apr,
-                        s.timestamp,
-                        s.yield_type,
-                        s.market_type
-                    FROM kinetic_apy_snapshots s
-                    JOIN assets a ON s.asset_id = a.asset_id
-                    WHERE s.timestamp >= NOW() - INTERVAL '%s days'
-                    ORDER BY s.timestamp ASC
-                """, (yield_type, days))
-                
-                for row in cur.fetchall():
-                    apr_value = row[3]
-                    if apr_value is None:
-                        continue
-                    results.append({
-                        'chain': row[0],
-                        'protocol': row[1],
-                        'symbol': row[2],
-                        'apr': float(apr_value),
-                        'timestamp': row[4].isoformat(),
-                        'yield_type': yield_type,
-                        'market_type': row[6]
-                    })
+            # Note: Kinetic/Flare data is still collected but hidden from UI
+            # To re-enable, uncomment the kinetic_apy_snapshots query below
+            # if yield_type in ('supply', 'borrow'):
+            #     cur.execute("""
+            #         SELECT 
+            #             'flare' as chain,
+            #             'kinetic' as protocol,
+            #             a.symbol,
+            #             CASE 
+            #                 WHEN %s = 'supply' THEN s.total_supply_apy
+            #                 ELSE s.borrow_apy
+            #             END as apr,
+            #             s.timestamp,
+            #             s.yield_type,
+            #             s.market_type
+            #         FROM kinetic_apy_snapshots s
+            #         JOIN assets a ON s.asset_id = a.asset_id
+            #         WHERE s.timestamp >= NOW() - INTERVAL '%s days'
+            #         ORDER BY s.timestamp ASC
+            #     """, (yield_type, days))
+            #     
+            #     for row in cur.fetchall():
+            #         apr_value = row[3]
+            #         if apr_value is None:
+            #             continue
+            #         results.append({
+            #             'chain': row[0],
+            #             'protocol': row[1],
+            #             'symbol': row[2],
+            #             'apr': float(apr_value),
+            #             'timestamp': row[4].isoformat(),
+            #             'yield_type': yield_type,
+            #             'market_type': row[6]
+            #         })
         
         # Group by chain/protocol/symbol
         grouped = {}
@@ -547,37 +520,38 @@ def api_get_latest_yields_by_type(yield_type):
                         'yield_type': yield_type
                     })
             
-            # Get latest from kinetic_apy_snapshots (lending)
-            if yield_type in ('supply', 'borrow'):
-                cur.execute("""
-                    SELECT DISTINCT ON (a.symbol)
-                        'flare' as chain,
-                        'kinetic' as protocol,
-                        a.symbol,
-                        CASE 
-                            WHEN %s = 'supply' THEN s.total_supply_apy
-                            ELSE s.borrow_apy
-                        END as apr,
-                        s.timestamp,
-                        s.market_type
-                    FROM kinetic_apy_snapshots s
-                    JOIN assets a ON s.asset_id = a.asset_id
-                    ORDER BY a.symbol, s.timestamp DESC
-                """, (yield_type,))
-                
-                for row in cur.fetchall():
-                    apr_value = row[3]
-                    if apr_value is None:
-                        continue
-                    results.append({
-                        'chain': row[0],
-                        'protocol': row[1],
-                        'symbol': row[2],
-                        'apr': float(apr_value),
-                        'timestamp': row[4].isoformat(),
-                        'yield_type': yield_type,
-                        'market_type': row[5]
-                    })
+            # Note: Kinetic/Flare data is still collected but hidden from UI
+            # To re-enable, uncomment the kinetic_apy_snapshots query below
+            # if yield_type in ('supply', 'borrow'):
+            #     cur.execute("""
+            #         SELECT DISTINCT ON (a.symbol)
+            #             'flare' as chain,
+            #             'kinetic' as protocol,
+            #             a.symbol,
+            #             CASE 
+            #                 WHEN %s = 'supply' THEN s.total_supply_apy
+            #                 ELSE s.borrow_apy
+            #             END as apr,
+            #             s.timestamp,
+            #             s.market_type
+            #         FROM kinetic_apy_snapshots s
+            #         JOIN assets a ON s.asset_id = a.asset_id
+            #         ORDER BY a.symbol, s.timestamp DESC
+            #     """, (yield_type,))
+            #     
+            #     for row in cur.fetchall():
+            #         apr_value = row[3]
+            #         if apr_value is None:
+            #             continue
+            #         results.append({
+            #             'chain': row[0],
+            #             'protocol': row[1],
+            #             'symbol': row[2],
+            #             'apr': float(apr_value),
+            #             'timestamp': row[4].isoformat(),
+            #             'yield_type': yield_type,
+            #             'market_type': row[5]
+            #         })
         
         # Sort by APR descending
         results.sort(key=lambda x: x['apr'] if x['apr'] else 0, reverse=True)
