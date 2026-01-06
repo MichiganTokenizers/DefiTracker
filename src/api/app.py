@@ -1,18 +1,64 @@
 """Flask API application with charting UI"""
+import os
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
+from flask_login import current_user
 from datetime import datetime, timedelta
 from src.database.connection import DatabaseConnection
 from src.database.queries import DatabaseQueries, APYQueries
+from src.database.user_queries import UserQueries
+from src.auth import login_manager
+from src.auth.routes import auth_bp, init_auth
+from src.auth.email import mail
 
 app = Flask(__name__, 
             template_folder='../../templates',
             static_folder='../../static')
-CORS(app)
 
+# Configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Mail configuration (from environment variables)
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@yieldlife.io')
+
+CORS(app, supports_credentials=True)
+
+# Initialize extensions
+login_manager.init_app(app)
+mail.init_app(app)
+
+# Database connection
 db = DatabaseConnection()
 queries = DatabaseQueries(db)
 apy_queries = APYQueries(db)
+user_queries = UserQueries(db)
+
+# Initialize auth module with database
+init_auth(db)
+
+# Register auth blueprint
+app.register_blueprint(auth_bp)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user by ID for Flask-Login"""
+    return user_queries.get_user_by_id(int(user_id))
+
+
+# Make current_user available in templates
+@app.context_processor
+def inject_user():
+    """Inject current_user into all templates"""
+    return dict(current_user=current_user)
 
 # ============================================
 # Token Pair Normalization
@@ -591,6 +637,16 @@ def embed_widget(chain, protocol):
                           protocol=protocol,
                           asset=asset,
                           days=days)
+
+@app.route('/my-charts')
+def my_charts_page():
+    """User's saved charts page"""
+    return render_template('my_charts.html')
+
+@app.route('/reset-password/<token>')
+def reset_password_page(token):
+    """Password reset page"""
+    return render_template('reset_password.html', token=token)
 
 # ============================================
 # Legacy endpoints

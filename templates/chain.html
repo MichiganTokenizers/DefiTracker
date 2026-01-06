@@ -165,6 +165,34 @@
             </div>
         </div>
     </div>
+    <div class="col-md-3 d-flex align-items-end">
+        <button type="button" class="btn btn-outline-primary" id="saveChartBtn" onclick="saveCurrentChart()">
+            Save Chart
+        </button>
+    </div>
+</div>
+
+<!-- Save Chart Modal -->
+<div class="modal fade" id="saveChartModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Save Chart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="saveChartAlert" class="alert d-none" role="alert"></div>
+                <form id="saveChartForm" onsubmit="handleSaveChart(event)">
+                    <div class="mb-3">
+                        <label for="chartName" class="form-label">Chart Name</label>
+                        <input type="text" class="form-control" id="chartName" required maxlength="100" 
+                               placeholder="e.g., My Cardano LP Watchlist">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -638,6 +666,70 @@ document.getElementById('timeRange').addEventListener('change', loadChart);
 
 // Initial load
 loadAssets().then(loadChart);
+
+// ==========================================
+// Save Chart functionality
+// ==========================================
+
+function saveCurrentChart() {
+    {% if current_user.is_authenticated %}
+    // User is logged in, show save modal
+    document.getElementById('chartName').value = `${chain.charAt(0).toUpperCase() + chain.slice(1)} Chart`;
+    new bootstrap.Modal(document.getElementById('saveChartModal')).show();
+    {% else %}
+    // User not logged in, show auth modal
+    new bootstrap.Modal(document.getElementById('authModal')).show();
+    {% endif %}
+}
+
+async function handleSaveChart(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('chartName').value;
+    const alert = document.getElementById('saveChartAlert');
+    
+    // Build filters object
+    const filters = {
+        chain: chain,
+        days: parseInt(document.getElementById('timeRange').value),
+        assets: Array.from(selectedAssets),
+        yield_type: 'lp'
+    };
+    
+    // Build display options
+    const displayOptions = {
+        colors: pairColorMap
+    };
+    
+    try {
+        const response = await fetch('/api/auth/charts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, filters, display_options: displayOptions })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert.textContent = 'Chart saved successfully!';
+            alert.className = 'alert alert-success';
+            alert.classList.remove('d-none');
+            
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('saveChartModal')).hide();
+                alert.classList.add('d-none');
+            }, 1500);
+        } else {
+            alert.textContent = data.error || 'Failed to save chart';
+            alert.className = 'alert alert-danger';
+            alert.classList.remove('d-none');
+        }
+    } catch (e) {
+        alert.textContent = 'Connection error. Please try again.';
+        alert.className = 'alert alert-danger';
+        alert.classList.remove('d-none');
+    }
+}
 </script>
 {% endblock %}
 

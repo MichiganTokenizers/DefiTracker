@@ -1,0 +1,57 @@
+# DefiTracker Web UI systemd Service
+# ==================================
+#
+# This service file runs the Flask web UI automatically on boot.
+#
+# Installation:
+#   sudo cp /home/pi/DefiTracker/systemd/defitracker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable defitracker
+#   sudo systemctl start defitracker
+#
+# Management:
+#   sudo systemctl status defitracker   # Check status
+#   sudo systemctl restart defitracker  # Restart service
+#   sudo systemctl stop defitracker     # Stop service
+#   sudo journalctl -u defitracker -f   # View logs
+#
+# Note: Adjust the User, Group, and WorkingDirectory if you installed
+# to a different location or use a different username.
+
+[Unit]
+Description=DefiTracker Web UI - DeFi APR/APY Dashboard
+Documentation=https://github.com/yourusername/DefiTracker
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/DefiTracker
+
+# Python virtual environment
+Environment="PATH=/home/pi/DefiTracker/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="FLASK_APP=src.api.app:app"
+Environment="FLASK_ENV=production"
+
+# Run Flask on all interfaces, port 5000
+ExecStart=/home/pi/DefiTracker/venv/bin/python -m flask run --host=0.0.0.0 --port=5000
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/DefiTracker/logs
+
+# Resource limits (adjust based on your needs)
+MemoryMax=512M
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target
+

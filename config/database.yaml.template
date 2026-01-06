@@ -11,3 +11,12 @@ database:
   # TimescaleDB specific settings
   # Ensure TimescaleDB extension is enabled in the database
 
+# Email/SMTP configuration is handled via environment variables
+# See .env.example for the list of required variables:
+#   - MAIL_SERVER
+#   - MAIL_PORT
+#   - MAIL_USE_TLS
+#   - MAIL_USERNAME
+#   - MAIL_PASSWORD
+#   - MAIL_DEFAULT_SENDER
+

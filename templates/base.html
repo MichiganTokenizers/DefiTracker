@@ -129,6 +129,86 @@
         }
         .text-muted { color: var(--text-secondary) !important; }
         .text-secondary { color: var(--text-secondary) !important; }
+        
+        /* Auth styles */
+        .auth-modal .modal-content {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
+        }
+        .auth-modal .modal-header {
+            border-bottom: 1px solid rgba(31, 32, 31, 0.1);
+        }
+        .auth-modal .nav-tabs {
+            border-bottom: 2px solid rgba(31, 32, 31, 0.1);
+        }
+        .auth-modal .nav-tabs .nav-link {
+            color: var(--text-secondary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+        }
+        .auth-modal .nav-tabs .nav-link.active {
+            color: var(--sea-green);
+            border-bottom: 2px solid var(--sea-green);
+            background: transparent;
+        }
+        .wallet-btn {
+            background: linear-gradient(135deg, #0033ad 0%, #0044cc 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .wallet-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 51, 173, 0.3);
+            color: white;
+        }
+        .wallet-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+            color: var(--text-secondary);
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(31, 32, 31, 0.2);
+        }
+        .divider span {
+            padding: 0 1rem;
+            font-size: 0.875rem;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--sea-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .alert-auth {
+            font-size: 0.875rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -168,6 +248,31 @@
                             Embed
                         </a>
                     </li>
+                    
+                    <!-- Auth Section -->
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+                            <span class="user-avatar">
+                                {{ (current_user.display_name or current_user.email or current_user.wallet_address[:4])[0].upper() }}
+                            </span>
+                            <span class="d-none d-md-inline">
+                                {{ current_user.display_name or current_user.email or (current_user.wallet_address[:8] + '...' if current_user.wallet_address else 'User') }}
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/my-charts">My Charts</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout(); return false;">Logout</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#authModal">
+                            Login
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -194,13 +299,249 @@
         </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div class="modal fade auth-modal" id="authModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Welcome to YieldLife</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Alert area -->
+                    <div id="authAlert" class="alert alert-auth d-none" role="alert"></div>
+                    
+                    <!-- Wallet Login -->
+                    <button type="button" class="wallet-btn mb-3" id="walletLoginBtn" onclick="connectWallet()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                        </svg>
+                        Connect Cardano Wallet
+                    </button>
+                    
+                    <div class="divider"><span>or use email</span></div>
+                    
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-pane" type="button">Login</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="signup-tab" data-bs-toggle="tab" data-bs-target="#signup-pane" type="button">Sign Up</button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content">
+                        <!-- Login Form -->
+                        <div class="tab-pane fade show active" id="login-pane" role="tabpanel">
+                            <form id="loginForm" onsubmit="handleLogin(event)">
+                                <div class="mb-3">
+                                    <label for="loginEmail" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="loginEmail" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="loginPassword" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="loginPassword" required>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <a href="#" onclick="showForgotPassword(); return false;" class="small">Forgot password?</a>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="loginSubmitBtn">Login</button>
+                            </form>
+                        </div>
+                        
+                        <!-- Signup Form -->
+                        <div class="tab-pane fade" id="signup-pane" role="tabpanel">
+                            <form id="signupForm" onsubmit="handleSignup(event)">
+                                <div class="mb-3">
+                                    <label for="signupEmail" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="signupEmail" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signupPassword" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="signupPassword" required minlength="8">
+                                    <div class="form-text">At least 8 characters with letters and numbers</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signupDisplayName" class="form-label">Display Name (optional)</label>
+                                    <input type="text" class="form-control" id="signupDisplayName" maxlength="100">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="signupSubmitBtn">Create Account</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Forgot Password Modal -->
+    <div class="modal fade auth-modal" id="forgotPasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reset Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="forgotAlert" class="alert alert-auth d-none" role="alert"></div>
+                    <form id="forgotForm" onsubmit="handleForgotPassword(event)">
+                        <p class="text-muted mb-3">Enter your email and we'll send you a link to reset your password.</p>
+                        <div class="mb-3">
+                            <label for="forgotEmail" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="forgotEmail" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Send Reset Link</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/wallet-connect.js"></script>
     <script>
         function copyEmbed() {
             const code = document.getElementById('embedCode').textContent;
             navigator.clipboard.writeText(code);
             alert('Embed code copied!');
         }
+        
+        // Auth helper functions
+        function showAuthAlert(message, type = 'danger') {
+            const alert = document.getElementById('authAlert');
+            alert.textContent = message;
+            alert.className = `alert alert-auth alert-${type}`;
+            alert.classList.remove('d-none');
+        }
+        
+        function hideAuthAlert() {
+            document.getElementById('authAlert').classList.add('d-none');
+        }
+        
+        function showForgotPassword() {
+            bootstrap.Modal.getInstance(document.getElementById('authModal')).hide();
+            new bootstrap.Modal(document.getElementById('forgotPasswordModal')).show();
+        }
+        
+        // Login handler
+        async function handleLogin(event) {
+            event.preventDefault();
+            hideAuthAlert();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginSubmitBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Logging in...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    showAuthAlert(data.error || 'Login failed');
+                }
+            } catch (e) {
+                showAuthAlert('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Login';
+            }
+        }
+        
+        // Signup handler
+        async function handleSignup(event) {
+            event.preventDefault();
+            hideAuthAlert();
+            
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const displayName = document.getElementById('signupDisplayName').value;
+            const btn = document.getElementById('signupSubmitBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, display_name: displayName || null })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAuthAlert('Account created! Check your email to verify.', 'success');
+                    document.getElementById('signupForm').reset();
+                } else {
+                    showAuthAlert(data.error || 'Registration failed');
+                }
+            } catch (e) {
+                showAuthAlert('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        }
+        
+        // Forgot password handler
+        async function handleForgotPassword(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('forgotEmail').value;
+            const alert = document.getElementById('forgotAlert');
+            
+            try {
+                const response = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await response.json();
+                
+                alert.textContent = data.message;
+                alert.className = 'alert alert-auth alert-success';
+                alert.classList.remove('d-none');
+                document.getElementById('forgotForm').reset();
+            } catch (e) {
+                alert.textContent = 'Connection error. Please try again.';
+                alert.className = 'alert alert-auth alert-danger';
+                alert.classList.remove('d-none');
+            }
+        }
+        
+        // Logout handler
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.reload();
+            } catch (e) {
+                alert('Logout failed. Please try again.');
+            }
+        }
+        
+        // Check for email verification status in URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('verified') === 'true') {
+                alert('Email verified successfully! You can now log in.');
+                window.history.replaceState({}, '', window.location.pathname);
+            } else if (params.get('verified') === 'false') {
+                alert('Email verification failed. Please try again or request a new link.');
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
