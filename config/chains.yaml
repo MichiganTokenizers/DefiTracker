@@ -301,7 +301,7 @@ chains:
         timeout: 30
         max_retries: 3
         cache_ttl: 300  # Cache pool data for 5 minutes
-        min_tvl_usd: 10000  # Only track pools with TVL > $10k
+        min_tvl_ada: 10000  # Only track pools with TVL >= 10,000 ADA
         ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
       
       wingriders:
@@ -313,7 +313,7 @@ chains:
         timeout: 30
         max_retries: 3
         cache_ttl: 300  # Cache pool data for 5 minutes
-        min_tvl_usd: 10000  # Only track pools with TVL > $10k
+        min_tvl_ada: 10000  # Only track pools with TVL >= 10,000 ADA
         ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
       
       muesliswap:

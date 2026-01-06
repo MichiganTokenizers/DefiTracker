@@ -92,7 +92,7 @@ class SundaeSwapAdapter(ProtocolAdapter):
         )
         self.timeout = config.get("timeout", 30)
         self.max_retries = config.get("max_retries", 3)
-        self.min_tvl_usd = config.get("min_tvl_usd", 10000)
+        self.min_tvl_ada = config.get("min_tvl_ada", 10000)  # 10K ADA minimum
         self.ada_price_usd = config.get("ada_price_usd", 0.35)  # Default estimate
 
         self.session = requests.Session()
@@ -243,8 +243,8 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 tvl_ada = Decimal(tvl_lovelace) / Decimal(1_000_000)
                 tvl_usd = tvl_ada * Decimal(str(self.ada_price_usd))
 
-                # Filter by minimum TVL
-                if tvl_usd < self.min_tvl_usd:
+                # Filter by minimum TVL (in ADA)
+                if tvl_ada < self.min_tvl_ada:
                     continue
 
                 # Parse fee (comes as [numerator, denominator])
@@ -283,8 +283,8 @@ class SundaeSwapAdapter(ProtocolAdapter):
         # Sort by TVL descending
         pools.sort(key=lambda x: x.tvl_usd or Decimal(0), reverse=True)
         
-        logger.info("Parsed %d SundaeSwap pools with TVL >= $%s", 
-                   len(pools), self.min_tvl_usd)
+        logger.info("Parsed %d SundaeSwap pools with TVL >= %s ADA", 
+                   len(pools), self.min_tvl_ada)
         
         # Fetch 24h fees for HRA calculation
         self._enrich_pools_with_hra(pools)

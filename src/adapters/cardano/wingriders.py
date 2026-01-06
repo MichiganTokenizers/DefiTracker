@@ -117,7 +117,7 @@ class WingRidersAdapter(ProtocolAdapter):
         )
         self.timeout = config.get("timeout", 30)
         self.max_retries = config.get("max_retries", 3)
-        self.min_tvl_usd = config.get("min_tvl_usd", 10000)
+        self.min_tvl_ada = config.get("min_tvl_ada", 10000)  # 10K ADA minimum
         self.ada_price_usd = config.get("ada_price_usd", 0.35)
 
         self.session = requests.Session()
@@ -344,8 +344,8 @@ class WingRidersAdapter(ProtocolAdapter):
                 tvl_ada = Decimal(str(tvl_lovelace)) / Decimal(1_000_000)
                 tvl_usd = tvl_ada * Decimal(str(self.ada_price_usd))
 
-                # Filter by minimum TVL
-                if tvl_usd < self.min_tvl_usd:
+                # Filter by minimum TVL (in ADA)
+                if tvl_ada < self.min_tvl_ada:
                     continue
 
                 # Parse base APRs (already in percentage form)
@@ -397,8 +397,8 @@ class WingRidersAdapter(ProtocolAdapter):
         pools.sort(key=lambda x: x.tvl_usd or Decimal(0), reverse=True)
         
         farms_count = sum(1 for p in pools if p.has_farm)
-        logger.info("Parsed %d WingRiders pools with TVL >= $%s (%d with active farms)", 
-                   len(pools), self.min_tvl_usd, farms_count)
+        logger.info("Parsed %d WingRiders pools with TVL >= %s ADA (%d with active farms)", 
+                   len(pools), self.min_tvl_ada, farms_count)
         return pools
 
     def _build_ticker_map(self, metadata: List[Dict]) -> Dict[str, str]:
