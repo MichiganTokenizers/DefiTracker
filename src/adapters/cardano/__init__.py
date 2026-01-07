@@ -5,7 +5,6 @@ from src.adapters.cardano.minswap import MinswapAdapter
 from src.adapters.cardano.liqwid import LiqwidAdapter
 from src.adapters.cardano.sundaeswap import SundaeSwapAdapter
 from src.adapters.cardano.wingriders import WingRidersAdapter
-from src.adapters.cardano.muesliswap import MuesliSwapAdapter
 
 __all__ = [
     "CardanoChainAdapter",
@@ -13,6 +12,5 @@ __all__ = [
     "LiqwidAdapter",
     "SundaeSwapAdapter",
     "WingRidersAdapter",
-    "MuesliSwapAdapter",
 ]
 

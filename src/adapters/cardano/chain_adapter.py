@@ -8,7 +8,6 @@ from src.adapters.cardano.minswap import MinswapAdapter
 from src.adapters.cardano.liqwid import LiqwidAdapter
 from src.adapters.cardano.sundaeswap import SundaeSwapAdapter
 from src.adapters.cardano.wingriders import WingRidersAdapter
-from src.adapters.cardano.muesliswap import MuesliSwapAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +46,6 @@ class CardanoChainAdapter(ChainAdapter):
             if wingriders_cfg.get("enabled", False):
                 self.protocols["wingriders"] = WingRidersAdapter("wingriders", wingriders_cfg)
                 logger.info("Initialized WingRiders adapter for Cardano")
-
-        if "muesliswap" in protocols_cfg:
-            muesliswap_cfg = protocols_cfg["muesliswap"]
-            if muesliswap_cfg.get("enabled", False):
-                self.protocols["muesliswap"] = MuesliSwapAdapter("muesliswap", muesliswap_cfg)
-                logger.info("Initialized MuesliSwap adapter for Cardano")
 
     def get_web3_instance(self):
         """
