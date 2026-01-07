@@ -230,6 +230,13 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 ticker_b = p.get("assetB", {}).get("ticker", "???")
                 version = p.get("version", "V1")
                 
+                # Ensure ADA is always SECOND in the pair name (TOKEN-ADA format)
+                # For stablecoin pairs, use alphabetical order
+                # This matches the Minswap convention
+                if ticker_a == 'ADA' and ticker_b != 'ADA':
+                    # Swap so ADA is second
+                    ticker_a, ticker_b = ticker_b, ticker_a
+                
                 # Create pair name (version stored separately)
                 pair = f"{ticker_a}-{ticker_b}"
                 pair_key = f"{pair}-{version}"  # Unique key includes version

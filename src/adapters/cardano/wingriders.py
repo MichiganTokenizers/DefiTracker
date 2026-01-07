@@ -331,6 +331,14 @@ class WingRidersAdapter(ProtocolAdapter):
                 version = p.get("version", "V1")
                 pool_type = p.get("poolType", "CONSTANT_PRODUCT")
                 
+                # Ensure ADA is always SECOND in the pair name (TOKEN-ADA format)
+                # For stablecoin pairs, use alphabetical order
+                # This matches the Minswap/MuesliSwap convention
+                if ticker_a == 'ADA' and ticker_b != 'ADA':
+                    # Swap so ADA is second
+                    ticker_a, ticker_b = ticker_b, ticker_a
+                    token_a, token_b = token_b, token_a
+                
                 # Create unique pair key including version
                 pair = f"{ticker_a}-{ticker_b}"
                 pair_key = f"{pair}-{version}"
