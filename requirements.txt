@@ -32,3 +32,6 @@ pandas==2.1.4
 
 # Logging
 python-json-logger==2.0.7
+
+# HTML Parsing (for icon fetching)
+beautifulsoup4==4.14.3
