@@ -15,8 +15,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PoolMetrics:
-    """Container for pool metrics (APR, TVL, fees, volume)."""
-    apr: Optional[Decimal] = None
+    """Container for pool metrics (APR, TVL, fees, volume).
+    
+    APR fields:
+        apr: Minswap's trading_fee_apr (~30-day rolling average)
+        apr_1d: Calculated 1-day APR from trading_fee_24h / liquidity * 365 * 100
+    """
+    apr: Optional[Decimal] = None       # Minswap's 30-day rolling average
+    apr_1d: Optional[Decimal] = None    # Calculated 1-day APR (more volatile)
     tvl_usd: Optional[Decimal] = None
     fees_24h: Optional[Decimal] = None
     volume_24h: Optional[Decimal] = None
@@ -157,6 +163,15 @@ class MinswapAdapter(ProtocolAdapter):
                 metrics.volume_24h = Decimal(str(volume_value))
             except Exception:
                 logger.error("Could not convert volume_24h value %s for %s", volume_value, asset)
+
+        # Calculate 1-day APR from trading_fee_24h / liquidity * 365 * 100
+        # This provides a more volatile but accurate daily snapshot
+        if metrics.fees_24h is not None and metrics.tvl_usd is not None and metrics.tvl_usd > 0:
+            try:
+                # APR = (daily_fees / TVL) * 365 * 100
+                metrics.apr_1d = (metrics.fees_24h / metrics.tvl_usd) * Decimal(365) * Decimal(100)
+            except Exception:
+                logger.error("Could not calculate apr_1d for %s", asset)
 
         return metrics
 

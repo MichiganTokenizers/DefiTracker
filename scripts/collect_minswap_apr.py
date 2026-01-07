@@ -104,13 +104,16 @@ def collect_and_store_minswap():
                 tvl_usd=metrics.tvl_usd,
                 fees_24h=metrics.fees_24h,
                 volume_24h=metrics.volume_24h,
+                apr_1d=metrics.apr_1d,
             )
             inserted += 1
             tvl_str = f"${metrics.tvl_usd:,.2f}" if metrics.tvl_usd else "N/A"
             fees_str = f"${metrics.fees_24h:,.2f}" if metrics.fees_24h else "N/A"
             vol_str = f"${metrics.volume_24h:,.2f}" if metrics.volume_24h else "N/A"
-            logger.info("Stored snapshot for %s: APR=%s%%, TVL=%s, Fees24h=%s, Vol24h=%s", 
-                       asset, metrics.apr, tvl_str, fees_str, vol_str)
+            apr_30d_str = f"{metrics.apr:.2f}%" if metrics.apr else "N/A"
+            apr_1d_str = f"{metrics.apr_1d:.2f}%" if metrics.apr_1d else "N/A"
+            logger.info("Stored snapshot for %s: APR(30d)=%s, APR(1d)=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
+                       asset, apr_30d_str, apr_1d_str, tvl_str, fees_str, vol_str)
 
         logger.info("Minswap collection complete. Snapshots inserted: %s", inserted)
         return 0

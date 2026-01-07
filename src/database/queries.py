@@ -179,7 +179,8 @@ class DatabaseQueries:
                            tvl_usd: Optional[Decimal] = None,
                            fees_24h: Optional[Decimal] = None,
                            volume_24h: Optional[Decimal] = None,
-                           version: Optional[str] = None) -> int:
+                           version: Optional[str] = None,
+                           apr_1d: Optional[Decimal] = None) -> int:
         """Insert a new APR snapshot
         
         Args:
@@ -188,6 +189,7 @@ class DatabaseQueries:
             fees_24h: Trading fees generated in last 24 hours (USD) - for DEX pools
             volume_24h: Trading volume in last 24 hours (USD) - for DEX pools
             version: Protocol version for LP pools (e.g., V1, V3 for SundaeSwap)
+            apr_1d: Calculated 1-day APR (trading_fee_24h / TVL * 365 * 100) - for Minswap
         """
         if timestamp is None:
             timestamp = datetime.utcnow()
@@ -197,10 +199,10 @@ class DatabaseQueries:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO apr_snapshots 
-                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING snapshot_id""",
-                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version)
+                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d)
                 )
                 snapshot_id = cur.fetchone()[0]
                 conn.commit()
