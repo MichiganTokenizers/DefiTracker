@@ -402,7 +402,8 @@ def api_get_yields_by_type(yield_type):
                         a.symbol,
                         s.apr,
                         s.timestamp,
-                        s.yield_type
+                        s.yield_type,
+                        s.apr_1d
                     FROM apr_snapshots s
                     JOIN assets a ON s.asset_id = a.asset_id
                     JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -419,7 +420,8 @@ def api_get_yields_by_type(yield_type):
                         'symbol': row[2],
                         'apr': float(row[3]) if row[3] else None,
                         'timestamp': row[4].isoformat(),
-                        'yield_type': row[5]
+                        'yield_type': row[5],
+                        'apr_1d': float(row[6]) if row[6] else None
                     })
             
             # Note: Kinetic/Flare data is still collected but hidden from UI
@@ -472,7 +474,8 @@ def api_get_yields_by_type(yield_type):
                 }
             grouped[key]['data'].append({
                 'timestamp': r['timestamp'],
-                'apr': r['apr']
+                'apr': r['apr'],
+                'apr_1d': r.get('apr_1d')
             })
         
         return jsonify(list(grouped.values()))
@@ -501,7 +504,8 @@ def api_get_latest_yields_by_type(yield_type):
                         p.name as protocol,
                         a.symbol,
                         s.apr,
-                        s.timestamp
+                        s.timestamp,
+                        s.apr_1d
                     FROM apr_snapshots s
                     JOIN assets a ON s.asset_id = a.asset_id
                     JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -517,7 +521,8 @@ def api_get_latest_yields_by_type(yield_type):
                         'symbol': row[2],
                         'apr': float(row[3]) if row[3] else None,
                         'timestamp': row[4].isoformat(),
-                        'yield_type': yield_type
+                        'yield_type': yield_type,
+                        'apr_1d': float(row[5]) if row[5] else None
                     })
             
             # Note: Kinetic/Flare data is still collected but hidden from UI

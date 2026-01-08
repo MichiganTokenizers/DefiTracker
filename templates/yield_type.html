@@ -152,6 +152,23 @@
         outline: none;
         border-color: var(--sea-green);
     }
+    
+    /* APR Toggle Button Styles */
+    #aprToggle .btn-outline-primary {
+        border-color: var(--sea-green);
+        color: var(--sea-green);
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+    }
+    #aprToggle .btn-outline-primary:hover {
+        background-color: rgba(14, 135, 73, 0.1);
+        color: var(--sea-green);
+    }
+    #aprToggle .btn-check:checked + .btn-outline-primary {
+        background-color: var(--sea-green);
+        border-color: var(--sea-green);
+        color: white;
+    }
 </style>
 {% endblock %}
 
@@ -173,6 +190,15 @@
             <option value="30" selected>Last 30 Days</option>
             <option value="90">Last 90 Days</option>
         </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">APR Calculation</label>
+        <div class="btn-group w-100" role="group" id="aprToggle">
+            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="apr" checked>
+            <label class="btn btn-outline-primary" for="apr30d" title="30-day rolling average (smoother)">30d Avg</label>
+            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="apr_1d">
+            <label class="btn btn-outline-primary" for="apr1d" title="1-day snapshot (more volatile)">1d</label>
+        </div>
     </div>
     <div class="col-md-3">
         <label class="form-label">Protocols</label>
@@ -264,7 +290,7 @@
                             <th onclick="sortTable(0)" id="th-0">Asset</th>
                             <th onclick="sortTable(1)" id="th-1">Chain</th>
                             <th onclick="sortTable(2)" id="th-2">Protocol</th>
-                            <th onclick="sortTable(3)" id="th-3">Current APR ↓</th>
+                            <th onclick="sortTable(3)" id="th-3"><span id="aprColumnLabel">Current APR (30d)</span> ↓</th>
                             <th onclick="sortTable(4)" id="th-4">24h Change</th>
                             <th>Last Updated</th>
                         </tr>
@@ -287,6 +313,7 @@ let allData = [];
 let latestData = [];
 let currentSortColumn = 3;
 let currentSortDirection = 'desc';
+let selectedAprType = 'apr'; // 'apr' for 30-day avg, 'apr_1d' for 1-day snapshot
 
 // Protocol definitions
 const availableProtocols = [
@@ -568,12 +595,21 @@ function updateChart(data) {
     }
     
     const days = document.getElementById('timeRange').value;
+    const aprField = selectedAprType; // 'apr' or 'apr_1d'
     
-    // Take top 8 by latest APR for chart
-    const sortedData = [...data].sort((a, b) => {
-        const aLatest = a.data[a.data.length - 1]?.apr || 0;
-        const bLatest = b.data[b.data.length - 1]?.apr || 0;
-        return bLatest - aLatest;
+    // Take top 8 by latest APR for chart (only items with valid data for selected type)
+    const sortedData = [...data].filter(item => {
+        // Only include items that have data for the selected APR type
+        const latest = item.data[item.data.length - 1];
+        if (!latest) return false;
+        if (aprField === 'apr_1d') return latest.apr_1d != null;
+        return latest.apr != null;
+    }).sort((a, b) => {
+        const aLatest = a.data[a.data.length - 1];
+        const bLatest = b.data[b.data.length - 1];
+        const aVal = aprField === 'apr_1d' ? (aLatest?.apr_1d || 0) : (aLatest?.apr || 0);
+        const bVal = aprField === 'apr_1d' ? (bLatest?.apr_1d || 0) : (bLatest?.apr || 0);
+        return bVal - aVal;
     }).slice(0, 8);
     
     const datasets = sortedData.map((item, idx) => {
@@ -585,17 +621,24 @@ function updateChart(data) {
         
         return {
             label: `${item.symbol} (${item.protocol})`,
-            data: item.data.map(d => ({
-                x: new Date(d.timestamp),
-                y: d.apr
-            })),
+            data: item.data.map(d => {
+                // When 1-day is selected, only use apr_1d (NO fallback to 30-day)
+                // When 30-day is selected, use apr
+                const yVal = selectedAprType === 'apr_1d' ? d.apr_1d : d.apr;
+                return {
+                    x: new Date(d.timestamp),
+                    y: yVal
+                };
+            }).filter(d => d.y != null), // Filter out null values (no data for this period type)
             borderColor: color,
             backgroundColor: color + '20',
             borderWidth: 2,
             tension: 0.4,
             fill: false
         };
-    });
+    }).filter(ds => ds.data.length > 0); // Remove datasets with no valid data points
+    
+    const aprTypeLabel = selectedAprType === 'apr_1d' ? '1-Day APR' : '30-Day Avg APR';
     
     const ctx = document.getElementById('aprChart').getContext('2d');
     chart = new Chart(ctx, {
@@ -605,6 +648,13 @@ function updateChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
+                title: {
+                    display: true,
+                    text: aprTypeLabel,
+                    color: '#1f201f',
+                    font: { size: 14, weight: 'normal' },
+                    padding: { bottom: 10 }
+                },
                 legend: {
                     labels: { 
                         color: '#1f201f',
@@ -640,15 +690,22 @@ function updateChart(data) {
 }
 
 function updateTable(data) {
-    window.tableData = data.map(item => ({
-        symbol: item.symbol,
-        chain: item.chain,
-        protocol: item.protocol,
-        apr: item.apr,
-        market_type: item.market_type,
-        timestamp: new Date(item.timestamp),
-        change24h: null // Would need historical data to calculate
-    }));
+    window.tableData = data.map(item => {
+        // When 1-day is selected, only use apr_1d (NO fallback to 30-day)
+        // When 30-day is selected, use apr
+        const displayApr = selectedAprType === 'apr_1d' ? item.apr_1d : item.apr;
+        return {
+            symbol: item.symbol,
+            chain: item.chain,
+            protocol: item.protocol,
+            apr: displayApr,
+            apr_30d: item.apr,
+            apr_1d: item.apr_1d,
+            market_type: item.market_type,
+            timestamp: new Date(item.timestamp),
+            change24h: null // Would need historical data to calculate
+        };
+    }).filter(item => item.apr != null); // Only show rows that have data for the selected period type
     
     applySortToTable();
 }
@@ -737,6 +794,19 @@ function sortTable(columnIndex) {
 
 // Event listeners
 document.getElementById('timeRange').addEventListener('change', loadData);
+
+// APR type toggle event listeners
+document.querySelectorAll('input[name="aprType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        selectedAprType = e.target.value;
+        // Update column header label
+        const label = document.getElementById('aprColumnLabel');
+        if (label) {
+            label.textContent = selectedAprType === 'apr_1d' ? 'Current APR (1d)' : 'Current APR (30d)';
+        }
+        applyFilters(); // Re-apply filters to update chart and table
+    });
+});
 
 // Initialize
 initializeProtocolDropdown();
