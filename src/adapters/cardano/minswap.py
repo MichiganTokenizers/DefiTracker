@@ -38,9 +38,8 @@ class MinswapAdapter(ProtocolAdapter):
     # MIN-ADA pool LP asset for price fetching
     MIN_ADA_LP_ASSET = "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
     
-    # Total daily MIN emissions to all farms (from https://minswap.org/analytics/yield-dashboard)
-    # This is recalibrated periodically - last updated 2024-01
-    TOTAL_DAILY_MIN_EMISSION = Decimal("85147")
+    # MIN farming rewards are now configured per-pool using daily_min_emission
+    # Values come directly from https://minswap.org/analytics/yield-dashboard
 
     CANDIDATE_APR_KEYS = [
         "trading_fee_apr",  # exposed by /v1/pools/:id/metrics
@@ -99,15 +98,6 @@ class MinswapAdapter(ProtocolAdapter):
         self.pairs = config.get("pairs", [])
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
-        
-        # Farming reward configuration (from config or defaults)
-        # Total daily MIN emissions and total farm points determine each pool's reward share
-        self.total_daily_min_emission = Decimal(str(
-            config.get("total_daily_min_emission", 85147)
-        ))
-        self.total_farm_points = Decimal(str(
-            config.get("total_farm_points", 100)
-        ))
         
         # Cache for MIN price (refreshed per collection run)
         self._min_price_cache: Optional[Decimal] = None
@@ -253,14 +243,13 @@ class MinswapAdapter(ProtocolAdapter):
         """
         Calculate the farming APR from MIN token rewards.
         
-        The Minswap yield farming system allocates daily MIN emissions to farms
-        based on a point system. Points are assigned to each pool and determine
-        the share of total daily MIN emissions.
+        Uses the daily_min_emission value configured per-pool from the Minswap
+        yield dashboard (https://minswap.org/analytics/yield-dashboard).
         
-        Formula: Farming APR = (daily_min_allocation * MIN_price / TVL) * 365 * 100
+        Formula: Farming APR = (daily_min_emission * MIN_price / TVL) * 365 * 100
         
         Args:
-            pair: Pool configuration dict (should include 'farm_points')
+            pair: Pool configuration dict (should include 'daily_min_emission')
             tvl_usd: Pool's total value locked in USD
             
         Returns:
@@ -269,17 +258,13 @@ class MinswapAdapter(ProtocolAdapter):
         if tvl_usd is None or tvl_usd <= 0:
             return None
         
-        # Get farm points from config (set in chains.yaml)
-        farm_points = pair.get("farm_points")
-        if farm_points is None or float(farm_points) <= 0:
+        # Get daily MIN emission from config (set in chains.yaml, from yield dashboard)
+        daily_min_emission = pair.get("daily_min_emission")
+        if daily_min_emission is None or float(daily_min_emission) <= 0:
             # No farming rewards configured for this pool
             return None
         
-        farm_points = Decimal(str(farm_points))
-        
-        # Calculate this pool's share of daily MIN emissions
-        # Using instance variables from config (total_daily_min_emission, total_farm_points)
-        daily_min_allocation = (farm_points / self.total_farm_points) * self.total_daily_min_emission
+        daily_min_emission = Decimal(str(daily_min_emission))
         
         # Get MIN price
         min_price = self.get_min_price()
@@ -289,15 +274,15 @@ class MinswapAdapter(ProtocolAdapter):
         
         try:
             # Daily reward value in USD
-            daily_reward_usd = daily_min_allocation * min_price
+            daily_reward_usd = daily_min_emission * min_price
             
             # Farming APR = (daily_reward_value / TVL) * 365 * 100
             farming_apr = (daily_reward_usd / tvl_usd) * Decimal(365) * Decimal(100)
             
             logger.debug(
-                "Farming APR for pool: points=%.2f, daily_min=%.2f, min_price=$%.6f, "
+                "Farming APR for pool: daily_min=%.2f, min_price=$%.6f, "
                 "daily_value=$%.2f, tvl=$%.2f, apr=%.2f%%",
-                farm_points, daily_min_allocation, min_price,
+                daily_min_emission, min_price,
                 daily_reward_usd, tvl_usd, farming_apr
             )
             
