@@ -18,11 +18,15 @@ class PoolMetrics:
     """Container for pool metrics (APR, TVL, fees, volume).
     
     APR fields:
-        apr: Minswap's trading_fee_apr (~30-day rolling average)
-        apr_1d: Calculated 1-day APR from trading_fee_24h / liquidity * 365 * 100
+        apr: Minswap's trading_fee_apr (~30-day rolling average, trading fees only)
+        apr_1d: Calculated total 1-day APR (trading fees + farming rewards)
+        trading_fee_apr_1d: 1-day APR from trading fees only
+        farming_apr_1d: 1-day APR from MIN farming rewards
     """
-    apr: Optional[Decimal] = None       # Minswap's 30-day rolling average
-    apr_1d: Optional[Decimal] = None    # Calculated 1-day APR (more volatile)
+    apr: Optional[Decimal] = None       # Minswap's 30-day rolling average (trading fees only)
+    apr_1d: Optional[Decimal] = None    # Total 1-day APR (fees + farming)
+    trading_fee_apr_1d: Optional[Decimal] = None  # 1-day trading fee APR
+    farming_apr_1d: Optional[Decimal] = None      # 1-day farming APR from MIN rewards
     tvl_usd: Optional[Decimal] = None
     fees_24h: Optional[Decimal] = None
     volume_24h: Optional[Decimal] = None
@@ -30,6 +34,13 @@ class PoolMetrics:
 
 class MinswapAdapter(ProtocolAdapter):
     """Adapter for querying Minswap pool/farm APRs."""
+
+    # MIN-ADA pool LP asset for price fetching
+    MIN_ADA_LP_ASSET = "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
+    
+    # Total daily MIN emissions to all farms (from https://minswap.org/analytics/yield-dashboard)
+    # This is recalibrated periodically - last updated 2024-01
+    TOTAL_DAILY_MIN_EMISSION = Decimal("85147")
 
     CANDIDATE_APR_KEYS = [
         "trading_fee_apr",  # exposed by /v1/pools/:id/metrics
@@ -48,16 +59,21 @@ class MinswapAdapter(ProtocolAdapter):
     ]
 
     CANDIDATE_TVL_KEYS = [
-        "tvl",
-        "tvlAda",
-        "tvl_ada",
+        # USD values first (preferred)
+        "liquidity_currency",  # Minswap API - TVL in USD
         "tvlUsd",
         "tvl_usd",
-        "liquidity",
+        # ADA values (need conversion but better than lovelace)
+        "tvlAda",
+        "tvl_ada",
+        # Generic (often USD but verify)
+        "tvl",
         "totalLiquidity",
         "total_liquidity",
         "lockedValue",
         "locked_value",
+        # Lovelace (smallest unit - last resort, needs conversion)
+        # "liquidity",  # Minswap returns this in lovelace - too large!
     ]
 
     CANDIDATE_FEES_24H_KEYS = [
@@ -83,6 +99,20 @@ class MinswapAdapter(ProtocolAdapter):
         self.pairs = config.get("pairs", [])
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
+        
+        # Farming reward configuration (from config or defaults)
+        # Total daily MIN emissions and total farm points determine each pool's reward share
+        self.total_daily_min_emission = Decimal(str(
+            config.get("total_daily_min_emission", 85147)
+        ))
+        self.total_farm_points = Decimal(str(
+            config.get("total_farm_points", 100)
+        ))
+        
+        # Cache for MIN price (refreshed per collection run)
+        self._min_price_cache: Optional[Decimal] = None
+        self._min_price_cache_time: float = 0
+        self._min_price_cache_ttl = 300  # 5 minutes
 
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "defitracker/1.0"})
@@ -111,6 +141,40 @@ class MinswapAdapter(ProtocolAdapter):
         metrics = self.get_pool_metrics(asset)
         return metrics.apr if metrics else None
 
+    def get_min_price(self) -> Optional[Decimal]:
+        """
+        Fetch the current MIN token price in USD from the MIN-ADA pool.
+        
+        Returns:
+            MIN price in USD, or None if unavailable.
+        """
+        now = time.time()
+        if self._min_price_cache is not None and (now - self._min_price_cache_time) < self._min_price_cache_ttl:
+            return self._min_price_cache
+        
+        payload = self._get_json(f"v1/pools/{self.MIN_ADA_LP_ASSET}/metrics")
+        if not payload:
+            logger.warning("Could not fetch MIN-ADA pool for MIN price")
+            return self._min_price_cache  # Return stale cache if available
+        
+        try:
+            # MIN price = ADA value / MIN tokens in pool
+            # liquidity_a = ADA tokens, liquidity_b = MIN tokens
+            # liquidity_a_currency = ADA value in USD
+            liquidity_a_currency = payload.get("liquidity_a_currency")
+            liquidity_b = payload.get("liquidity_b")
+            
+            if liquidity_a_currency and liquidity_b and float(liquidity_b) > 0:
+                min_price = Decimal(str(liquidity_a_currency)) / Decimal(str(liquidity_b))
+                self._min_price_cache = min_price
+                self._min_price_cache_time = now
+                logger.info("MIN token price: $%.6f", min_price)
+                return min_price
+        except Exception as e:
+            logger.error("Error calculating MIN price: %s", e)
+        
+        return self._min_price_cache
+
     def get_pool_metrics(self, asset: str) -> Optional[PoolMetrics]:
         """
         Fetch pool metrics (APR and TVL) for a configured pair.
@@ -132,7 +196,7 @@ class MinswapAdapter(ProtocolAdapter):
 
         metrics = PoolMetrics()
 
-        # Extract APR
+        # Extract APR (30-day trading fee APR from API)
         apr_value = self._extract_apr(payload)
         if apr_value is not None:
             try:
@@ -140,7 +204,7 @@ class MinswapAdapter(ProtocolAdapter):
             except Exception:
                 logger.error("Could not convert APR value %s for %s", apr_value, asset)
 
-        # Extract TVL
+        # Extract TVL (using liquidity_currency for USD value)
         tvl_value = self._extract_tvl(payload)
         if tvl_value is not None:
             try:
@@ -164,16 +228,83 @@ class MinswapAdapter(ProtocolAdapter):
             except Exception:
                 logger.error("Could not convert volume_24h value %s for %s", volume_value, asset)
 
-        # Calculate 1-day APR from trading_fee_24h / liquidity * 365 * 100
-        # This provides a more volatile but accurate daily snapshot
+        # Calculate 1-day trading fee APR
         if metrics.fees_24h is not None and metrics.tvl_usd is not None and metrics.tvl_usd > 0:
             try:
-                # APR = (daily_fees / TVL) * 365 * 100
-                metrics.apr_1d = (metrics.fees_24h / metrics.tvl_usd) * Decimal(365) * Decimal(100)
+                # Trading Fee APR = (daily_fees / TVL) * 365 * 100
+                metrics.trading_fee_apr_1d = (metrics.fees_24h / metrics.tvl_usd) * Decimal(365) * Decimal(100)
             except Exception:
-                logger.error("Could not calculate apr_1d for %s", asset)
+                logger.error("Could not calculate trading_fee_apr_1d for %s", asset)
+
+        # Calculate farming APR from MIN rewards
+        farming_apr = self._calculate_farming_apr(pair, metrics.tvl_usd)
+        if farming_apr is not None:
+            metrics.farming_apr_1d = farming_apr
+
+        # Total 1-day APR = trading fee APR + farming APR
+        if metrics.trading_fee_apr_1d is not None:
+            metrics.apr_1d = metrics.trading_fee_apr_1d
+            if metrics.farming_apr_1d is not None:
+                metrics.apr_1d += metrics.farming_apr_1d
 
         return metrics
+
+    def _calculate_farming_apr(self, pair: Dict, tvl_usd: Optional[Decimal]) -> Optional[Decimal]:
+        """
+        Calculate the farming APR from MIN token rewards.
+        
+        The Minswap yield farming system allocates daily MIN emissions to farms
+        based on a point system. Points are assigned to each pool and determine
+        the share of total daily MIN emissions.
+        
+        Formula: Farming APR = (daily_min_allocation * MIN_price / TVL) * 365 * 100
+        
+        Args:
+            pair: Pool configuration dict (should include 'farm_points')
+            tvl_usd: Pool's total value locked in USD
+            
+        Returns:
+            Farming APR as Decimal percentage, or None if cannot calculate.
+        """
+        if tvl_usd is None or tvl_usd <= 0:
+            return None
+        
+        # Get farm points from config (set in chains.yaml)
+        farm_points = pair.get("farm_points")
+        if farm_points is None or float(farm_points) <= 0:
+            # No farming rewards configured for this pool
+            return None
+        
+        farm_points = Decimal(str(farm_points))
+        
+        # Calculate this pool's share of daily MIN emissions
+        # Using instance variables from config (total_daily_min_emission, total_farm_points)
+        daily_min_allocation = (farm_points / self.total_farm_points) * self.total_daily_min_emission
+        
+        # Get MIN price
+        min_price = self.get_min_price()
+        if min_price is None:
+            logger.warning("Could not get MIN price for farming APR calculation")
+            return None
+        
+        try:
+            # Daily reward value in USD
+            daily_reward_usd = daily_min_allocation * min_price
+            
+            # Farming APR = (daily_reward_value / TVL) * 365 * 100
+            farming_apr = (daily_reward_usd / tvl_usd) * Decimal(365) * Decimal(100)
+            
+            logger.debug(
+                "Farming APR for pool: points=%.2f, daily_min=%.2f, min_price=$%.6f, "
+                "daily_value=$%.2f, tvl=$%.2f, apr=%.2f%%",
+                farm_points, daily_min_allocation, min_price,
+                daily_reward_usd, tvl_usd, farming_apr
+            )
+            
+            return farming_apr
+        except Exception as e:
+            logger.error("Error calculating farming APR: %s", e)
+            return None
 
     def compute_apr_from_onchain(self, asset: str, lookback_days: int = 7) -> Optional[Decimal]:
         """On-chain computation is not implemented for Cardano Minswap."""

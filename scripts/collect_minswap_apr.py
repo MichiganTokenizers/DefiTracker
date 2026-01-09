@@ -107,13 +107,28 @@ def collect_and_store_minswap():
                 apr_1d=metrics.apr_1d,
             )
             inserted += 1
+            
+            # Format output strings
             tvl_str = f"${metrics.tvl_usd:,.2f}" if metrics.tvl_usd else "N/A"
             fees_str = f"${metrics.fees_24h:,.2f}" if metrics.fees_24h else "N/A"
             vol_str = f"${metrics.volume_24h:,.2f}" if metrics.volume_24h else "N/A"
             apr_30d_str = f"{metrics.apr:.2f}%" if metrics.apr else "N/A"
             apr_1d_str = f"{metrics.apr_1d:.2f}%" if metrics.apr_1d else "N/A"
-            logger.info("Stored snapshot for %s: APR(30d)=%s, APR(1d)=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
-                       asset, apr_30d_str, apr_1d_str, tvl_str, fees_str, vol_str)
+            
+            # APR breakdown for logging
+            fee_apr_str = f"{metrics.trading_fee_apr_1d:.2f}%" if metrics.trading_fee_apr_1d else "N/A"
+            farm_apr_str = f"{metrics.farming_apr_1d:.2f}%" if metrics.farming_apr_1d else "0.00%"
+            
+            if metrics.farming_apr_1d:
+                logger.info(
+                    "Stored snapshot for %s: APR(30d)=%s, APR(1d)=%s [Fees=%s + Farm=%s], TVL=%s",
+                    asset, apr_30d_str, apr_1d_str, fee_apr_str, farm_apr_str, tvl_str
+                )
+            else:
+                logger.info(
+                    "Stored snapshot for %s: APR(30d)=%s, APR(1d)=%s [Fees only], TVL=%s, Fees24h=%s",
+                    asset, apr_30d_str, apr_1d_str, tvl_str, fees_str
+                )
 
         logger.info("Minswap collection complete. Snapshots inserted: %s", inserted)
         return 0

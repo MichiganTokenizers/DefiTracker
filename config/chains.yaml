@@ -108,49 +108,68 @@ chains:
         base_url: "https://api-mainnet-prod.minswap.org"
         timeout: 10
         max_retries: 3
+        # Farming reward configuration
+        # Total daily MIN emissions: 85,147 MIN (from https://minswap.org/analytics/yield-dashboard)
+        # Total farm points: Sum of all farm points across 276 farms
+        # The top 10 pools have ~53 points; estimate total ~150 for all farms
+        # This affects the accuracy of farming APR - should be calibrated periodically
+        # Last updated: 2025-01-09 from https://minswap.org/analytics/yield-dashboard
+        total_daily_min_emission: 85147
+        total_farm_points: 150  # Estimated total for all 276 farms
         # List the pools you want to track
+        # farm_points: Points allocation from Minswap yield dashboard (determines MIN reward share)
         pairs:
           - name: "NIGHT-ADA"
             symbol: "NIGHT-ADA"
             # LP policy ID = farm_id, LP token name = pool_id
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "e74c52975908a612d5ce68327040d449aae99f8b463bb6de046a1b23c5713169"
+            farm_points: 6.28  # From yield dashboard
           - name: "MIN-ADA"
             symbol: "MIN-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
+            farm_points: 9.55  # From yield dashboard
           - name: "NIGHT-USDM"
             symbol: "NIGHT-USDM"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "126bbf31110c7232ca88cfc1463ecbc7fe3256ea37876975d0dc42b8f156f6a0"
+            farm_points: 3.18  # From yield dashboard
           - name: "NIGHT-USDA"
             symbol: "NIGHT-USDA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "1f2f0d16482b653218cfdf59fd5bec105d0ddd9ae31dd4eb9ee90250f6d56378"
+            farm_points: 3.11  # From yield dashboard
           - name: "SNEK-ADA"
             symbol: "SNEK-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "2ffadbb87144e875749122e0bbb9f535eeaa7f5660c6c4a91bcc4121e477f08d"
+            farm_points: 8.3   # From yield dashboard
           - name: "USDM-ADA"
             symbol: "USDM-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171"
+            farm_points: 6.89  # From yield dashboard
           - name: "USDA-ADA"
             symbol: "USDA-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "ee5cfbc5b0dc10c873a0bcc69e49b9af21b899f59337a894874c6b596c2da136"
+            farm_points: 5.32  # From yield dashboard
           - name: "USDM-USDA"
             symbol: "USDM-USDA"
             farm_id: "5f0d38b3eb8fea72cd3cbdaa9594a74d0db79b5a27e85be5e9015bd6"
             pool_id: "5553444d2d555344412d534c50"
+            farm_points: 3.56  # From yield dashboard (Stableswap tier)
           - name: "FLDT-ADA"
             symbol: "FLDT-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "bc53f5c2a8cf3ef64081d2ec8c74333d567fc7ef271c1b97d21fdd53a2c5c889"
+            farm_points: 3.48  # From yield dashboard
           - name: "iUSD-ADA"
             symbol: "iUSD-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3"
+            farm_points: 3.33  # From yield dashboard
           - name: "IAG-ADA"
             symbol: "IAG-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
