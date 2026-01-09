@@ -462,8 +462,10 @@ function getPairColor(symbol) {
 
 function updateAprLabels() {
     const is1d = selectedAprType === '1d';
-    document.getElementById('aprTypeLabel').textContent = is1d ? '(1-day)' : '(30-day)';
-    document.getElementById('aprColumnLabel').textContent = is1d ? 'APR (1d)' : 'APR (30d)';
+    const typeLabel = document.getElementById('aprTypeLabel');
+    const columnLabel = document.getElementById('aprColumnLabel');
+    if (typeLabel) typeLabel.textContent = is1d ? '(1-day)' : '(30-day)';
+    if (columnLabel) columnLabel.textContent = is1d ? 'APR (1d)' : 'APR (30d)';
 }
 
 async function loadChart() {
@@ -484,6 +486,7 @@ async function loadChart() {
     
     if (chart) {
         chart.destroy();
+        chart = null;
     }
     
     // Update labels
@@ -536,6 +539,11 @@ async function loadChart() {
     
     const aprTypeLabel = is1d ? '1-Day APR' : '30-Day APR';
     
+    // Handle empty datasets gracefully
+    const noDataMessage = datasets.length === 0 
+        ? (is1d ? 'No 1-day APR data available for selected assets' : 'No data available for selected assets')
+        : null;
+    
     const ctx = document.getElementById('aprChart').getContext('2d');
     chart = new Chart(ctx, {
         type: 'line',
@@ -546,12 +554,13 @@ async function loadChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: aprTypeLabel,
-                    color: '#ddd6b9',
+                    text: noDataMessage || aprTypeLabel,
+                    color: noDataMessage ? '#888' : '#ddd6b9',
                     font: { size: 14, weight: 'normal' },
                     padding: { bottom: 10 }
                 },
                 legend: {
+                    display: datasets.length > 0,
                     labels: { 
                         color: '#ddd6b9',
                         usePointStyle: true,
@@ -570,7 +579,8 @@ async function loadChart() {
                     type: 'time',
                     time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#b0b3c1' }
+                    ticks: { color: '#b0b3c1' },
+                    display: datasets.length > 0
                 },
                 y: {
                     beginAtZero: true,
@@ -578,7 +588,8 @@ async function loadChart() {
                     ticks: {
                         color: '#b0b3c1',
                         callback: (value) => value + '%'
-                    }
+                    },
+                    display: datasets.length > 0
                 }
             }
         }

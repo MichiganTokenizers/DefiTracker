@@ -315,7 +315,8 @@ def api_get_all_history_for_chain(chain):
                     s.timestamp,
                     s.yield_type,
                     s.tvl_usd,
-                    s.version
+                    s.version,
+                    s.apr_1d
                 FROM apr_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
                 JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -342,6 +343,7 @@ def api_get_all_history_for_chain(chain):
                 row_yield_type = row[4]
                 tvl_usd = row[5]
                 version = row[6]
+                apr_1d = row[7]
                 
                 if apr_value is None:
                     continue
@@ -363,7 +365,8 @@ def api_get_all_history_for_chain(chain):
                 data[key]['data'].append({
                     'timestamp': timestamp.isoformat(),
                     'apr': float(apr_value),
-                    'tvl_usd': float(tvl_usd) if tvl_usd else None
+                    'tvl_usd': float(tvl_usd) if tvl_usd else None,
+                    'apr_1d': float(apr_1d) if apr_1d else None
                 })
             
         return jsonify(list(data.values()))
@@ -579,32 +582,24 @@ def chain_page(chain_name):
     """Chain-specific page with all protocols"""
     return render_template('chain.html', chain=chain_name)
 
+# Legacy routes - redirect to chain-specific pages
 @app.route('/lps')
 def lps_page():
-    """Liquidity Pools yield page"""
-    return render_template('yield_type.html', 
-                          yield_type='lp',
-                          title='Liquidity Pools',
-                          icon='🌊',
-                          description='Provide liquidity to DEXs and earn trading fees + rewards')
+    """Redirect to Cardano LPs (primary chain)"""
+    from flask import redirect
+    return redirect('/cardano/lps')
 
 @app.route('/earn')
 def earn_page():
-    """Lending supply yield page"""
-    return render_template('yield_type.html', 
-                          yield_type='supply',
-                          title='Earn (Lend)',
-                          icon='💰',
-                          description='Supply assets to lending markets and earn interest')
+    """Redirect to Cardano lending"""
+    from flask import redirect
+    return redirect('/cardano/lending')
 
 @app.route('/borrow')
 def borrow_page():
-    """Borrow rates page"""
-    return render_template('yield_type.html', 
-                          yield_type='borrow',
-                          title='Borrow Rates',
-                          icon='🏦',
-                          description='Compare borrowing costs across lending markets')
+    """Redirect to Cardano lending (borrow rates shown there)"""
+    from flask import redirect
+    return redirect('/cardano/lending')
 
 @app.route('/cardano')
 def cardano_page():
