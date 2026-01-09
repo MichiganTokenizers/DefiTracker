@@ -111,6 +111,10 @@ def collect_and_store_wingriders():
             staking_apr = pool.staking_apr if pool.staking_apr else Decimal(0)
             farm_apr = pool.farm_apr if pool.farm_apr else Decimal(0)
             total_apr = fees_apr + staking_apr + farm_apr
+            
+            # 1-day APR: fees_apr is based on recent trading activity (daily snapshot)
+            # For a daily view, include fees + staking + farm
+            apr_1d = total_apr if total_apr else None
 
             asset_id = queries.get_or_create_asset(
                 symbol=pool.pair, 
@@ -126,6 +130,7 @@ def collect_and_store_wingriders():
                 yield_type='lp',  # WingRiders is a DEX - all pairs are liquidity pools
                 tvl_usd=pool.tvl_usd,
                 version=pool.version,
+                apr_1d=apr_1d,
             )
             inserted += 1
             if pool.has_farm:
@@ -139,11 +144,11 @@ def collect_and_store_wingriders():
             
             if pool.has_farm:
                 boost_str = f"{pool.boosting_apr:.2f}%" if pool.boosting_apr else "0.00%"
-                logger.info("Stored %s (%s): APR=%s (Fees=%s + Stake=%s + Farm=%s), [Boost=%s not included], TVL=%s", 
-                           pool.pair, pool.version, total_str, fees_str, staking_str, farm_str, boost_str, tvl_str)
+                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s + Farm=%s), [Boost=%s not included], TVL=%s", 
+                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, farm_str, boost_str, tvl_str)
             else:
-                logger.info("Stored %s (%s): APR=%s (Fees=%s + Stake=%s), TVL=%s", 
-                           pool.pair, pool.version, total_str, fees_str, staking_str, tvl_str)
+                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s), TVL=%s", 
+                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, tvl_str)
 
         logger.info("WingRiders collection complete. Snapshots inserted: %s (%s with active farms)", 
                    inserted, farms_count)

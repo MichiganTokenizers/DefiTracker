@@ -2,300 +2,238 @@
 
 {% block extra_css %}
 <style>
-    .strategy-card {
+    .hero-section {
+        text-align: center;
+        padding: 3rem 0 4rem;
+    }
+    .hero-logo {
+        max-width: 300px;
+        width: 100%;
+        margin-bottom: 2rem;
+    }
+    .hero-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+        margin-bottom: 1rem;
+    }
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto 2.5rem;
+        line-height: 1.6;
+    }
+    
+    /* Launch Button */
+    .launch-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 1rem;
+        background: linear-gradient(135deg, #0033ad 0%, #0044cc 100%);
+        color: white;
+        padding: 1.25rem 3rem;
+        border-radius: 16px;
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-decoration: none;
+        box-shadow: 0 8px 30px rgba(0, 51, 173, 0.3);
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .launch-btn:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 51, 173, 0.4);
+        color: white;
+    }
+    .launch-btn .chain-icon {
+        font-size: 2rem;
+    }
+    
+    /* Stats Section */
+    .stats-section {
+        padding: 3rem 0;
+    }
+    .stat-card {
         background: radial-gradient(ellipse at center, #ddd6b9 60%, #79cf55 100%);
         border: 3px solid #1f201f;
-        border-radius: 20px;
+        border-radius: 16px;
         padding: 1.5rem;
-        height: 100%;
-        transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-        cursor: pointer;
-        text-decoration: none;
-        display: block;
-        color: inherit;
+        text-align: center;
         box-shadow: 0 4px 20px rgba(31, 32, 31, 0.12);
     }
-    .strategy-card:hover {
-        transform: translateY(-6px);
-        border-color: var(--sea-green);
-        box-shadow: 0 12px 40px rgba(14, 135, 73, 0.15);
-        color: inherit;
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--sea-green);
     }
-    .strategy-icon {
+    .stat-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin-top: 0.25rem;
+    }
+    
+    /* Feature Cards */
+    .features-section {
+        padding: 3rem 0;
+    }
+    .feature-card {
+        background: rgba(255, 255, 255, 0.95);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(31, 32, 31, 0.1);
+        border-radius: 16px;
+        padding: 2rem;
+        height: 100%;
+        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.08);
+    }
+    .feature-icon {
         font-size: 2.5rem;
         margin-bottom: 1rem;
     }
-    .strategy-title {
+    .feature-title {
         font-size: 1.25rem;
         font-weight: 600;
-        margin-bottom: 0.5rem;
-    }
-    .strategy-desc {
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-    }
-    .best-apr {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.75rem;
-        background: rgba(14, 135, 73, 0.15);
-        border-radius: 8px;
-        margin-bottom: 0.5rem;
-    }
-    .best-apr-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--moss-green);
-    }
-    .best-apr-label {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-    }
-    .best-apr-asset {
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-    .protocol-logo-small {
-        width: 20px;
-        height: 20px;
-        border-radius: 4px;
-    }
-    .chain-mini {
-        display: inline-block;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.65rem;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    .chain-flare { background: #e84142; }
-    .chain-cardano { background: #0033ad; }
-    
-    .chain-card {
-        background: radial-gradient(ellipse at center, #ddd6b9 60%, #79cf55 100%);
-        border: 3px solid #1f201f;
-        border-radius: 16px;
-        padding: 1.25rem;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.12);
-        color: var(--carbon-black) !important;
-    }
-    .chain-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 30px rgba(31, 32, 31, 0.12);
-    }
-    .chain-card strong, .chain-card span {
+        margin-bottom: 0.75rem;
         color: var(--carbon-black);
     }
-    
-    .hero-section {
-        padding: 2rem 0 3rem;
-    }
-    .hero-logo {
-        text-align: center;
-    }
-    .hero-logo img {
-        max-width: 280px;
-        width: 100%;
-    }
-    .hero-card {
-        background: radial-gradient(ellipse at center, #ddd6b9 60%, #79cf55 100%);
-        border: 3px solid #1f201f;
-        border-radius: 16px;
-        padding: 1.5rem;
-        height: 100%;
-        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.12);
-    }
-    .hero-card h5 {
-        font-weight: 600;
-        margin-bottom: 1rem;
-        color: var(--carbon-black);
-    }
-    .hero-card p {
+    .feature-desc {
         color: var(--text-secondary);
         font-size: 0.95rem;
-        margin-bottom: 0.75rem;
+        line-height: 1.5;
     }
-    .preset-link {
-        display: block;
-        padding: 0.5rem 0.75rem;
-        margin-bottom: 0.5rem;
-        background: rgba(14, 135, 73, 0.1);
-        border-radius: 8px;
-        color: var(--carbon-black);
-        text-decoration: none;
-        font-size: 0.9rem;
-        transition: background 0.2s;
+    
+    /* Protocol Logos */
+    .protocols-section {
+        padding: 2rem 0 3rem;
+        text-align: center;
     }
-    .preset-link:hover {
-        background: rgba(14, 135, 73, 0.2);
-        color: var(--sea-green);
+    .protocols-title {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
-    .preset-link .preset-icon {
-        margin-right: 8px;
+    .protocol-logos {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    .protocol-logos img {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    .protocol-logos img:hover {
+        transform: scale(1.1);
+    }
+    .protocol-badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: var(--cardano-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Hero Section -->
 <div class="hero-section">
-    <div class="row align-items-center g-4">
-        <!-- Left Card: About -->
-        <div class="col-md-4">
-            <div class="hero-card">
-                <h5>📊 Cardano DeFi Yield Tracking</h5>
-                <p>Daily snapshots of APR/APY across Cardano's top DEXs.</p>
-                <p>Track liquidity pools, lending supply rates, and earning opportunities in one place.</p>
-                <p><strong>Chain:</strong> Cardano</p>
-                <p><strong>Protocols:</strong> Minswap, SundaeSwap, WingRiders, Liqwid</p>
-            </div>
-        </div>
-        
-        <!-- Center: Logo -->
-        <div class="col-md-4">
-            <div class="hero-card hero-logo">
-                <img src="/static/YieldLife_Logo_transparent_withText.png" alt="YieldLife">
-            </div>
-        </div>
-        
-        <!-- Right Card: Quick Links -->
-        <div class="col-md-4">
-            <div class="hero-card">
-                <h5>🔗 Quick Links</h5>
-                <a href="/chain/cardano" class="preset-link"><span class="preset-icon">♠️</span> All Cardano Pools</a>
-                <a href="/lps" class="preset-link"><span class="preset-icon">🌊</span> Liquidity Pools</a>
-                <a href="/earn" class="preset-link"><span class="preset-icon">💰</span> Liqwid Lending Rates</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Strategy Cards -->
-<div class="row g-4 mb-5">
-    <div class="col-md-4">
-        <a href="/lps" class="strategy-card">
-            <div class="strategy-icon">🌊</div>
-            <div class="strategy-title">Liquidity Pools</div>
-            <div class="strategy-desc">Provide liquidity to DEXs and earn trading fees + rewards</div>
-            <div class="best-apr" id="lp-best">
-                <div>
-                    <div class="best-apr-value" id="lp-apr">--</div>
-                    <div class="best-apr-label">Best APR</div>
-                </div>
-                <div class="ms-auto text-end">
-                    <div class="best-apr-asset" id="lp-asset">Loading...</div>
-                    <div id="lp-chain"></div>
-                </div>
-            </div>
-            <small class="text-muted" id="lp-count">-- pools tracked</small>
-        </a>
-    </div>
+    <img src="/static/YieldLife_Logo_transparent_withText.png" alt="YieldLife" class="hero-logo">
+    <h1 class="hero-title">Track DeFi Yields Across Chains</h1>
+    <p class="hero-subtitle">
+        Monitor APR and APY across decentralized exchanges and lending protocols. 
+        Daily snapshots help you find the best yield opportunities.
+    </p>
     
-    <div class="col-md-4">
-        <a href="/earn" class="strategy-card">
-            <div class="strategy-icon">💰</div>
-            <div class="strategy-title">Liqwid Lending</div>
-            <div class="strategy-desc">Supply assets to Liqwid and earn interest</div>
-            <div class="best-apr" id="supply-best">
-                <div>
-                    <div class="best-apr-value" id="supply-apr">--</div>
-                    <div class="best-apr-label">Best APY</div>
-                </div>
-                <div class="ms-auto text-end">
-                    <div class="best-apr-asset" id="supply-asset">Loading...</div>
-                    <div id="supply-chain"></div>
-                </div>
+    <a href="/cardano" class="launch-btn">
+        <span class="chain-icon">♠️</span>
+        Launch into Cardano
+    </a>
+</div>
+
+<!-- Stats Section -->
+<div class="stats-section">
+    <div class="row g-4 justify-content-center">
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-protocols">4</div>
+                <div class="stat-label">Protocols Tracked</div>
             </div>
-            <small class="text-muted" id="supply-count">-- assets tracked</small>
-        </a>
-    </div>
-    
-    <div class="col-md-4">
-        <a href="/chain/cardano" class="strategy-card">
-            <div class="strategy-icon">♠️</div>
-            <div class="strategy-title">All Cardano Yields</div>
-            <div class="strategy-desc">Complete view of all Cardano DeFi opportunities</div>
-            <div class="best-apr" id="cardano-best">
-                <div>
-                    <div class="best-apr-value" id="cardano-count-value">--</div>
-                    <div class="best-apr-label">Protocols Tracked</div>
-                </div>
-                <div class="ms-auto text-end">
-                    <div class="best-apr-asset">Minswap, SundaeSwap</div>
-                    <div><span class="chain-mini chain-cardano">cardano</span></div>
-                </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-pools">--</div>
+                <div class="stat-label">Liquidity Pools</div>
             </div>
-            <small class="text-muted">WingRiders, Liqwid</small>
-        </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-best-apr">--</div>
+                <div class="stat-label">Best LP APR</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-assets">--</div>
+                <div class="stat-label">Lending Assets</div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Cardano Protocols -->
-<h4 class="mb-3">Cardano DeFi Protocols</h4>
-<div class="row g-3 mb-5">
-    <div class="col-md-3">
-        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <img src="/static/minswap-logo.png" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 12px;">
-            <div>
-                <strong>Minswap</strong>
-                <br><small class="text-muted">LP Farming</small>
-            </div>
-            <span class="ms-auto">→</span>
-        </a>
-    </div>
-    <div class="col-md-3">
-        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <img src="/static/sundaeswap-logo.ico" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 12px;">
-            <div>
-                <strong>SundaeSwap</strong>
-                <br><small class="text-muted">LP Farming</small>
-            </div>
-            <span class="ms-auto">→</span>
-        </a>
-    </div>
-    <div class="col-md-3">
-        <a href="/chain/cardano" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <img src="/static/wingriders-logo.svg" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 12px;">
-            <div>
-                <strong>WingRiders</strong>
-                <br><small class="text-muted">LP Farming</small>
-            </div>
-            <span class="ms-auto">→</span>
-        </a>
-    </div>
-    <div class="col-md-3">
-        <a href="/earn" class="chain-card d-flex align-items-center text-decoration-none text-white">
-            <span class="chain-badge chain-cardano me-3">LQ</span>
-            <div>
-                <strong>Liqwid</strong>
-                <br><small class="text-muted">Lending</small>
-            </div>
-            <span class="ms-auto">→</span>
-        </a>
+<!-- Tracked Protocols -->
+<div class="protocols-section">
+    <div class="protocols-title">Tracking Cardano DeFi</div>
+    <div class="protocol-logos">
+        <img src="/static/minswap-logo.png" alt="Minswap" title="Minswap">
+        <img src="/static/sundaeswap-logo.ico" alt="SundaeSwap" title="SundaeSwap">
+        <img src="/static/wingriders-logo.svg" alt="WingRiders" title="WingRiders">
+        <span class="protocol-badge" title="Liqwid">LQ</span>
     </div>
 </div>
 
-<!-- Features -->
-<div class="card p-4">
-    <h4 class="mb-4">Features</h4>
-    <div class="row">
+<!-- Features Section -->
+<div class="features-section">
+    <div class="row g-4">
         <div class="col-md-3">
-            <h6>📈 Historical Data</h6>
-            <p class="text-secondary small">Track APR/APY changes over time with interactive charts</p>
+            <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <div class="feature-title">Historical Charts</div>
+                <div class="feature-desc">Track APR/APY changes over time with interactive charts spanning days, weeks, or months.</div>
+            </div>
         </div>
         <div class="col-md-3">
-            <h6>♠️ Cardano Focused</h6>
-            <p class="text-secondary small">Deep coverage of Cardano's top DeFi protocols</p>
+            <div class="feature-card">
+                <div class="feature-icon">🌊</div>
+                <div class="feature-title">LP Yields</div>
+                <div class="feature-desc">Compare liquidity pool yields across Minswap, SundaeSwap, and WingRiders.</div>
+            </div>
         </div>
         <div class="col-md-3">
-            <h6>📊 Strategy Views</h6>
-            <p class="text-secondary small">Filter by LPs, lending supply, and yield opportunities</p>
+            <div class="feature-card">
+                <div class="feature-icon">💰</div>
+                <div class="feature-title">Lending Rates</div>
+                <div class="feature-desc">Monitor supply APY on Liqwid Finance lending markets.</div>
+            </div>
         </div>
         <div class="col-md-3">
-            <h6>🔄 Daily Updates</h6>
-            <p class="text-secondary small">Fresh data collected automatically every day</p>
+            <div class="feature-card">
+                <div class="feature-icon">🔄</div>
+                <div class="feature-title">Daily Updates</div>
+                <div class="feature-desc">Fresh yield data collected automatically every day.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -303,42 +241,31 @@
 
 {% block extra_js %}
 <script>
-async function loadBestYields() {
-    // Load LP best (Cardano only)
+async function loadStats() {
     try {
+        // Load LP stats
         const lpResponse = await fetch('/api/yields/lp/latest');
         const lpData = await lpResponse.json();
-        // Filter to Cardano only
         const cardanoLPs = lpData.filter(d => d.chain === 'cardano');
+        
         if (cardanoLPs.length > 0) {
-            const best = cardanoLPs[0];
-            document.getElementById('lp-apr').textContent = best.apr.toFixed(1) + '%';
-            document.getElementById('lp-asset').textContent = best.symbol;
-            document.getElementById('lp-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
-            document.getElementById('lp-count').textContent = `${cardanoLPs.length} pools tracked`;
+            document.getElementById('stat-pools').textContent = cardanoLPs.length;
+            document.getElementById('stat-best-apr').textContent = cardanoLPs[0].apr.toFixed(1) + '%';
         }
-    } catch (e) { console.error('Error loading LP data', e); }
-    
-    // Load Supply best (Liqwid on Cardano)
-    try {
+        
+        // Load lending stats
         const supplyResponse = await fetch('/api/yields/supply/latest');
         const supplyData = await supplyResponse.json();
-        // Filter to Cardano only (Liqwid)
         const cardanoSupply = supplyData.filter(d => d.chain === 'cardano');
+        
         if (cardanoSupply.length > 0) {
-            const best = cardanoSupply[0];
-            document.getElementById('supply-apr').textContent = best.apr.toFixed(1) + '%';
-            document.getElementById('supply-asset').textContent = best.symbol;
-            document.getElementById('supply-chain').innerHTML = `<span class="chain-mini chain-${best.chain}">${best.chain}</span>`;
-            document.getElementById('supply-count').textContent = `${cardanoSupply.length} assets tracked`;
+            document.getElementById('stat-assets').textContent = cardanoSupply.length;
         }
-    } catch (e) { console.error('Error loading supply data', e); }
-    
-    // Update protocol count
-    document.getElementById('cardano-count-value').textContent = '4';
+    } catch (e) {
+        console.error('Error loading stats', e);
+    }
 }
 
-// Load on page load
-loadBestYields();
+loadStats();
 </script>
 {% endblock %}

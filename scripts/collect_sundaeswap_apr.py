@@ -104,6 +104,10 @@ def collect_and_store_sundaeswap():
         for pool in pools:
             # Use HRA (Historic Returns Annualized) calculated from 24h LP fees
             apr = pool.hra if pool.hra else Decimal(0)
+            
+            # Calculate 1-day APR: (fees_24h / tvl) * 365 * 100
+            # HRA is already this calculation, so we use it directly as apr_1d
+            apr_1d = pool.hra if pool.hra else None
 
             asset_id = queries.get_or_create_asset(
                 symbol=pool.pair, 
@@ -121,6 +125,7 @@ def collect_and_store_sundaeswap():
                 fees_24h=pool.fees_24h_usd,
                 volume_24h=pool.volume_24h_usd,
                 version=pool.version,
+                apr_1d=apr_1d,
             )
             inserted += 1
             
@@ -128,8 +133,8 @@ def collect_and_store_sundaeswap():
             hra_str = f"{pool.hra:.2f}%" if pool.hra else "N/A"
             fees_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
             vol_str = f"${pool.volume_24h_usd:,.0f}" if pool.volume_24h_usd else "N/A"
-            logger.info("Stored %s (%s): HRA=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
-                       pool.pair, pool.version, hra_str, tvl_str, fees_str, vol_str)
+            logger.info("Stored %s (%s): APR(30d)=%s, APR(1d)=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
+                       pool.pair, pool.version, hra_str, hra_str, tvl_str, fees_str, vol_str)
 
         logger.info("SundaeSwap collection complete. Snapshots inserted: %s", inserted)
         return 0

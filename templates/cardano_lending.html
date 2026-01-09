@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+
+{% block title %}Cardano Lending - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    #aprTable th {
+        border-top: none;
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        padding: 1rem;
+        font-weight: 600;
+        color: #b0b3c1;
+        cursor: pointer;
+        user-select: none;
+    }
+    #aprTable th:hover {
+        color: #ffffff;
+    }
+    #aprTable td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #aprTable tbody tr:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+    
+    /* Multi-select dropdown styles */
+    .multi-select-container {
+        position: relative;
+    }
+    .multi-select-btn {
+        width: 100%;
+        text-align: left;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.2);
+        color: var(--carbon-black);
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 38px;
+    }
+    .multi-select-btn:hover {
+        border-color: var(--sea-green);
+    }
+    .multi-select-btn .count-badge {
+        background: var(--sea-green);
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .multi-select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.2);
+        border-radius: 6px;
+        margin-top: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .multi-select-dropdown.show {
+        display: block;
+    }
+    .multi-select-actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .multi-select-actions button {
+        flex: 1;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        border: 1px solid rgba(0,0,0,0.2);
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+    .multi-select-actions button:hover {
+        background: var(--sea-green);
+        color: #fff;
+        border-color: var(--sea-green);
+    }
+    .multi-select-option {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .multi-select-option:hover {
+        background: rgba(14, 135, 73, 0.1);
+    }
+    .multi-select-option input {
+        margin-right: 10px;
+        accent-color: var(--sea-green);
+    }
+    .multi-select-option label {
+        cursor: pointer;
+        flex: 1;
+        margin: 0;
+        color: var(--carbon-black);
+    }
+    
+    /* Back link */
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    .back-link:hover {
+        color: var(--sea-green);
+    }
+    
+    /* Page header */
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .page-header-icon {
+        font-size: 2rem;
+    }
+    .page-header h2 {
+        margin: 0;
+        font-size: 1.75rem;
+    }
+    .page-header-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin: 0;
+    }
+    
+    /* Protocol badge */
+    .protocol-badge-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(0, 51, 173, 0.1);
+        padding: 0.25rem 0.75rem;
+        border-radius: 8px;
+        margin-left: 1rem;
+    }
+    .protocol-badge-inline span {
+        background: var(--cardano-color);
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.7rem;
+    }
+    .protocol-badge-inline small {
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Back Link -->
+<a href="/cardano" class="back-link">← Back to Cardano</a>
+
+<div class="page-header">
+    <span class="page-header-icon">💰</span>
+    <div>
+        <h2>Cardano Lending</h2>
+        <p class="page-header-subtitle">Track supply APY on Liqwid Finance</p>
+    </div>
+    <div class="protocol-badge-inline">
+        <span>LQ</span>
+        <small>Liqwid</small>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4 g-3">
+    <div class="col-md-2">
+        <label class="form-label">Time Range</label>
+        <select id="timeRange" class="form-select">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Assets</label>
+        <div class="multi-select-container" id="assetSelectContainer">
+            <button type="button" class="multi-select-btn" id="assetSelectBtn">
+                <span id="assetSelectLabel">All Assets</span>
+                <span class="count-badge" id="assetCount" style="display: none;">0</span>
+            </button>
+            <div class="multi-select-dropdown" id="assetDropdown">
+                <div class="multi-select-actions">
+                    <button type="button" onclick="selectAllAssets()">Select All</button>
+                    <button type="button" onclick="clearAssets()">Clear</button>
+                </div>
+                <div id="assetOptions">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+        <button type="button" class="btn btn-outline-primary" id="saveChartBtn" onclick="saveCurrentChart()">
+            Save Chart
+        </button>
+    </div>
+</div>
+
+<!-- Save Chart Modal -->
+<div class="modal fade" id="saveChartModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Save Chart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="saveChartAlert" class="alert d-none" role="alert"></div>
+                <form id="saveChartForm" onsubmit="handleSaveChart(event)">
+                    <div class="mb-3">
+                        <label for="chartName" class="form-label">Chart Name</label>
+                        <input type="text" class="form-control" id="chartName" required maxlength="100" 
+                               placeholder="e.g., My Lending Watchlist">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="row">
+    <div class="col-12">
+        <div class="card p-4" style="height: 600px;">
+            <canvas id="aprChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card p-4">
+            <h5 class="mb-3">Current Supply APYs</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover" id="aprTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)" id="th-0">Asset</th>
+                            <th onclick="sortTable(1)" id="th-1">Current APY ↓</th>
+                            <th onclick="sortTable(2)" id="th-2">24h Change</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="yieldTable">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const chain = "{{ chain }}";
+const yieldType = "{{ yield_type }}";
+let chart = null;
+let allData = [];
+let latestData = [];
+let currentSortColumn = 1;
+let currentSortDirection = 'desc';
+
+// Selected filters
+let selectedAssets = new Set(); // Empty = all assets
+let allAssetsList = [];
+
+// Protocol info
+const protocolLogos = {
+    'liqwid': '/static/liqwid-logo.png'
+};
+
+// Color palette
+const assetColors = [
+    '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
+    '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4'
+];
+
+// Dropdown toggle handlers
+document.getElementById('assetSelectBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('assetDropdown').classList.toggle('show');
+});
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.multi-select-container')) {
+        document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('show'));
+    }
+});
+
+function updateAssetOptions() {
+    const container = document.getElementById('assetOptions');
+    container.innerHTML = allAssetsList.map(symbol => `
+        <div class="multi-select-option">
+            <input type="checkbox" id="asset-${symbol}" value="${symbol}" 
+                   ${selectedAssets.size === 0 || selectedAssets.has(symbol) ? 'checked' : ''} 
+                   onchange="toggleAsset('${symbol}')">
+            <label for="asset-${symbol}">${symbol}</label>
+        </div>
+    `).join('');
+    
+    updateAssetLabel();
+}
+
+function toggleAsset(symbol) {
+    if (selectedAssets.size === 0) {
+        // Switching from "all" to explicit selection
+        allAssetsList.forEach(s => {
+            if (s !== symbol) selectedAssets.add(s);
+        });
+    } else if (selectedAssets.has(symbol)) {
+        selectedAssets.delete(symbol);
+    } else {
+        selectedAssets.add(symbol);
+    }
+    
+    // If all selected, reset to empty (means "all")
+    if (selectedAssets.size === allAssetsList.length) {
+        selectedAssets.clear();
+        document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
+    }
+    
+    updateAssetLabel();
+    applyFilters();
+}
+
+function selectAllAssets() {
+    selectedAssets.clear();
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
+    updateAssetLabel();
+    applyFilters();
+}
+
+function clearAssets() {
+    selectedAssets = new Set();
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = false);
+    updateAssetLabel();
+    applyFilters();
+}
+
+function updateAssetLabel() {
+    const label = document.getElementById('assetSelectLabel');
+    const badge = document.getElementById('assetCount');
+    const checkedCount = document.querySelectorAll('#assetOptions input:checked').length;
+    
+    if (selectedAssets.size === 0 && checkedCount === allAssetsList.length) {
+        label.textContent = 'All Assets';
+        badge.style.display = 'none';
+    } else if (checkedCount === 0) {
+        label.textContent = 'No assets';
+        badge.style.display = 'none';
+    } else if (checkedCount === 1) {
+        const checked = document.querySelector('#assetOptions input:checked');
+        label.textContent = checked ? checked.value : 'Selected';
+        badge.style.display = 'none';
+    } else {
+        label.textContent = 'Assets';
+        badge.textContent = checkedCount;
+        badge.style.display = 'inline';
+    }
+}
+
+async function loadData() {
+    const days = document.getElementById('timeRange').value;
+    
+    // Load historical data - filter to supply type on cardano
+    const historyResponse = await fetch(`/api/yields/${yieldType}?days=${days}`);
+    const rawHistory = await historyResponse.json();
+    allData = rawHistory.filter(d => d.chain === chain);
+    
+    // Load latest for table
+    const latestResponse = await fetch(`/api/yields/${yieldType}/latest`);
+    const rawLatest = await latestResponse.json();
+    latestData = rawLatest.filter(d => d.chain === chain);
+    
+    // Extract all asset symbols
+    allAssetsList = [...new Set(latestData.map(item => item.symbol))].sort();
+    
+    // Initialize asset options
+    updateAssetOptions();
+    
+    // Apply filters
+    applyFilters();
+}
+
+function applyFilters() {
+    const checkedAssets = new Set(
+        [...document.querySelectorAll('#assetOptions input:checked')].map(cb => cb.value)
+    );
+    
+    // Filter historical data
+    let filteredData = allData;
+    if (checkedAssets.size > 0 && checkedAssets.size < allAssetsList.length) {
+        filteredData = allData.filter(d => checkedAssets.has(d.symbol));
+    } else if (checkedAssets.size === 0) {
+        filteredData = [];
+    }
+    
+    // Filter latest data for table
+    let filteredLatest = latestData;
+    if (checkedAssets.size > 0 && checkedAssets.size < allAssetsList.length) {
+        filteredLatest = latestData.filter(d => checkedAssets.has(d.symbol));
+    } else if (checkedAssets.size === 0) {
+        filteredLatest = [];
+    }
+    
+    updateChart(filteredData);
+    updateTable(filteredLatest);
+}
+
+function updateChart(data) {
+    if (chart) {
+        chart.destroy();
+    }
+    
+    const days = document.getElementById('timeRange').value;
+    
+    const datasets = data.map((item, idx) => {
+        const color = assetColors[idx % assetColors.length];
+        
+        return {
+            label: `${item.symbol} (${item.protocol})`,
+            data: item.data.map(d => ({
+                x: new Date(d.timestamp),
+                y: d.apr
+            })),
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: false
+        };
+    });
+    
+    const ctx = document.getElementById('aprChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { 
+                        color: '#1f201f',
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
+                    grid: { display: false },
+                    ticks: { color: '#4a4a4a' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(31, 32, 31, 0.1)' },
+                    ticks: {
+                        color: '#4a4a4a',
+                        callback: (value) => value + '%'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateTable(data) {
+    window.tableData = data.map(item => ({
+        symbol: item.symbol,
+        protocol: item.protocol,
+        apr: item.apr,
+        timestamp: new Date(item.timestamp),
+        change24h: null
+    })).filter(item => item.apr != null);
+    
+    applySortToTable();
+}
+
+function applySortToTable() {
+    const tbody = document.getElementById('yieldTable');
+    tbody.innerHTML = '';
+    
+    let sorted = [...(window.tableData || [])];
+    
+    sorted.sort((a, b) => {
+        switch(currentSortColumn) {
+            case 0:
+                return currentSortDirection === 'asc' ? 
+                    a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
+            case 1:
+                return currentSortDirection === 'asc' ? a.apr - b.apr : b.apr - a.apr;
+            case 2:
+                const aVal = a.change24h ?? -Infinity;
+                const bVal = b.change24h ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            default:
+                return 0;
+        }
+    });
+    
+    // Update column headers
+    for (let i = 0; i < 3; i++) {
+        const th = document.getElementById(`th-${i}`);
+        if (th) {
+            let text = th.textContent.replace(/ [↑↓]/g, '');
+            if (i === currentSortColumn) {
+                text += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+            th.textContent = text;
+        }
+    }
+    
+    sorted.forEach(item => {
+        const logo = protocolLogos[item.protocol] || '';
+        const timeAgo = formatTimeAgo(item.timestamp);
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                ${logo ? `<img src="${logo}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;">` : ''}
+                <strong>${item.symbol}</strong>
+                <span class="text-muted ms-2" style="font-size: 0.8rem;">${item.protocol}</span>
+            </td>
+            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
+            <td><span class="text-muted">-</span></td>
+            <td class="text-secondary">${timeAgo}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function sortTable(columnIndex) {
+    if (currentSortColumn === columnIndex) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = columnIndex;
+        currentSortDirection = 'desc';
+    }
+    applySortToTable();
+}
+
+// Event listeners
+document.getElementById('timeRange').addEventListener('change', loadData);
+
+// Initialize
+loadData();
+
+// Save Chart functionality
+function saveCurrentChart() {
+    {% if current_user.is_authenticated %}
+    document.getElementById('chartName').value = 'Cardano Lending Chart';
+    new bootstrap.Modal(document.getElementById('saveChartModal')).show();
+    {% else %}
+    new bootstrap.Modal(document.getElementById('authModal')).show();
+    {% endif %}
+}
+
+async function handleSaveChart(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('chartName').value;
+    const alert = document.getElementById('saveChartAlert');
+    
+    const filters = {
+        chain: chain,
+        assets: selectedAssets.size === 0 ? null : [...selectedAssets],
+        days: parseInt(document.getElementById('timeRange').value),
+        yield_type: yieldType
+    };
+    
+    try {
+        const response = await fetch('/api/auth/charts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, filters })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert.textContent = 'Chart saved successfully!';
+            alert.className = 'alert alert-success';
+            alert.classList.remove('d-none');
+            
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('saveChartModal')).hide();
+                alert.classList.add('d-none');
+            }, 1500);
+        } else {
+            alert.textContent = data.error || 'Failed to save chart';
+            alert.className = 'alert alert-danger';
+            alert.classList.remove('d-none');
+        }
+    } catch (e) {
+        alert.textContent = 'Connection error. Please try again.';
+        alert.className = 'alert alert-danger';
+        alert.classList.remove('d-none');
+    }
+}
+</script>
+{% endblock %}
+

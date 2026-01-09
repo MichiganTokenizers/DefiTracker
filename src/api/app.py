@@ -606,6 +606,21 @@ def borrow_page():
                           icon='🏦',
                           description='Compare borrowing costs across lending markets')
 
+@app.route('/cardano')
+def cardano_page():
+    """Cardano blockchain overview page"""
+    return render_template('cardano.html')
+
+@app.route('/cardano/lps')
+def cardano_lps_page():
+    """Cardano liquidity pools page"""
+    return render_template('cardano_lps.html', chain='cardano', yield_type='lp')
+
+@app.route('/cardano/lending')
+def cardano_lending_page():
+    """Cardano lending page"""
+    return render_template('cardano_lending.html', chain='cardano', yield_type='supply')
+
 @app.route('/embed/<chain>/<protocol>')
 def embed_widget(chain, protocol):
     """Embeddable widget view"""

@@ -1,0 +1,807 @@
+{% extends "base.html" %}
+
+{% block title %}Cardano Liquidity Pools - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    #aprTable {
+        margin-bottom: 0;
+    }
+    #aprTable th {
+        border-top: none;
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        padding: 1rem;
+        font-weight: 600;
+        color: #b0b3c1;
+        user-select: none;
+    }
+    #aprTable th:hover {
+        color: #ffffff;
+    }
+    #aprTable td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #aprTable tbody tr:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+    .table-responsive {
+        border-radius: 8px;
+    }
+    
+    /* Multi-select dropdown styles */
+    .multi-select-container {
+        position: relative;
+    }
+    .multi-select-btn {
+        width: 100%;
+        text-align: left;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.2);
+        color: var(--carbon-black);
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .multi-select-btn:hover {
+        border-color: var(--sea-green);
+    }
+    .multi-select-btn .count-badge {
+        background: var(--accent-primary);
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .multi-select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.2);
+        border-radius: 6px;
+        margin-top: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .multi-select-dropdown.show {
+        display: block;
+    }
+    .multi-select-actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .multi-select-actions button {
+        flex: 1;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        border: 1px solid rgba(0,0,0,0.2);
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+    .multi-select-actions button:hover {
+        background: var(--sea-green);
+        color: #fff;
+        border-color: var(--sea-green);
+    }
+    .multi-select-option {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+        color: var(--carbon-black);
+    }
+    .multi-select-option:hover {
+        background: rgba(14, 135, 73, 0.1);
+    }
+    .multi-select-option input {
+        margin-right: 10px;
+        accent-color: var(--accent-primary);
+    }
+    .multi-select-option label {
+        cursor: pointer;
+        margin: 0;
+        flex: 1;
+    }
+    
+    /* Dark chart card */
+    .chart-card-dark {
+        background: var(--carbon-black) !important;
+        border: none;
+    }
+    
+    /* APR Toggle Button Styles */
+    .apr-toggle {
+        display: flex;
+        gap: 0;
+    }
+    .apr-toggle .btn-check + .btn {
+        border: 1px solid var(--sea-green);
+        color: var(--sea-green);
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        background: transparent;
+    }
+    .apr-toggle .btn-check + .btn:hover {
+        background-color: rgba(14, 135, 73, 0.1);
+    }
+    .apr-toggle .btn-check:checked + .btn {
+        background-color: var(--sea-green);
+        border-color: var(--sea-green);
+        color: white;
+    }
+    .apr-toggle .btn:first-of-type {
+        border-radius: 6px 0 0 6px;
+    }
+    .apr-toggle .btn:last-of-type {
+        border-radius: 0 6px 6px 0;
+    }
+    
+    /* Back link */
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    .back-link:hover {
+        color: var(--sea-green);
+    }
+    
+    /* Page header */
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .page-header-icon {
+        font-size: 2rem;
+    }
+    .page-header h2 {
+        margin: 0;
+        font-size: 1.75rem;
+    }
+    .page-header-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Back Link -->
+<a href="/cardano" class="back-link">← Back to Cardano</a>
+
+<div class="page-header">
+    <span class="page-header-icon">🌊</span>
+    <div>
+        <h2>Cardano Liquidity Pools</h2>
+        <p class="page-header-subtitle">Compare LP yields across Minswap, SundaeSwap, and WingRiders</p>
+    </div>
+</div>
+
+<div class="row mb-4 g-3">
+    <div class="col-md-2">
+        <label class="form-label">Time Range</label>
+        <select id="timeRange" class="form-select">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+            <option value="365">Last Year</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">APR Type</label>
+        <div class="apr-toggle" role="group" id="aprToggle">
+            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
+            <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
+            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
+            <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Asset Filter</label>
+        <div class="multi-select-container" id="assetFilterContainer">
+            <button type="button" class="multi-select-btn" id="assetFilterBtn">
+                <span id="assetFilterLabel">Loading...</span>
+                <span class="count-badge" id="assetCount">0</span>
+            </button>
+            <div class="multi-select-dropdown" id="assetDropdown">
+                <div class="multi-select-actions">
+                    <button type="button" onclick="selectAllAssets()">Select All</button>
+                    <button type="button" onclick="deselectAllAssets()">Clear</button>
+                    <button type="button" onclick="selectDefaults()">Defaults</button>
+                </div>
+                <div id="assetOptions">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button type="button" class="btn btn-outline-primary" id="saveChartBtn" onclick="saveCurrentChart()">
+            Save Chart
+        </button>
+    </div>
+</div>
+
+<!-- Save Chart Modal -->
+<div class="modal fade" id="saveChartModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Save Chart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="saveChartAlert" class="alert d-none" role="alert"></div>
+                <form id="saveChartForm" onsubmit="handleSaveChart(event)">
+                    <div class="mb-3">
+                        <label for="chartName" class="form-label">Chart Name</label>
+                        <input type="text" class="form-control" id="chartName" required maxlength="100" 
+                               placeholder="e.g., My Cardano LP Watchlist">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card p-4 chart-card-dark" style="height: 700px;">
+            <canvas id="aprChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card p-4">
+            <h5 class="mb-3">Current APRs <small class="text-muted" id="aprTypeLabel">(30-day)</small></h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover" id="aprTable">
+                    <thead>
+                        <tr>
+                            <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1"><span id="aprColumnLabel">APR (30d)</span> ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="currentAprs">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const chain = "{{ chain }}";
+const yieldType = "{{ yield_type }}";
+let chart = null;
+let currentSortColumn = 1;
+let currentSortDirection = 'desc';
+let allAssets = [];
+let selectedAssets = new Set();
+let selectedAprType = '30d'; // '1d' or '30d'
+
+// Protocol logo mapping
+const protocolLogos = {
+    'minswap': '/static/minswap-logo.png',
+    'sundaeswap': '/static/sundaeswap-logo.ico',
+    'wingriders': '/static/wingriders-logo.svg',
+    'liqwid': '/static/liqwid-logo.png'
+};
+
+// Line styles per DEX
+const protocolLineStyles = {
+    'minswap': { borderDash: [], pointStyle: 'circle' },
+    'sundaeswap': { borderDash: [5, 5], pointStyle: 'rect' },
+    'wingriders': { borderDash: [2, 2], pointStyle: 'triangle' },
+    'liqwid': { borderDash: [10, 5], pointStyle: 'star' }
+};
+
+// Color palette
+const pairColors = [
+    '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
+    '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4',
+    '#84cc16', '#f43f5e', '#22d3d8', '#fb923c', '#c084fc'
+];
+const pairColorMap = {};
+
+// Default assets
+const defaultAssets = [
+    'NIGHT-ADA', 'NIGHT-USDM', 'NIGHT-USDA', 'ADA-NIGHT',
+    'ADA-USDM', 'ADA-USDA', 'ADA-DJED', 'ADA-iUSD', 'USDM-ADA', 'USDA-ADA',
+    'ADA-SNEK', 'ADA-IAG', 'ADA-WMTX'
+];
+
+function isDefaultAsset(symbol) {
+    return defaultAssets.some(d => 
+        symbol === d || 
+        symbol.toUpperCase() === d.toUpperCase() ||
+        symbol.includes(d) || 
+        d.includes(symbol)
+    );
+}
+
+async function loadAssets() {
+    const response = await fetch(`/api/${chain}/all/assets?yield_type=${yieldType}`);
+    const rawAssets = await response.json();
+    
+    const symbolSet = new Set();
+    rawAssets.forEach(a => symbolSet.add(a.symbol));
+    allAssets = Array.from(symbolSet).map(s => ({ symbol: s }));
+    
+    const optionsContainer = document.getElementById('assetOptions');
+    optionsContainer.innerHTML = '';
+    
+    allAssets.forEach(asset => {
+        const isDefault = isDefaultAsset(asset.symbol);
+        if (isDefault) {
+            selectedAssets.add(asset.symbol);
+        }
+        
+        const div = document.createElement('div');
+        div.className = 'multi-select-option';
+        div.innerHTML = `
+            <input type="checkbox" id="asset-${asset.symbol}" value="${asset.symbol}" 
+                   ${isDefault ? 'checked' : ''} onchange="toggleAsset('${asset.symbol}')">
+            <label for="asset-${asset.symbol}">${asset.symbol}</label>
+        `;
+        optionsContainer.appendChild(div);
+    });
+    
+    updateAssetLabel();
+}
+
+function toggleAsset(symbol) {
+    if (selectedAssets.has(symbol)) {
+        selectedAssets.delete(symbol);
+    } else {
+        selectedAssets.add(symbol);
+    }
+    updateAssetLabel();
+    loadChart();
+}
+
+function selectAllAssets() {
+    allAssets.forEach(asset => selectedAssets.add(asset.symbol));
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
+    updateAssetLabel();
+    loadChart();
+}
+
+function deselectAllAssets() {
+    selectedAssets.clear();
+    document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = false);
+    updateAssetLabel();
+    loadChart();
+}
+
+function selectDefaults() {
+    selectedAssets.clear();
+    allAssets.forEach(asset => {
+        const isDefault = isDefaultAsset(asset.symbol);
+        const checkbox = document.getElementById(`asset-${asset.symbol}`);
+        if (checkbox) checkbox.checked = isDefault;
+        if (isDefault) selectedAssets.add(asset.symbol);
+    });
+    updateAssetLabel();
+    loadChart();
+}
+
+function updateAssetLabel() {
+    const label = document.getElementById('assetFilterLabel');
+    const count = document.getElementById('assetCount');
+    const size = selectedAssets.size;
+    
+    count.textContent = size;
+    
+    if (size === 0) {
+        label.textContent = 'No assets selected';
+    } else if (size === allAssets.length) {
+        label.textContent = 'All assets';
+    } else if (size <= 3) {
+        label.textContent = Array.from(selectedAssets).slice(0, 3).join(', ');
+    } else {
+        label.textContent = Array.from(selectedAssets).slice(0, 2).join(', ') + ` +${size - 2} more`;
+    }
+}
+
+function getSelectedAssets() {
+    return Array.from(selectedAssets);
+}
+
+// Dropdown toggle
+document.getElementById('assetFilterBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.getElementById('assetDropdown').classList.toggle('show');
+});
+
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('assetFilterContainer').contains(e.target)) {
+        document.getElementById('assetDropdown').classList.remove('show');
+    }
+});
+
+let allHistoryData = [];
+
+function getPairColor(symbol) {
+    if (!pairColorMap[symbol]) {
+        const colorIndex = Object.keys(pairColorMap).length % pairColors.length;
+        pairColorMap[symbol] = pairColors[colorIndex];
+    }
+    return pairColorMap[symbol];
+}
+
+function updateAprLabels() {
+    const is1d = selectedAprType === '1d';
+    document.getElementById('aprTypeLabel').textContent = is1d ? '(1-day)' : '(30-day)';
+    document.getElementById('aprColumnLabel').textContent = is1d ? 'APR (1d)' : 'APR (30d)';
+}
+
+async function loadChart() {
+    const days = document.getElementById('timeRange').value;
+    const selected = getSelectedAssets();
+    
+    const url = `/api/${chain}/all/history?days=${days}&yield_type=${yieldType}`;
+    
+    const response = await fetch(url);
+    allHistoryData = await response.json();
+    
+    let chartData = allHistoryData;
+    if (selected.length > 0 && selected.length < allAssets.length) {
+        chartData = allHistoryData.filter(d => selected.includes(d.symbol));
+    } else if (selected.length === 0) {
+        chartData = [];
+    }
+    
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Update labels
+    updateAprLabels();
+    
+    const is1d = selectedAprType === '1d';
+    
+    const datasets = chartData.map((assetData) => {
+        const protocol = assetData.protocol;
+        const symbol = assetData.symbol;
+        const version = assetData.version;
+        const color = getPairColor(symbol);
+        const lineStyle = protocolLineStyles[protocol] || { borderDash: [], pointStyle: 'circle' };
+        
+        const versionSuffix = version ? ` ${version}` : '';
+        const label = `${symbol} (${protocol}${versionSuffix})`;
+        
+        // Select which APR field to use - no fallback
+        let processedData;
+        if (is1d) {
+            // Use apr_1d only - no fallback to 30d
+            processedData = assetData.data
+                .filter(d => d.apr_1d != null)
+                .map(d => ({
+                    x: new Date(d.timestamp),
+                    y: d.apr_1d
+                }));
+        } else {
+            // Use stored apr value (30-day)
+            processedData = assetData.data
+                .filter(d => d.apr != null)
+                .map(d => ({
+                    x: new Date(d.timestamp),
+                    y: d.apr
+                }));
+        }
+        
+        return {
+            label: label,
+            data: processedData,
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            borderDash: lineStyle.borderDash,
+            pointStyle: lineStyle.pointStyle,
+            tension: 0.4,
+            fill: false
+        };
+    }).filter(ds => ds.data.length > 0);
+    
+    const aprTypeLabel = is1d ? '1-Day APR' : '30-Day APR';
+    
+    const ctx = document.getElementById('aprChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: aprTypeLabel,
+                    color: '#ddd6b9',
+                    font: { size: 14, weight: 'normal' },
+                    padding: { bottom: 10 }
+                },
+                legend: {
+                    labels: { 
+                        color: '#ddd6b9',
+                        usePointStyle: true,
+                        padding: 15,
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#b0b3c1' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: {
+                        color: '#b0b3c1',
+                        callback: (value) => value + '%'
+                    }
+                }
+            }
+        }
+    });
+    
+    updateCurrentAprs(chartData);
+}
+
+function updateCurrentAprs(data) {
+    const tbody = document.getElementById('currentAprs');
+    tbody.innerHTML = '';
+    
+    const is1d = selectedAprType === '1d';
+    
+    const sortedData = data.map(assetData => {
+        // For 1d mode, only use data points that have apr_1d
+        const relevantData = is1d 
+            ? assetData.data.filter(d => d.apr_1d != null)
+            : assetData.data.filter(d => d.apr != null);
+        
+        if (relevantData.length === 0) return null;
+        
+        const latest = relevantData[relevantData.length - 1];
+        if (!latest) return null;
+        
+        // Get the APR value based on selected type - no fallback
+        const aprValue = is1d ? latest.apr_1d : latest.apr;
+        
+        if (aprValue == null) return null;
+        
+        // Calculate 24h change using only the relevant data
+        let change24h = null;
+        if (relevantData.length > 1) {
+            const now = new Date(latest.timestamp);
+            const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+            
+            let closest = relevantData[0];
+            let minDiff = Math.abs(new Date(closest.timestamp) - oneDayAgo);
+            
+            for (let point of relevantData) {
+                const diff = Math.abs(new Date(point.timestamp) - oneDayAgo);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = point;
+                }
+            }
+            
+            const closestApr = is1d ? closest.apr_1d : closest.apr;
+            
+            if (closestApr != null) {
+                change24h = aprValue - closestApr;
+            }
+        }
+        
+        return {
+            symbol: assetData.symbol,
+            protocol: assetData.protocol,
+            version: assetData.version,
+            apr: aprValue,
+            tvl_usd: latest.tvl_usd,
+            change24h: change24h,
+            timestamp: new Date(latest.timestamp)
+        };
+    }).filter(x => x !== null);
+    
+    window.tableData = sortedData;
+    applySortToTable();
+}
+
+function applySortToTable() {
+    const tbody = document.getElementById('currentAprs');
+    tbody.innerHTML = '';
+    
+    let sorted = [...window.tableData];
+    
+    sorted.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(currentSortColumn) {
+            case 0:
+                aVal = a.symbol;
+                bVal = b.symbol;
+                const cmp = aVal.localeCompare(bVal);
+                return currentSortDirection === 'asc' ? cmp : -cmp;
+            case 1:
+                aVal = a.apr;
+                bVal = b.apr;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            case 2:
+                aVal = a.change24h ?? -Infinity;
+                bVal = b.change24h ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            default:
+                return 0;
+        }
+    });
+    
+    for (let i = 0; i < 3; i++) {
+        const th = document.getElementById(`th-${i}`);
+        if (th) {
+            let text = th.textContent.replace(/ [↑↓]/g, '');
+            if (i === currentSortColumn) {
+                text += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+            th.textContent = text;
+        }
+    }
+    
+    sorted.forEach(item => {
+        const row = document.createElement('tr');
+        
+        let changeHtml = '<span class="text-muted">-</span>';
+        if (item.change24h !== null) {
+            const changeClass = item.change24h >= 0 ? 'text-success' : 'text-danger';
+            const changeSymbol = item.change24h >= 0 ? '+' : '';
+            changeHtml = `<span class="${changeClass}">${changeSymbol}${item.change24h.toFixed(2)}%</span>`;
+        }
+        
+        const timeAgo = formatTimeAgo(item.timestamp);
+        const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
+        const versionStr = item.version ? ` ${item.version}` : '';
+        
+        row.innerHTML = `
+            <td>
+                <img src="${logo}" alt="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
+                <strong>${item.symbol}</strong>
+                <span class="text-muted" style="font-size: 0.8rem; margin-left: 5px;">${item.protocol}${versionStr}</span>
+            </td>
+            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
+            <td>${changeHtml}</td>
+            <td class="text-secondary">${timeAgo}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function sortTable(columnIndex) {
+    if (currentSortColumn === columnIndex) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = columnIndex;
+        currentSortDirection = 'desc';
+    }
+    
+    applySortToTable();
+}
+
+document.getElementById('timeRange').addEventListener('change', loadChart);
+
+// APR type toggle event listeners
+document.querySelectorAll('input[name="aprType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        selectedAprType = e.target.value;
+        loadChart();
+    });
+});
+
+loadAssets().then(loadChart);
+
+// Save Chart functionality
+function saveCurrentChart() {
+    {% if current_user.is_authenticated %}
+    document.getElementById('chartName').value = 'Cardano LP Chart';
+    new bootstrap.Modal(document.getElementById('saveChartModal')).show();
+    {% else %}
+    new bootstrap.Modal(document.getElementById('authModal')).show();
+    {% endif %}
+}
+
+async function handleSaveChart(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('chartName').value;
+    const alert = document.getElementById('saveChartAlert');
+    
+    const filters = {
+        chain: chain,
+        days: parseInt(document.getElementById('timeRange').value),
+        assets: Array.from(selectedAssets),
+        yield_type: yieldType,
+        apr_type: selectedAprType
+    };
+    
+    const displayOptions = { colors: pairColorMap };
+    
+    try {
+        const response = await fetch('/api/auth/charts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, filters, display_options: displayOptions })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert.textContent = 'Chart saved successfully!';
+            alert.className = 'alert alert-success';
+            alert.classList.remove('d-none');
+            
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('saveChartModal')).hide();
+                alert.classList.add('d-none');
+            }, 1500);
+        } else {
+            alert.textContent = data.error || 'Failed to save chart';
+            alert.className = 'alert alert-danger';
+            alert.classList.remove('d-none');
+        }
+    } catch (e) {
+        alert.textContent = 'Connection error. Please try again.';
+        alert.className = 'alert alert-danger';
+        alert.classList.remove('d-none');
+    }
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Cardano - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chain-header {
+        text-align: center;
+        padding: 2rem 0 3rem;
+    }
+    .chain-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    .chain-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+        margin-bottom: 0.5rem;
+    }
+    .chain-subtitle {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    /* Category Cards */
+    .category-section {
+        padding: 2rem 0 4rem;
+    }
+    .category-card {
+        background: radial-gradient(ellipse at center, #ddd6b9 60%, #79cf55 100%);
+        border: 4px solid #1f201f;
+        border-radius: 24px;
+        padding: 3rem 2rem;
+        text-align: center;
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        box-shadow: 0 8px 40px rgba(31, 32, 31, 0.15);
+        cursor: pointer;
+        text-decoration: none;
+        display: block;
+        color: inherit;
+        height: 100%;
+    }
+    .category-card:hover {
+        transform: translateY(-8px);
+        border-color: var(--sea-green);
+        box-shadow: 0 16px 60px rgba(14, 135, 73, 0.2);
+        color: inherit;
+    }
+    .category-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .category-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        color: var(--carbon-black);
+    }
+    .category-description {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+    .category-stats {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .category-stat {
+        text-align: center;
+    }
+    .category-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--sea-green);
+    }
+    .category-stat-label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .category-btn {
+        display: inline-block;
+        background: var(--sea-green);
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.2s, transform 0.2s;
+    }
+    .category-card:hover .category-btn {
+        background: var(--moss-green);
+        color: var(--carbon-black);
+    }
+    .category-protocols {
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .category-protocols img {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .category-protocols .protocol-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--cardano-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    
+    /* Protocol Section */
+    .protocols-section {
+        padding: 2rem 0;
+    }
+    .protocols-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        color: var(--carbon-black);
+    }
+    .protocol-card {
+        background: rgba(255, 255, 255, 0.95);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(31, 32, 31, 0.1);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .protocol-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .protocol-card img {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+    .protocol-card .protocol-badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--cardano-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    .protocol-info h6 {
+        margin: 0;
+        font-weight: 600;
+        color: var(--carbon-black);
+    }
+    .protocol-info small {
+        color: var(--text-secondary);
+    }
+    
+    /* Back link */
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    .back-link:hover {
+        color: var(--sea-green);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Back Link -->
+<a href="/" class="back-link">← Back to Home</a>
+
+<!-- Chain Header -->
+<div class="chain-header">
+    <div class="chain-icon">♠️</div>
+    <h1 class="chain-title">Cardano</h1>
+    <p class="chain-subtitle">
+        Explore yields across Cardano's decentralized exchanges and lending protocols
+    </p>
+</div>
+
+<!-- Category Cards -->
+<div class="category-section">
+    <div class="row g-4 justify-content-center">
+        <!-- Liquidity Pools -->
+        <div class="col-md-5">
+            <a href="/cardano/lps" class="category-card">
+                <div class="category-icon">🌊</div>
+                <div class="category-title">Liquidity Pools</div>
+                <div class="category-description">
+                    Provide liquidity to DEXs and earn trading fees plus farming rewards
+                </div>
+                <div class="category-stats">
+                    <div class="category-stat">
+                        <div class="category-stat-value" id="lp-count">--</div>
+                        <div class="category-stat-label">Pools</div>
+                    </div>
+                    <div class="category-stat">
+                        <div class="category-stat-value" id="lp-best-apr">--</div>
+                        <div class="category-stat-label">Best APR</div>
+                    </div>
+                </div>
+                <span class="category-btn">View LP Charts</span>
+                <div class="category-protocols">
+                    <img src="/static/minswap-logo.png" alt="Minswap" title="Minswap">
+                    <img src="/static/sundaeswap-logo.ico" alt="SundaeSwap" title="SundaeSwap">
+                    <img src="/static/wingriders-logo.svg" alt="WingRiders" title="WingRiders">
+                </div>
+            </a>
+        </div>
+        
+        <!-- Lending -->
+        <div class="col-md-5">
+            <a href="/cardano/lending" class="category-card">
+                <div class="category-icon">💰</div>
+                <div class="category-title">Lending</div>
+                <div class="category-description">
+                    Supply assets to lending markets and earn interest on your holdings
+                </div>
+                <div class="category-stats">
+                    <div class="category-stat">
+                        <div class="category-stat-value" id="lending-count">--</div>
+                        <div class="category-stat-label">Assets</div>
+                    </div>
+                    <div class="category-stat">
+                        <div class="category-stat-value" id="lending-best-apy">--</div>
+                        <div class="category-stat-label">Best APY</div>
+                    </div>
+                </div>
+                <span class="category-btn">View Lending Charts</span>
+                <div class="category-protocols">
+                    <span class="protocol-badge" title="Liqwid">LQ</span>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Protocols Overview -->
+<div class="protocols-section">
+    <h4 class="protocols-title">Tracked Protocols</h4>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="protocol-card">
+                <img src="/static/minswap-logo.png" alt="Minswap">
+                <div class="protocol-info">
+                    <h6>Minswap</h6>
+                    <small>DEX - LP Farming</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="protocol-card">
+                <img src="/static/sundaeswap-logo.ico" alt="SundaeSwap">
+                <div class="protocol-info">
+                    <h6>SundaeSwap</h6>
+                    <small>DEX - LP Farming</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="protocol-card">
+                <img src="/static/wingriders-logo.svg" alt="WingRiders">
+                <div class="protocol-info">
+                    <h6>WingRiders</h6>
+                    <small>DEX - LP Farming</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="protocol-card">
+                <span class="protocol-badge">LQ</span>
+                <div class="protocol-info">
+                    <h6>Liqwid</h6>
+                    <small>Lending Protocol</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadStats() {
+    // Load LP stats
+    try {
+        const lpResponse = await fetch('/api/yields/lp/latest');
+        const lpData = await lpResponse.json();
+        const cardanoLPs = lpData.filter(d => d.chain === 'cardano');
+        
+        if (cardanoLPs.length > 0) {
+            document.getElementById('lp-count').textContent = cardanoLPs.length;
+            document.getElementById('lp-best-apr').textContent = cardanoLPs[0].apr.toFixed(1) + '%';
+        }
+    } catch (e) { 
+        console.error('Error loading LP stats', e); 
+    }
+    
+    // Load Lending stats
+    try {
+        const supplyResponse = await fetch('/api/yields/supply/latest');
+        const supplyData = await supplyResponse.json();
+        const cardanoSupply = supplyData.filter(d => d.chain === 'cardano');
+        
+        if (cardanoSupply.length > 0) {
+            document.getElementById('lending-count').textContent = cardanoSupply.length;
+            document.getElementById('lending-best-apy').textContent = cardanoSupply[0].apr.toFixed(1) + '%';
+        }
+    } catch (e) { 
+        console.error('Error loading lending stats', e); 
+    }
+}
+
+loadStats();
+</script>
+{% endblock %}
+
