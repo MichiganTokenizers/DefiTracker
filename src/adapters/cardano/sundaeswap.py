@@ -13,6 +13,14 @@ HRA (Historic Returns Annualized) is calculated from:
 - 24h lpFees (fees returned to LPs) from hourly ticks
 - Current TVL
 - Formula: (daily_fees / tvl) * 365 * 100
+
+Farming Rewards:
+- Fetched from https://api.yield.sundaeswap.finance/graphql
+- SUNDAE token rewards distributed daily to eligible pools
+- Farming APR = (daily_sundae_emission * sundae_price / tvl) * 365 * 100
+- SUNDAE price derived from ADA-SUNDAE pool reserves
+
+Total APR = HRA (trading fees) + Farming APR (SUNDAE rewards)
 """
 
 import logging
@@ -64,6 +72,36 @@ POOLS_QUERY = """
 }
 """
 
+# Farming API URL (separate from main API)
+FARMING_API_URL = "https://api.yield.sundaeswap.finance/graphql"
+
+# GraphQL query to get yield farming programs
+FARMING_PROGRAMS_QUERY = """
+{
+  programs {
+    id
+    type
+    label
+    emittedAsset
+    dailyEmission {
+      assetID
+      amount
+    }
+    eligiblePools {
+      poolIdent
+      lpAsset
+      assetA
+      assetB
+    }
+    status
+    poolEmissions
+  }
+}
+"""
+
+# SUNDAE token asset ID (policy_id.asset_name)
+SUNDAE_ASSET_ID = "9a9693a9a37912a5097918f97918d15240c92ab729a0b7c4aa144d77.53554e444145"
+
 
 @dataclass
 class SundaePoolMetrics:
@@ -76,10 +114,19 @@ class SundaePoolMetrics:
     fee_percent: Optional[Decimal] = None
     reserve_a: Optional[Decimal] = None
     reserve_b: Optional[Decimal] = None
+    # Original tickers from API (before pair name normalization)
+    ticker_a: str = ""  # First token ticker (as in pair name, left side)
+    ticker_b: str = ""  # Second token ticker (as in pair name, right side)
     # HRA (Historic Returns Annualized) from 24h fees
     hra: Optional[Decimal] = None
     fees_24h_usd: Optional[Decimal] = None
     volume_24h_usd: Optional[Decimal] = None
+    # Farming rewards (SUNDAE token emissions)
+    farming_apr: Optional[Decimal] = None  # APR from SUNDAE farming rewards
+    daily_sundae_emission: Optional[Decimal] = None  # Daily SUNDAE tokens for this pool
+    has_farm: bool = False  # Whether pool has active farming rewards
+    # Total APR = HRA (fees) + farming_apr (rewards)
+    total_apr: Optional[Decimal] = None
 
 
 class SundaeSwapAdapter(ProtocolAdapter):
@@ -89,6 +136,9 @@ class SundaeSwapAdapter(ProtocolAdapter):
         super().__init__(protocol_name, config)
         self.graphql_url = config.get(
             "graphql_url", "https://api.sundae.fi/graphql"
+        )
+        self.farming_url = config.get(
+            "farming_url", FARMING_API_URL
         )
         self.timeout = config.get("timeout", 30)
         self.max_retries = config.get("max_retries", 3)
@@ -105,6 +155,10 @@ class SundaeSwapAdapter(ProtocolAdapter):
         self._pool_cache: List[SundaePoolMetrics] = []
         self._cache_timestamp: float = 0
         self._cache_ttl = config.get("cache_ttl", 300)  # 5 minutes
+        
+        # Cache for SUNDAE token price (in ADA)
+        self._sundae_price_ada: Optional[Decimal] = None
+        self._sundae_price_timestamp: float = 0
 
     def get_supported_assets(self) -> List[str]:
         """Return list of pool pair names with TVL above threshold."""
@@ -113,20 +167,22 @@ class SundaeSwapAdapter(ProtocolAdapter):
 
     def get_supply_apr(self, asset: str) -> Optional[Decimal]:
         """
-        Get the HRA (Historic Returns Annualized) for a pool.
+        Get the total APR (trading fees + farming rewards) for a pool.
         
-        HRA is calculated from actual 24h LP fees divided by TVL, annualized.
+        Total APR includes:
+        - HRA (Historic Returns Annualized) from 24h trading fees
+        - Farming APR from SUNDAE token rewards (if pool is eligible)
         
         Args:
             asset: Pool pair name (e.g., "ADA-NIGHT")
             
         Returns:
-            HRA as Decimal percentage, or None if not found
+            Total APR as Decimal percentage, or None if not found
         """
         pools = self._get_pools()
         for pool in pools:
             if pool.pair == asset:
-                return pool.hra
+                return pool.total_apr
         return None
 
     def get_pool_metrics(self, asset: str) -> Optional[SundaePoolMetrics]:
@@ -226,16 +282,29 @@ class SundaeSwapAdapter(ProtocolAdapter):
 
         for p in raw_pools:
             try:
-                ticker_a = p.get("assetA", {}).get("ticker", "???")
-                ticker_b = p.get("assetB", {}).get("ticker", "???")
+                orig_ticker_a = p.get("assetA", {}).get("ticker", "???")
+                orig_ticker_b = p.get("assetB", {}).get("ticker", "???")
                 version = p.get("version", "V1")
+                
+                # Parse reserves first (before potential swap)
+                qty_a = p.get("current", {}).get("quantityA", {}).get("quantity", 0)
+                qty_b = p.get("current", {}).get("quantityB", {}).get("quantity", 0)
+                decimals_a = p.get("assetA", {}).get("decimals", 6)
+                decimals_b = p.get("assetB", {}).get("decimals", 6)
+                
+                reserve_a = Decimal(qty_a) / Decimal(10 ** decimals_a) if qty_a else None
+                reserve_b = Decimal(qty_b) / Decimal(10 ** decimals_b) if qty_b else None
                 
                 # Ensure ADA is always SECOND in the pair name (TOKEN-ADA format)
                 # For stablecoin pairs, use alphabetical order
                 # This matches the Minswap convention
-                if ticker_a == 'ADA' and ticker_b != 'ADA':
-                    # Swap so ADA is second
-                    ticker_a, ticker_b = ticker_b, ticker_a
+                ticker_a = orig_ticker_a
+                ticker_b = orig_ticker_b
+                if orig_ticker_a == 'ADA' and orig_ticker_b != 'ADA':
+                    # Swap so ADA is second in pair name
+                    ticker_a, ticker_b = orig_ticker_b, orig_ticker_a
+                    # Also swap reserves to match new order
+                    reserve_a, reserve_b = reserve_b, reserve_a
                 
                 # Create pair name (version stored separately)
                 pair = f"{ticker_a}-{ticker_b}"
@@ -261,15 +330,6 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 else:
                     fee_percent = Decimal(0)
 
-                # Parse reserves
-                qty_a = p.get("current", {}).get("quantityA", {}).get("quantity", 0)
-                qty_b = p.get("current", {}).get("quantityB", {}).get("quantity", 0)
-                decimals_a = p.get("assetA", {}).get("decimals", 6)
-                decimals_b = p.get("assetB", {}).get("decimals", 6)
-                
-                reserve_a = Decimal(qty_a) / Decimal(10 ** decimals_a) if qty_a else None
-                reserve_b = Decimal(qty_b) / Decimal(10 ** decimals_b) if qty_b else None
-
                 pool_metrics = SundaePoolMetrics(
                     pool_id=p.get("id", ""),
                     pair=pair,
@@ -279,6 +339,8 @@ class SundaeSwapAdapter(ProtocolAdapter):
                     fee_percent=fee_percent,
                     reserve_a=reserve_a,
                     reserve_b=reserve_b,
+                    ticker_a=ticker_a,
+                    ticker_b=ticker_b,
                 )
                 pools.append(pool_metrics)
                 seen_pairs.add(pair_key)
@@ -295,6 +357,13 @@ class SundaeSwapAdapter(ProtocolAdapter):
         
         # Fetch 24h fees for HRA calculation
         self._enrich_pools_with_hra(pools)
+        
+        # Fetch farming rewards for eligible pools
+        self._enrich_pools_with_farming(pools)
+        
+        # Calculate total APR for all pools
+        for pool in pools:
+            pool.total_apr = (pool.hra or Decimal(0)) + (pool.farming_apr or Decimal(0))
         
         return pools
 
@@ -399,4 +468,256 @@ class SundaeSwapAdapter(ProtocolAdapter):
         except Exception as e:
             logger.debug("Error fetching ticks for pool %s: %s", pool_id, e)
             return None, None
+
+    def _enrich_pools_with_farming(self, pools: List[SundaePoolMetrics]) -> None:
+        """
+        Fetch farming rewards from the yield farming API and calculate farming APR.
+        
+        Farming APR = (daily_sundae_emission * sundae_price / tvl) * 365 * 100
+        
+        Uses the SUNDAE yield farming program which distributes SUNDAE tokens
+        daily to eligible liquidity pools based on their share of total liquidity.
+        """
+        try:
+            # Fetch farming programs
+            farming_data = self._fetch_farming_programs()
+            if not farming_data:
+                logger.debug("No farming program data available")
+                return
+            
+            # Get SUNDAE price in ADA
+            sundae_price = self._get_sundae_price(pools)
+            if not sundae_price or sundae_price <= 0:
+                logger.warning("Could not get SUNDAE price for farming APR calculation")
+                return
+            
+            # Build mapping from pool ID to daily SUNDAE emission
+            pool_emissions = farming_data.get("pool_emissions", {})
+            
+            if not pool_emissions:
+                logger.debug("No pool emissions data in farming program")
+                return
+            
+            # SUNDAE token has 6 decimals
+            sundae_decimals = Decimal(1_000_000)
+            
+            farms_found = 0
+            for pool in pools:
+                # Pool IDs in farming API may be truncated or different format
+                # Try matching by prefix
+                emission_amount = None
+                
+                for farm_pool_id, amount in pool_emissions.items():
+                    # Match if pool ID starts with the farming pool ID or vice versa
+                    if (pool.pool_id.startswith(farm_pool_id) or 
+                        farm_pool_id.startswith(pool.pool_id)):
+                        emission_amount = amount
+                        break
+                
+                if emission_amount is not None and emission_amount > 0:
+                    # Convert raw emission to SUNDAE tokens
+                    daily_sundae = Decimal(emission_amount) / sundae_decimals
+                    pool.daily_sundae_emission = daily_sundae
+                    pool.has_farm = True
+                    
+                    # Calculate farming APR
+                    if pool.tvl_ada and pool.tvl_ada > 0:
+                        # Daily reward value in ADA
+                        daily_reward_ada = daily_sundae * sundae_price
+                        
+                        # Farming APR = (daily_reward / tvl) * 365 * 100
+                        pool.farming_apr = (
+                            daily_reward_ada / pool.tvl_ada
+                        ) * Decimal(365) * Decimal(100)
+                        
+                        farms_found += 1
+                        
+                        logger.debug(
+                            "Pool %s farming: %.0f SUNDAE/day, price=%.6f ADA, "
+                            "tvl=%.0f ADA, farming_apr=%.2f%%",
+                            pool.pair, daily_sundae, sundae_price,
+                            pool.tvl_ada, pool.farming_apr
+                        )
+            
+            logger.info(
+                "Enriched %d pools with SUNDAE farming rewards (SUNDAE price: %.6f ADA)",
+                farms_found, sundae_price
+            )
+            
+        except Exception as e:
+            logger.warning("Error enriching pools with farming data: %s", e)
+
+    def _fetch_farming_programs(self) -> Optional[Dict]:
+        """
+        Fetch yield farming programs from the farming API.
+        
+        Returns:
+            Dict with 'pool_emissions' mapping pool IDs to daily SUNDAE amounts,
+            or None if fetch fails.
+        """
+        try:
+            resp = self.session.post(
+                self.farming_url,
+                json={"query": FARMING_PROGRAMS_QUERY},
+                timeout=self.timeout
+            )
+            
+            if resp.status_code != 200:
+                logger.warning(
+                    "Farming API returned status %s", resp.status_code
+                )
+                return None
+            
+            data = resp.json()
+            
+            if "errors" in data and data["errors"]:
+                logger.warning("Farming API errors: %s", data["errors"][:200])
+                return None
+            
+            programs = data.get("data", {}).get("programs", [])
+            
+            # Find the SUNDAE farming program
+            for prog in programs:
+                if prog.get("id") == "SUNDAE" and prog.get("type") == "yield":
+                    pool_emissions = prog.get("poolEmissions") or {}
+                    
+                    logger.debug(
+                        "Found SUNDAE farming program with %d pool emissions",
+                        len(pool_emissions)
+                    )
+                    
+                    return {
+                        "program_id": prog.get("id"),
+                        "label": prog.get("label"),
+                        "pool_emissions": pool_emissions,
+                        "daily_emission": prog.get("dailyEmission", []),
+                    }
+            
+            logger.debug("SUNDAE farming program not found in %d programs", len(programs))
+            return None
+            
+        except Exception as e:
+            logger.warning("Error fetching farming programs: %s", e)
+            return None
+
+    def _get_sundae_price(self, pools: List[SundaePoolMetrics]) -> Optional[Decimal]:
+        """
+        Get the SUNDAE token price in ADA from the ADA-SUNDAE pool reserves.
+        
+        Uses the highest TVL ADA-SUNDAE pool (typically V3) for most accurate price.
+        
+        Args:
+            pools: List of pool metrics (used to find ADA-SUNDAE pool)
+            
+        Returns:
+            SUNDAE price in ADA, or None if not available.
+        """
+        now = time.time()
+        
+        # Return cached price if still valid
+        if (self._sundae_price_ada is not None and 
+            now - self._sundae_price_timestamp < self._cache_ttl):
+            return self._sundae_price_ada
+        
+        # Find ADA-SUNDAE pool with highest TVL
+        sundae_pool = None
+        for pool in pools:
+            if pool.pair in ["SUNDAE-ADA", "ADA-SUNDAE"]:
+                if sundae_pool is None or (pool.tvl_ada or 0) > (sundae_pool.tvl_ada or 0):
+                    sundae_pool = pool
+        
+        if sundae_pool and sundae_pool.reserve_a and sundae_pool.reserve_b:
+            # Use ticker_a and ticker_b to determine which reserve is which
+            # Price = ADA_reserve / SUNDAE_reserve
+            if sundae_pool.ticker_a == "SUNDAE":
+                # reserve_a is SUNDAE, reserve_b is ADA
+                if sundae_pool.reserve_a > 0:
+                    self._sundae_price_ada = sundae_pool.reserve_b / sundae_pool.reserve_a
+            else:
+                # reserve_a is ADA, reserve_b is SUNDAE
+                if sundae_pool.reserve_b > 0:
+                    self._sundae_price_ada = sundae_pool.reserve_a / sundae_pool.reserve_b
+            
+            self._sundae_price_timestamp = now
+            
+            logger.debug(
+                "SUNDAE price from %s pool: %.6f ADA",
+                sundae_pool.version, self._sundae_price_ada
+            )
+            return self._sundae_price_ada
+        
+        # Fallback: Query the API directly for ADA-SUNDAE pools
+        try:
+            query = """
+            {
+              pools {
+                popular {
+                  id
+                  version
+                  assetA { ticker decimals }
+                  assetB { ticker decimals }
+                  current {
+                    quantityA { quantity }
+                    quantityB { quantity }
+                    tvl { quantity }
+                  }
+                }
+              }
+            }
+            """
+            
+            resp = self.session.post(
+                self.graphql_url,
+                json={"query": query},
+                timeout=self.timeout
+            )
+            
+            if resp.status_code != 200:
+                return None
+            
+            data = resp.json()
+            all_pools = data.get("data", {}).get("pools", {}).get("popular", [])
+            
+            # Find highest TVL ADA-SUNDAE pool
+            best_pool = None
+            best_tvl = 0
+            
+            for p in all_pools:
+                ticker_a = p.get("assetA", {}).get("ticker", "")
+                ticker_b = p.get("assetB", {}).get("ticker", "")
+                
+                if set([ticker_a, ticker_b]) == {"ADA", "SUNDAE"}:
+                    tvl = int(p.get("current", {}).get("tvl", {}).get("quantity", 0))
+                    if tvl > best_tvl:
+                        best_tvl = tvl
+                        best_pool = p
+            
+            if best_pool:
+                ticker_a = best_pool.get("assetA", {}).get("ticker", "")
+                decimals_a = best_pool.get("assetA", {}).get("decimals", 6)
+                decimals_b = best_pool.get("assetB", {}).get("decimals", 6)
+                
+                qty_a = int(best_pool.get("current", {}).get("quantityA", {}).get("quantity", 0))
+                qty_b = int(best_pool.get("current", {}).get("quantityB", {}).get("quantity", 0))
+                
+                reserve_a = Decimal(qty_a) / Decimal(10 ** decimals_a)
+                reserve_b = Decimal(qty_b) / Decimal(10 ** decimals_b)
+                
+                if ticker_a == "SUNDAE" and reserve_a > 0:
+                    self._sundae_price_ada = reserve_b / reserve_a
+                elif ticker_a == "ADA" and reserve_b > 0:
+                    self._sundae_price_ada = reserve_a / reserve_b
+                
+                self._sundae_price_timestamp = now
+                
+                logger.debug(
+                    "SUNDAE price from API: %.6f ADA (from %s pool)",
+                    self._sundae_price_ada, best_pool.get("version")
+                )
+                return self._sundae_price_ada
+                
+        except Exception as e:
+            logger.debug("Error fetching SUNDAE price from API: %s", e)
+        
+        return None
 

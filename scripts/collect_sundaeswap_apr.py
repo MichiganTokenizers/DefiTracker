@@ -7,9 +7,15 @@ and stores it in the `apr_snapshots` table.
 
 Collects:
 - HRA (Historic Returns Annualized) - calculated from 24h LP fees / TVL * 365
+- Farming APR - SUNDAE token rewards for eligible pools
+- Total APR - HRA + Farming APR
 - TVL in USD
 - 24h fees in USD
 - 24h volume in USD
+
+APR Breakdown:
+- Fee APR (HRA): Trading fees returned to liquidity providers
+- Farming APR: SUNDAE token rewards distributed to eligible pools
 
 Collects pools with TVL > $10k (configurable).
 
@@ -101,12 +107,13 @@ def collect_and_store_sundaeswap():
                    len(pools), protocol_config.get("min_tvl_usd", 10000))
 
         inserted = 0
+        farms_count = 0
         for pool in pools:
-            # Use HRA (Historic Returns Annualized) calculated from 24h LP fees
-            apr = pool.hra if pool.hra else Decimal(0)
+            # Use total APR (trading fees + farming rewards)
+            apr = pool.total_apr if pool.total_apr else Decimal(0)
             
-            # Calculate 1-day APR: (fees_24h / tvl) * 365 * 100
-            # HRA is already this calculation, so we use it directly as apr_1d
+            # Calculate 1-day APR from fees only (HRA)
+            # This represents the daily trading fee return, annualized
             apr_1d = pool.hra if pool.hra else None
 
             asset_id = queries.get_or_create_asset(
@@ -128,15 +135,29 @@ def collect_and_store_sundaeswap():
                 apr_1d=apr_1d,
             )
             inserted += 1
+            if pool.has_farm:
+                farms_count += 1
             
+            # Format display strings
             tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
-            hra_str = f"{pool.hra:.2f}%" if pool.hra else "N/A"
-            fees_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
+            total_str = f"{pool.total_apr:.2f}%" if pool.total_apr else "N/A"
+            fee_str = f"{pool.hra:.2f}%" if pool.hra else "0%"
+            farm_str = f"{pool.farming_apr:.2f}%" if pool.farming_apr else "0%"
+            fees_24h_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
             vol_str = f"${pool.volume_24h_usd:,.0f}" if pool.volume_24h_usd else "N/A"
-            logger.info("Stored %s (%s): APR(30d)=%s, APR(1d)=%s, TVL=%s, Fees24h=%s, Vol24h=%s", 
-                       pool.pair, pool.version, hra_str, hra_str, tvl_str, fees_str, vol_str)
+            
+            # Log with APR breakdown
+            farm_indicator = " [FARM]" if pool.has_farm else ""
+            logger.info(
+                "Stored %s (%s)%s: Total=%s (Fees=%s + Farm=%s), TVL=%s, Fees24h=%s, Vol24h=%s", 
+                pool.pair, pool.version, farm_indicator, total_str, fee_str, farm_str, 
+                tvl_str, fees_24h_str, vol_str
+            )
 
-        logger.info("SundaeSwap collection complete. Snapshots inserted: %s", inserted)
+        logger.info(
+            "SundaeSwap collection complete. Snapshots inserted: %s (%s with farming rewards)", 
+            inserted, farms_count
+        )
         return 0
 
     except Exception as exc:
