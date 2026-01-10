@@ -178,11 +178,25 @@
     .page-header h2 {
         margin: 0;
         font-size: 1.75rem;
+        color: var(--sand-dune);
     }
     .page-header-subtitle {
-        color: var(--text-secondary);
+        color: var(--sand-dune);
         font-size: 0.95rem;
         margin: 0;
+    }
+    
+    /* Filter row */
+    .filter-row {
+        background-color: var(--sand-dune);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-left: 0;
+        margin-right: 0;
+    }
+    .filter-row .form-label {
+        color: var(--carbon-black);
+        font-weight: 500;
     }
     
     /* Reward Breakdown Pie Charts */
@@ -190,7 +204,7 @@
         margin-top: 2rem;
     }
     .breakdown-section h4 {
-        color: var(--text-primary);
+        color: var(--sand-dune);
         margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
@@ -317,7 +331,7 @@
     </div>
 </div>
 
-<div class="row mb-4 g-3">
+<div class="row mb-4 g-3 filter-row">
     <div class="col-md-2">
         <label class="form-label">Time Range</label>
         <select id="timeRange" class="form-select">
@@ -952,20 +966,20 @@ async function handleSaveChart(event) {
 const breakdownCharts = {};
 const breakdownProtocolData = {}; // Store per-protocol data for filtering
 
-// Protocol colors
+// Protocol colors - consistent across all protocols
 const protocolBreakdownColors = {
     'minswap': {
-        fees: '#4ade80',
-        farm: '#f59e0b'
+        fees: '#0E8749',
+        farm: '#F74B03'
     },
     'sundaeswap': {
-        fees: '#60a5fa',
-        farm: '#a78bfa'
+        fees: '#0E8749',
+        farm: '#F74B03'
     },
     'wingriders': {
-        fees: '#14b8a6',
+        fees: '#0E8749',
         staking: '#06b6d4',
-        farm: '#ec4899'
+        farm: '#F74B03'
     }
 };
 
@@ -1140,7 +1154,7 @@ function renderBreakdownCharts() {
         // Store for later use
         breakdownProtocolData[index] = data;
         
-        const colors = protocolBreakdownColors[data.protocol] || { fees: '#4ade80', farm: '#f59e0b' };
+        const colors = protocolBreakdownColors[data.protocol] || { fees: '#0E8749', farm: '#F74B03' };
         const logo = protocolLogos[data.protocol] || '';
         
         // Build pool options for dropdown (sorted by total APR descending)
@@ -1232,7 +1246,7 @@ function updateBreakdownChart(index) {
         }
     }
     
-    const colors = protocolBreakdownColors[data.protocol] || { fees: '#4ade80', farm: '#f59e0b' };
+    const colors = protocolBreakdownColors[data.protocol] || { fees: '#0E8749', farm: '#F74B03' };
     
     // Update legend
     const legendContainer = document.getElementById(`breakdownLegend${index}`);
