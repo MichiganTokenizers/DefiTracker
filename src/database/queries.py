@@ -180,7 +180,10 @@ class DatabaseQueries:
                            fees_24h: Optional[Decimal] = None,
                            volume_24h: Optional[Decimal] = None,
                            version: Optional[str] = None,
-                           apr_1d: Optional[Decimal] = None) -> int:
+                           apr_1d: Optional[Decimal] = None,
+                           fee_apr: Optional[Decimal] = None,
+                           staking_apr: Optional[Decimal] = None,
+                           farm_apr: Optional[Decimal] = None) -> int:
         """Insert a new APR snapshot
         
         Args:
@@ -190,6 +193,9 @@ class DatabaseQueries:
             volume_24h: Trading volume in last 24 hours (USD) - for DEX pools
             version: Protocol version for LP pools (e.g., V1, V3 for SundaeSwap)
             apr_1d: Calculated 1-day APR (trading_fee_24h / TVL * 365 * 100) - for Minswap
+            fee_apr: Trading fee APR component (percentage)
+            staking_apr: Staking rewards APR component (e.g., embedded ADA staking)
+            farm_apr: Farm/yield farming rewards APR component (token emissions)
         """
         if timestamp is None:
             timestamp = datetime.utcnow()
@@ -199,10 +205,10 @@ class DatabaseQueries:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO apr_snapshots 
-                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING snapshot_id""",
-                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d)
+                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr)
                 )
                 snapshot_id = cur.fetchone()[0]
                 conn.commit()

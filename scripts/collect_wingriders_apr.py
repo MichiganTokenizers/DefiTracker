@@ -131,6 +131,9 @@ def collect_and_store_wingriders():
                 tvl_usd=pool.tvl_usd,
                 version=pool.version,
                 apr_1d=apr_1d,
+                fee_apr=fees_apr,
+                staking_apr=staking_apr,
+                farm_apr=farm_apr,
             )
             inserted += 1
             if pool.has_farm:

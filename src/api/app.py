@@ -316,7 +316,11 @@ def api_get_all_history_for_chain(chain):
                     s.yield_type,
                     s.tvl_usd,
                     s.version,
-                    s.apr_1d
+                    s.apr_1d,
+                    s.fees_24h,
+                    s.fee_apr,
+                    s.staking_apr,
+                    s.farm_apr
                 FROM apr_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
                 JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -344,6 +348,10 @@ def api_get_all_history_for_chain(chain):
                 tvl_usd = row[5]
                 version = row[6]
                 apr_1d = row[7]
+                fees_24h = row[8]
+                fee_apr = row[9]
+                staking_apr = row[10]
+                farm_apr = row[11]
                 
                 if apr_value is None:
                     continue
@@ -366,7 +374,11 @@ def api_get_all_history_for_chain(chain):
                     'timestamp': timestamp.isoformat(),
                     'apr': float(apr_value),
                     'tvl_usd': float(tvl_usd) if tvl_usd else None,
-                    'apr_1d': float(apr_1d) if apr_1d else None
+                    'apr_1d': float(apr_1d) if apr_1d else None,
+                    'fees_24h': float(fees_24h) if fees_24h else None,
+                    'fee_apr': float(fee_apr) if fee_apr else None,
+                    'staking_apr': float(staking_apr) if staking_apr else None,
+                    'farm_apr': float(farm_apr) if farm_apr else None
                 })
             
         return jsonify(list(data.values()))

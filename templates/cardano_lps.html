@@ -184,6 +184,105 @@
         font-size: 0.95rem;
         margin: 0;
     }
+    
+    /* Reward Breakdown Pie Charts */
+    .breakdown-section {
+        margin-top: 2rem;
+    }
+    .breakdown-section h4 {
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .breakdown-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 16px;
+        padding: 1.5rem;
+        height: 100%;
+        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.1);
+    }
+    .breakdown-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .breakdown-card-header img {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+    }
+    .breakdown-card-header h5 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--carbon-black);
+        text-transform: capitalize;
+    }
+    .breakdown-card-meta {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-left: auto;
+    }
+    .breakdown-chart-container {
+        position: relative;
+        height: 180px;
+        margin-bottom: 1rem;
+    }
+    .breakdown-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .breakdown-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+    }
+    .breakdown-legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        flex-shrink: 0;
+    }
+    .breakdown-legend-label {
+        color: var(--text-secondary);
+        flex: 1;
+    }
+    .breakdown-legend-value {
+        font-weight: 600;
+        color: var(--carbon-black);
+    }
+    .breakdown-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 200px;
+        color: var(--text-secondary);
+    }
+    .breakdown-filter {
+        margin-bottom: 1rem;
+    }
+    .breakdown-filter select {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        border: 1px solid rgba(0,0,0,0.15);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--carbon-black);
+        cursor: pointer;
+    }
+    .breakdown-filter select:focus {
+        outline: none;
+        border-color: var(--sea-green);
+        box-shadow: 0 0 0 2px rgba(14, 135, 73, 0.15);
+    }
 </style>
 {% endblock %}
 
@@ -293,6 +392,18 @@
                         <!-- Populated by JS -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reward Breakdown Pie Charts -->
+<div class="breakdown-section">
+    <h4>🥧 Reward Source Breakdown <small class="text-muted" style="font-size: 0.75rem; font-weight: normal;">(1-day APR, TVL-weighted averages)</small></h4>
+    <div class="row g-4" id="breakdownCharts">
+        <div class="col-12">
+            <div class="breakdown-loading">
+                <span>Loading reward breakdown...</span>
             </div>
         </div>
     </div>
@@ -756,7 +867,11 @@ document.querySelectorAll('input[name="aprType"]').forEach(radio => {
     });
 });
 
-loadAssets().then(loadChart);
+loadAssets().then(() => {
+    loadChart();
+    // Render breakdown charts after history data is loaded
+    setTimeout(renderBreakdownCharts, 500);
+});
 
 // Save Chart functionality
 function saveCurrentChart() {
@@ -812,6 +927,365 @@ async function handleSaveChart(event) {
         alert.className = 'alert alert-danger';
         alert.classList.remove('d-none');
     }
+}
+
+// Breakdown pie charts
+const breakdownCharts = {};
+const breakdownProtocolData = {}; // Store per-protocol data for filtering
+
+// Protocol colors
+const protocolBreakdownColors = {
+    'minswap': {
+        fees: '#4ade80',
+        farm: '#f59e0b'
+    },
+    'sundaeswap': {
+        fees: '#60a5fa',
+        farm: '#a78bfa'
+    },
+    'wingriders': {
+        fees: '#14b8a6',
+        staking: '#06b6d4',
+        farm: '#ec4899'
+    }
+};
+
+function renderBreakdownCharts() {
+    const container = document.getElementById('breakdownCharts');
+    
+    if (!allHistoryData || allHistoryData.length === 0) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="breakdown-loading">
+                    <span>No data available for breakdown</span>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Group data by protocol and calculate breakdown
+    const protocolBreakdowns = {};
+    
+    allHistoryData.forEach(assetData => {
+        const protocol = assetData.protocol;
+        const latestData = assetData.data[assetData.data.length - 1];
+        
+        if (!latestData) return;
+        
+        if (!protocolBreakdowns[protocol]) {
+            protocolBreakdowns[protocol] = {
+                protocol: protocol,
+                pools: [],
+                totalTvl: 0,
+                totalFeeApr: 0,
+                totalFarmApr: 0
+            };
+        }
+        
+        const tvl = latestData.tvl_usd || 0;
+        const apr = latestData.apr || 0;      // 30-day APR (total for SundaeSwap)
+        const apr1d = latestData.apr_1d || 0; // 1-day APR
+        const fees24h = latestData.fees_24h || 0;
+        
+        let feeApr = 0;
+        let farmApr = 0;
+        let totalApr = 0;
+        
+        // Protocol-specific breakdown logic
+        if (protocol === 'sundaeswap') {
+            // SundaeSwap: apr_1d = HRA (fees only), apr = total (fees + SUNDAE farming)
+            feeApr = apr1d;
+            farmApr = Math.max(0, apr - apr1d);
+            totalApr = apr;
+        } else if (protocol === 'minswap') {
+            // Minswap: apr_1d = total (fees + MIN farming), calculate fees from fees_24h
+            if (tvl > 0 && fees24h > 0) {
+                feeApr = (fees24h / tvl) * 365 * 100;
+            }
+            farmApr = Math.max(0, apr1d - feeApr);
+            totalApr = apr1d > 0 ? apr1d : apr;
+        } else if (protocol === 'wingriders') {
+            // WingRiders: use stored breakdown if available, otherwise fallback
+            if (latestData.fee_apr != null) {
+                feeApr = latestData.fee_apr;
+                farmApr = latestData.farm_apr || 0;
+                totalApr = apr; // Use stored total
+            } else {
+                // Fallback for old data without breakdown
+                feeApr = apr;
+                farmApr = 0;
+                totalApr = apr;
+            }
+        } else {
+            // Default fallback
+            if (tvl > 0 && fees24h > 0) {
+                feeApr = (fees24h / tvl) * 365 * 100;
+                farmApr = Math.max(0, (apr1d || apr) - feeApr);
+            } else {
+                feeApr = apr1d || apr;
+                farmApr = 0;
+            }
+            totalApr = apr1d || apr;
+        }
+        
+        // Track staking APR separately for WingRiders
+        const stakingApr = (protocol === 'wingriders' && latestData.staking_apr != null) 
+            ? latestData.staking_apr 
+            : 0;
+        
+        protocolBreakdowns[protocol].pools.push({
+            symbol: assetData.symbol,
+            tvl: tvl,
+            feeApr: feeApr,
+            stakingApr: stakingApr,
+            farmApr: farmApr,
+            totalApr: totalApr
+        });
+        
+        protocolBreakdowns[protocol].totalTvl += tvl;
+    });
+    
+    // Calculate TVL-weighted averages for each protocol
+    const protocolData = Object.values(protocolBreakdowns).map(p => {
+        let weightedFeeApr = 0;
+        let weightedStakingApr = 0;
+        let weightedFarmApr = 0;
+        
+        if (p.totalTvl > 0) {
+            p.pools.forEach(pool => {
+                const weight = pool.tvl / p.totalTvl;
+                weightedFeeApr += pool.feeApr * weight;
+                weightedStakingApr += (pool.stakingApr || 0) * weight;
+                weightedFarmApr += pool.farmApr * weight;
+            });
+        } else if (p.pools.length > 0) {
+            // Simple average if no TVL data
+            weightedFeeApr = p.pools.reduce((sum, pool) => sum + pool.feeApr, 0) / p.pools.length;
+            weightedStakingApr = p.pools.reduce((sum, pool) => sum + (pool.stakingApr || 0), 0) / p.pools.length;
+            weightedFarmApr = p.pools.reduce((sum, pool) => sum + pool.farmApr, 0) / p.pools.length;
+        }
+        
+        return {
+            protocol: p.protocol,
+            poolCount: p.pools.length,
+            totalTvl: p.totalTvl,
+            pools: p.pools, // Include pools for dropdown filter
+            feeApr: weightedFeeApr,
+            stakingApr: weightedStakingApr,
+            farmApr: weightedFarmApr,
+            totalApr: weightedFeeApr + weightedStakingApr + weightedFarmApr
+        };
+    }).filter(p => p.totalApr > 0);
+    
+    if (protocolData.length === 0) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="breakdown-loading">
+                    <span>No breakdown data available</span>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Store protocol data for filtering and build cards HTML
+    let html = '';
+    protocolData.forEach((data, index) => {
+        // Store for later use
+        breakdownProtocolData[index] = data;
+        
+        const colors = protocolBreakdownColors[data.protocol] || { fees: '#4ade80', farm: '#f59e0b' };
+        const logo = protocolLogos[data.protocol] || '';
+        
+        // Build pool options for dropdown (sorted by total APR descending)
+        const sortedPools = [...data.pools].sort((a, b) => b.totalApr - a.totalApr);
+        const poolOptions = sortedPools.map(p => 
+            `<option value="${p.symbol}">${p.symbol} (${p.totalApr.toFixed(1)}%)</option>`
+        ).join('');
+        
+        html += `
+            <div class="col-md-4">
+                <div class="breakdown-card">
+                    <div class="breakdown-card-header">
+                        <img src="${logo}" alt="${data.protocol}" onerror="this.style.display='none'">
+                        <h5>${data.protocol}</h5>
+                        <span class="breakdown-card-meta">${data.poolCount} pools</span>
+                    </div>
+                    <div class="breakdown-filter">
+                        <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
+                            <option value="all">All Pools (TVL-weighted avg)</option>
+                            ${poolOptions}
+                        </select>
+                    </div>
+                    <div class="breakdown-chart-container">
+                        <canvas id="breakdownChart${index}"></canvas>
+                    </div>
+                    <div class="breakdown-legend" id="breakdownLegend${index}">
+                        <!-- Legend populated by JS -->
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Initial render of all charts with "All Pools" selected
+    protocolData.forEach((data, index) => {
+        updateBreakdownChart(index);
+    });
+}
+
+function updateBreakdownChart(index) {
+    const data = breakdownProtocolData[index];
+    if (!data) return;
+    
+    const filterSelect = document.getElementById(`breakdownFilter${index}`);
+    const selectedValue = filterSelect ? filterSelect.value : 'all';
+    
+    let displayData;
+    
+    if (selectedValue === 'all') {
+        // Use TVL-weighted averages
+        displayData = {
+            feeApr: data.feeApr,
+            stakingApr: data.stakingApr,
+            farmApr: data.farmApr,
+            totalApr: data.totalApr
+        };
+    } else {
+        // Find the specific pool
+        const pool = data.pools.find(p => p.symbol === selectedValue);
+        if (pool) {
+            displayData = {
+                feeApr: pool.feeApr,
+                stakingApr: pool.stakingApr || 0,
+                farmApr: pool.farmApr,
+                totalApr: pool.totalApr
+            };
+        } else {
+            displayData = { feeApr: 0, stakingApr: 0, farmApr: 0, totalApr: 0 };
+        }
+    }
+    
+    const colors = protocolBreakdownColors[data.protocol] || { fees: '#4ade80', farm: '#f59e0b' };
+    
+    // Update legend
+    const legendContainer = document.getElementById(`breakdownLegend${index}`);
+    if (legendContainer) {
+        const hasStaking = displayData.stakingApr > 0.01;
+        const hasFarm = displayData.farmApr > 0.01;
+        
+        legendContainer.innerHTML = `
+            <div class="breakdown-legend-item">
+                <span class="breakdown-legend-color" style="background: ${colors.fees}"></span>
+                <span class="breakdown-legend-label">Trading Fees</span>
+                <span class="breakdown-legend-value">${displayData.feeApr.toFixed(2)}%</span>
+            </div>
+            ${hasStaking ? `
+            <div class="breakdown-legend-item">
+                <span class="breakdown-legend-color" style="background: ${colors.staking || '#06b6d4'}"></span>
+                <span class="breakdown-legend-label">ADA Staking</span>
+                <span class="breakdown-legend-value">${displayData.stakingApr.toFixed(2)}%</span>
+            </div>
+            ` : ''}
+            ${hasFarm ? `
+            <div class="breakdown-legend-item">
+                <span class="breakdown-legend-color" style="background: ${colors.farm}"></span>
+                <span class="breakdown-legend-label">Farm Rewards</span>
+                <span class="breakdown-legend-value">${displayData.farmApr.toFixed(2)}%</span>
+            </div>
+            ` : ''}
+            <div class="breakdown-legend-item" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.08);">
+                <span class="breakdown-legend-color" style="background: transparent"></span>
+                <span class="breakdown-legend-label"><strong>Total APR</strong></span>
+                <span class="breakdown-legend-value" style="color: var(--sea-green);">${displayData.totalApr.toFixed(2)}%</span>
+            </div>
+        `;
+    }
+    
+    // Update chart
+    const ctx = document.getElementById(`breakdownChart${index}`);
+    if (!ctx) return;
+    
+    // Destroy existing chart if any
+    if (breakdownCharts[index]) {
+        breakdownCharts[index].destroy();
+    }
+    
+    // Build chart data dynamically based on what components exist
+    const chartData = [];
+    const chartColors = [];
+    const chartLabels = [];
+    
+    // Always include fees if > 0
+    if (displayData.feeApr > 0.001) {
+        chartData.push(displayData.feeApr);
+        chartColors.push(colors.fees);
+        chartLabels.push('Trading Fees');
+    }
+    
+    // Include staking if significant (WingRiders)
+    if (displayData.stakingApr > 0.01) {
+        chartData.push(displayData.stakingApr);
+        chartColors.push(colors.staking || '#06b6d4');
+        chartLabels.push('ADA Staking');
+    }
+    
+    // Include farm rewards if significant
+    if (displayData.farmApr > 0.01) {
+        chartData.push(displayData.farmApr);
+        chartColors.push(colors.farm);
+        chartLabels.push('Farm Rewards');
+    }
+    
+    // Skip if no data
+    if (chartData.length === 0) {
+        chartData.push(1);
+        chartColors.push('#e5e7eb');
+        chartLabels.push('No Data');
+    }
+    
+    breakdownCharts[index] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                data: chartData,
+                backgroundColor: chartColors,
+                borderColor: 'rgba(255,255,255,0.9)',
+                borderWidth: 2,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: {
+                    display: false,
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            if (context.label === 'No Data') return 'No breakdown data';
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.raw / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.raw.toFixed(2)}% (${percentage}% of total)`;
+                        }
+                    }
+                }
+            },
+            animation: {
+                animateScale: true,
+                animateRotate: true,
+                duration: 500,
+                easing: 'easeOutQuart'
+            }
+        }
+    });
 }
 </script>
 {% endblock %}
