@@ -105,6 +105,7 @@ def collect_and_store_minswap():
                 fees_24h=metrics.fees_24h,
                 volume_24h=metrics.volume_24h,
                 apr_1d=metrics.apr_1d,
+                swap_fee_percent=metrics.swap_fee_percent,
             )
             inserted += 1
             

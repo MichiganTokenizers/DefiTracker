@@ -133,6 +133,7 @@ def collect_and_store_sundaeswap():
                 volume_24h=pool.volume_24h_usd,
                 version=pool.version,
                 apr_1d=apr_1d,
+                swap_fee_percent=pool.fee_percent,
             )
             inserted += 1
             if pool.has_farm:

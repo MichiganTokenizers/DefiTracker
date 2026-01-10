@@ -134,6 +134,7 @@ def collect_and_store_wingriders():
                 fee_apr=fees_apr,
                 staking_apr=staking_apr,
                 farm_apr=farm_apr,
+                swap_fee_percent=pool.swap_fee_percent,
             )
             inserted += 1
             if pool.has_farm:

@@ -30,6 +30,7 @@ class PoolMetrics:
     tvl_usd: Optional[Decimal] = None
     fees_24h: Optional[Decimal] = None
     volume_24h: Optional[Decimal] = None
+    swap_fee_percent: Optional[Decimal] = None  # Swap fee percentage (e.g., 0.30 for 0.30%)
 
 
 class MinswapAdapter(ProtocolAdapter):
@@ -217,6 +218,14 @@ class MinswapAdapter(ProtocolAdapter):
                 metrics.volume_24h = Decimal(str(volume_value))
             except Exception:
                 logger.error("Could not convert volume_24h value %s for %s", volume_value, asset)
+
+        # Extract swap fee (trading_fee_tier is an array like [0.3, 0.3] for buy/sell)
+        swap_fee = self._extract_swap_fee(payload)
+        if swap_fee is not None:
+            try:
+                metrics.swap_fee_percent = Decimal(str(swap_fee))
+            except Exception:
+                logger.error("Could not convert swap_fee value %s for %s", swap_fee, asset)
 
         # Calculate 1-day trading fee APR
         if metrics.fees_24h is not None and metrics.tvl_usd is not None and metrics.tvl_usd > 0:
@@ -506,6 +515,32 @@ class MinswapAdapter(ProtocolAdapter):
                 value = self._extract_field(nested_value, candidate_keys)
                 if value is not None:
                     return value
+
+        return None
+
+    def _extract_swap_fee(self, payload: Dict) -> Optional[float]:
+        """
+        Extract swap fee percentage from the API payload.
+        
+        Minswap uses 'trading_fee_tier' which is an array like [0.3, 0.3]
+        where the first element is the buy fee and the second is the sell fee.
+        We return the first element (typically same for buy/sell).
+        """
+        if not isinstance(payload, dict):
+            return None
+
+        # Try direct key
+        fee_tier = payload.get('trading_fee_tier')
+        if fee_tier is not None and isinstance(fee_tier, list) and len(fee_tier) > 0:
+            return fee_tier[0]
+
+        # Try nested locations
+        for nested in ("pool", "statistics", "data"):
+            nested_value = payload.get(nested)
+            if isinstance(nested_value, dict):
+                fee_tier = nested_value.get('trading_fee_tier')
+                if fee_tier is not None and isinstance(fee_tier, list) and len(fee_tier) > 0:
+                    return fee_tier[0]
 
         return None
 

@@ -183,7 +183,8 @@ class DatabaseQueries:
                            apr_1d: Optional[Decimal] = None,
                            fee_apr: Optional[Decimal] = None,
                            staking_apr: Optional[Decimal] = None,
-                           farm_apr: Optional[Decimal] = None) -> int:
+                           farm_apr: Optional[Decimal] = None,
+                           swap_fee_percent: Optional[Decimal] = None) -> int:
         """Insert a new APR snapshot
         
         Args:
@@ -196,6 +197,7 @@ class DatabaseQueries:
             fee_apr: Trading fee APR component (percentage)
             staking_apr: Staking rewards APR component (e.g., embedded ADA staking)
             farm_apr: Farm/yield farming rewards APR component (token emissions)
+            swap_fee_percent: Swap/trading fee percentage (e.g., 0.30 for 0.30%)
         """
         if timestamp is None:
             timestamp = datetime.utcnow()
@@ -205,10 +207,10 @@ class DatabaseQueries:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO apr_snapshots 
-                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr, swap_fee_percent)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING snapshot_id""",
-                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr)
+                    (blockchain_id, protocol_id, asset_id, apr, timestamp, yield_type, tvl_usd, fees_24h, volume_24h, version, apr_1d, fee_apr, staking_apr, farm_apr, swap_fee_percent)
                 )
                 snapshot_id = cur.fetchone()[0]
                 conn.commit()

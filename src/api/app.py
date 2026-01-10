@@ -320,7 +320,8 @@ def api_get_all_history_for_chain(chain):
                     s.fees_24h,
                     s.fee_apr,
                     s.staking_apr,
-                    s.farm_apr
+                    s.farm_apr,
+                    s.swap_fee_percent
                 FROM apr_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
                 JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -352,6 +353,7 @@ def api_get_all_history_for_chain(chain):
                 fee_apr = row[9]
                 staking_apr = row[10]
                 farm_apr = row[11]
+                swap_fee_percent = row[12]
                 
                 if apr_value is None:
                     continue
@@ -378,7 +380,8 @@ def api_get_all_history_for_chain(chain):
                     'fees_24h': float(fees_24h) if fees_24h else None,
                     'fee_apr': float(fee_apr) if fee_apr else None,
                     'staking_apr': float(staking_apr) if staking_apr else None,
-                    'farm_apr': float(farm_apr) if farm_apr else None
+                    'farm_apr': float(farm_apr) if farm_apr else None,
+                    'swap_fee_percent': float(swap_fee_percent) if swap_fee_percent else None
                 })
             
         return jsonify(list(data.values()))

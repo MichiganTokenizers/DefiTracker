@@ -49,6 +49,8 @@ POOLS_QUERY = """
         tvlInAda
         feesAPR
         stakingAPR(timeframe: CURRENT_EPOCH)
+        swapFeeInBasis
+        feeBasis
       }
     }
     metadata {
@@ -105,6 +107,7 @@ class WingRidersPoolMetrics:
     ticker_a: str = ""
     ticker_b: str = ""
     has_farm: bool = False  # Whether pool has active farm
+    swap_fee_percent: Optional[Decimal] = None  # Swap fee percentage (e.g., 0.30 for 0.30%)
 
 
 class WingRidersAdapter(ProtocolAdapter):
@@ -372,6 +375,17 @@ class WingRidersAdapter(ProtocolAdapter):
                 
                 # Total APR = fees + staking + farm + boosting
                 total_apr = fees_apr + staking_apr + farm_apr + boosting_apr
+                
+                # Parse swap fee (V2 pools have swapFeeInBasis/feeBasis, V1 use default 0.3%)
+                swap_fee_percent = None
+                swap_fee_basis = p.get("swapFeeInBasis")
+                fee_basis = p.get("feeBasis")
+                if swap_fee_basis is not None and fee_basis is not None and fee_basis > 0:
+                    # Convert basis points to percentage (e.g., 30/10000 = 0.003 -> 0.30%)
+                    swap_fee_percent = Decimal(str(swap_fee_basis)) / Decimal(str(fee_basis)) * Decimal(100)
+                elif version == "V1":
+                    # V1 pools have a fixed 0.3% swap fee
+                    swap_fee_percent = Decimal("0.30")
 
                 # Parse reserves
                 reserve_a = Decimal(token_a.get("quantity", 0)) if token_a.get("quantity") else None
@@ -393,6 +407,7 @@ class WingRidersAdapter(ProtocolAdapter):
                     ticker_a=ticker_a,
                     ticker_b=ticker_b,
                     has_farm=has_farm,
+                    swap_fee_percent=swap_fee_percent,
                 )
                 pools.append(pool_metrics)
                 seen_pairs.add(pair_key)

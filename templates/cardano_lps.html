@@ -233,6 +233,25 @@
         height: 180px;
         margin-bottom: 1rem;
     }
+    .breakdown-chart-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        pointer-events: none;
+    }
+    .breakdown-chart-center .swap-fee-label {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .breakdown-chart-center .swap-fee-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
     .breakdown-legend {
         display: flex;
         flex-direction: column;
@@ -1034,13 +1053,17 @@ function renderBreakdownCharts() {
             ? latestData.staking_apr 
             : 0;
         
+        // Swap fee percentage from API (e.g., 0.30 for 0.30%)
+        const swapFeePercent = latestData.swap_fee_percent || null;
+        
         protocolBreakdowns[protocol].pools.push({
             symbol: assetData.symbol,
             tvl: tvl,
             feeApr: feeApr,
             stakingApr: stakingApr,
             farmApr: farmApr,
-            totalApr: totalApr
+            totalApr: totalApr,
+            swapFeePercent: swapFeePercent
         });
         
         protocolBreakdowns[protocol].totalTvl += tvl;
@@ -1066,6 +1089,27 @@ function renderBreakdownCharts() {
             weightedFarmApr = p.pools.reduce((sum, pool) => sum + pool.farmApr, 0) / p.pools.length;
         }
         
+        // Find the most common swap fee (mode) for "All Pools" display
+        // This is typically consistent per protocol (0.3% for most DEXs)
+        const swapFees = p.pools.map(pool => pool.swapFeePercent).filter(f => f != null);
+        let mostCommonSwapFee = null;
+        if (swapFees.length > 0) {
+            // Count occurrences
+            const counts = {};
+            swapFees.forEach(fee => {
+                const key = fee.toFixed(2);
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            // Get the most common
+            let maxCount = 0;
+            for (const [key, count] of Object.entries(counts)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostCommonSwapFee = parseFloat(key);
+                }
+            }
+        }
+        
         return {
             protocol: p.protocol,
             poolCount: p.pools.length,
@@ -1074,7 +1118,8 @@ function renderBreakdownCharts() {
             feeApr: weightedFeeApr,
             stakingApr: weightedStakingApr,
             farmApr: weightedFarmApr,
-            totalApr: weightedFeeApr + weightedStakingApr + weightedFarmApr
+            totalApr: weightedFeeApr + weightedStakingApr + weightedFarmApr,
+            swapFeePercent: mostCommonSwapFee
         };
     }).filter(p => p.totalApr > 0);
     
@@ -1120,6 +1165,9 @@ function renderBreakdownCharts() {
                     </div>
                     <div class="breakdown-chart-container">
                         <canvas id="breakdownChart${index}"></canvas>
+                        <div class="breakdown-chart-center" id="breakdownChartCenter${index}">
+                            <!-- Swap fee displayed here -->
+                        </div>
                     </div>
                     <div class="breakdown-legend" id="breakdownLegend${index}">
                         <!-- Legend populated by JS -->
@@ -1152,7 +1200,8 @@ function updateBreakdownChart(index) {
             feeApr: data.feeApr,
             stakingApr: data.stakingApr,
             farmApr: data.farmApr,
-            totalApr: data.totalApr
+            totalApr: data.totalApr,
+            swapFeePercent: data.swapFeePercent
         };
     } else {
         // Find the specific pool
@@ -1162,10 +1211,24 @@ function updateBreakdownChart(index) {
                 feeApr: pool.feeApr,
                 stakingApr: pool.stakingApr || 0,
                 farmApr: pool.farmApr,
-                totalApr: pool.totalApr
+                totalApr: pool.totalApr,
+                swapFeePercent: pool.swapFeePercent
             };
         } else {
-            displayData = { feeApr: 0, stakingApr: 0, farmApr: 0, totalApr: 0 };
+            displayData = { feeApr: 0, stakingApr: 0, farmApr: 0, totalApr: 0, swapFeePercent: null };
+        }
+    }
+    
+    // Update center text with swap fee
+    const centerContainer = document.getElementById(`breakdownChartCenter${index}`);
+    if (centerContainer) {
+        if (displayData.swapFeePercent != null) {
+            centerContainer.innerHTML = `
+                <div class="swap-fee-label">Swap Fee</div>
+                <div class="swap-fee-value">${displayData.swapFeePercent.toFixed(2)}%</div>
+            `;
+        } else {
+            centerContainer.innerHTML = '';
         }
     }
     
@@ -1186,7 +1249,7 @@ function updateBreakdownChart(index) {
             ${hasStaking ? `
             <div class="breakdown-legend-item">
                 <span class="breakdown-legend-color" style="background: ${colors.staking || '#06b6d4'}"></span>
-                <span class="breakdown-legend-label">ADA Staking</span>
+                <span class="breakdown-legend-label">${data.protocol === 'wingriders' ? 'NFT Bonus' : 'ADA Staking'}</span>
                 <span class="breakdown-legend-value">${displayData.stakingApr.toFixed(2)}%</span>
             </div>
             ` : ''}
@@ -1230,7 +1293,7 @@ function updateBreakdownChart(index) {
     if (displayData.stakingApr > 0.01) {
         chartData.push(displayData.stakingApr);
         chartColors.push(colors.staking || '#06b6d4');
-        chartLabels.push('ADA Staking');
+        chartLabels.push(data.protocol === 'wingriders' ? 'NFT Bonus' : 'ADA Staking');
     }
     
     // Include farm rewards if significant
