@@ -310,10 +310,32 @@
         border-color: var(--sea-green);
         box-shadow: 0 0 0 2px rgba(14, 135, 73, 0.15);
     }
+    
+    /* External HTML tooltip for pie charts */
+    .chart-tooltip {
+        position: fixed;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        pointer-events: none;
+        z-index: 99999;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        white-space: nowrap;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .chart-tooltip.visible {
+        opacity: 1;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- External tooltip container -->
+<div id="pieChartTooltip" class="chart-tooltip"></div>
+
 <!-- Save Chart Modal -->
 <div class="modal fade" id="saveChartModal" tabindex="-1">
     <div class="modal-dialog">
@@ -1357,13 +1379,38 @@ function updateBreakdownChart(index) {
                     display: false,
                 },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            if (context.label === 'No Data') return 'No breakdown data';
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((context.raw / total) * 100).toFixed(1);
-                            return `${context.label}: ${context.raw.toFixed(2)}% (${percentage}% of total)`;
+                    enabled: false,
+                    external: function(context) {
+                        const tooltipEl = document.getElementById('pieChartTooltip');
+                        const tooltipModel = context.tooltip;
+                        
+                        // Hide if no tooltip
+                        if (tooltipModel.opacity === 0) {
+                            tooltipEl.classList.remove('visible');
+                            return;
                         }
+                        
+                        // Set content
+                        if (tooltipModel.body) {
+                            const dataIndex = tooltipModel.dataPoints[0].dataIndex;
+                            const label = tooltipModel.dataPoints[0].label;
+                            const value = tooltipModel.dataPoints[0].raw;
+                            
+                            if (label === 'No Data') {
+                                tooltipEl.innerHTML = 'No breakdown data';
+                            } else {
+                                const total = tooltipModel.dataPoints[0].dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                tooltipEl.innerHTML = `<strong>${label}</strong><br>${value.toFixed(2)}% (${percentage}% of total)`;
+                            }
+                        }
+                        
+                        // Position tooltip
+                        const canvas = context.chart.canvas;
+                        const rect = canvas.getBoundingClientRect();
+                        tooltipEl.style.left = (rect.left + window.scrollX + tooltipModel.caretX + 10) + 'px';
+                        tooltipEl.style.top = (rect.top + window.scrollY + tooltipModel.caretY - 10) + 'px';
+                        tooltipEl.classList.add('visible');
                     }
                 }
             },
