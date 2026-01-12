@@ -420,9 +420,9 @@
                     <thead>
                         <tr>
                             <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
-                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APR (1d)</th>
-                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">APR (30d) ↓</th>
-                            <th style="cursor: pointer;" onclick="sortTable(3)" id="th-3">24h Change</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APR (30d) ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
+                            <th style="cursor: pointer;" onclick="sortTable(3)" id="th-3">Volume (1d)</th>
                         </tr>
                     </thead>
                     <tbody id="currentAprs">
@@ -452,7 +452,7 @@
 const chain = "{{ chain }}";
 const yieldType = "{{ yield_type }}";
 let chart = null;
-let currentSortColumn = 2;
+let currentSortColumn = 1;
 let currentSortDirection = 'desc';
 let allAssets = [];
 let selectedAssets = new Set();
@@ -753,9 +753,10 @@ function updateCurrentAprs(data) {
         const latest = relevantData[relevantData.length - 1];
         if (!latest) return null;
         
-        // Get both APR values
+        // Get both APR values and volume
         const apr1d = latest.apr_1d;
         const apr30d = latest.apr;
+        const volume24h = latest.volume_24h;
         
         if (apr30d == null) return null;
         
@@ -788,7 +789,8 @@ function updateCurrentAprs(data) {
             apr1d: apr1d,
             apr30d: apr30d,
             tvl_usd: latest.tvl_usd,
-            change24h: change24h
+            change24h: change24h,
+            volume24h: volume24h
         };
     }).filter(x => x !== null);
     
@@ -802,6 +804,8 @@ function applySortToTable() {
     
     let sorted = [...window.tableData];
     
+    const is1d = selectedAprType === '1d';
+    
     sorted.sort((a, b) => {
         let aVal, bVal;
         
@@ -812,23 +816,35 @@ function applySortToTable() {
                 const cmp = aVal.localeCompare(bVal);
                 return currentSortDirection === 'asc' ? cmp : -cmp;
             case 1:
-                aVal = a.apr1d ?? -Infinity;
-                bVal = b.apr1d ?? -Infinity;
+                aVal = is1d ? (a.apr1d ?? -Infinity) : (a.apr30d ?? -Infinity);
+                bVal = is1d ? (b.apr1d ?? -Infinity) : (b.apr30d ?? -Infinity);
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             case 2:
-                aVal = a.apr30d ?? -Infinity;
-                bVal = b.apr30d ?? -Infinity;
-                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-            case 3:
                 aVal = a.change24h ?? -Infinity;
                 bVal = b.change24h ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            case 3:
+                aVal = a.volume24h ?? -Infinity;
+                bVal = b.volume24h ?? -Infinity;
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             default:
                 return 0;
         }
     });
     
+    // Update APR column header based on toggle
+    const aprHeader = document.getElementById('th-1');
+    if (aprHeader) {
+        let aprText = is1d ? 'APR (1d)' : 'APR (30d)';
+        if (currentSortColumn === 1) {
+            aprText += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+        }
+        aprHeader.textContent = aprText;
+    }
+    
+    // Update other column headers for sort indicators
     for (let i = 0; i < 4; i++) {
+        if (i === 1) continue; // APR header already updated above
         const th = document.getElementById(`th-${i}`);
         if (th) {
             let text = th.textContent.replace(/ [↑↓]/g, '');
@@ -851,17 +867,18 @@ function applySortToTable() {
         
         const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
         const versionStr = item.version ? ` ${item.version}` : '';
-        const apr1dDisplay = item.apr1d != null ? `${item.apr1d.toFixed(2)}%` : '-';
-        const apr30dDisplay = item.apr30d != null ? `${item.apr30d.toFixed(2)}%` : '-';
+        const aprValue = is1d ? item.apr1d : item.apr30d;
+        const aprDisplay = aprValue != null ? `${aprValue.toFixed(2)}%` : '-';
+        const volumeDisplay = item.volume24h != null ? formatVolume(item.volume24h) : '-';
         
         row.innerHTML = `
             <td>
                 <img src="${logo}" alt="${item.protocol}" title="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${item.symbol}${versionStr}</strong>
             </td>
-            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${apr1dDisplay}</span></td>
-            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${apr30dDisplay}</span></td>
+            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${aprDisplay}</span></td>
             <td>${changeHtml}</td>
+            <td style="color: #1a1a1a;">${volumeDisplay}</td>
         `;
         tbody.appendChild(row);
     });
@@ -874,6 +891,16 @@ function formatTimeAgo(date) {
     if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
     if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
     return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function formatVolume(value) {
+    if (value >= 1000000) {
+        return '$' + (value / 1000000).toFixed(2) + 'M';
+    } else if (value >= 1000) {
+        return '$' + (value / 1000).toFixed(1) + 'K';
+    } else {
+        return '$' + value.toFixed(0);
+    }
 }
 
 function sortTable(columnIndex) {
