@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Cardano Liquidity Pools - YieldLife{% endblock %}
+{% block title %}Cardano Liquidity Pools & Farms - YieldLife{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -343,7 +343,7 @@
         <!-- Filter card -->
         <div class="filter-row mb-4">
             <div class="text-center mb-3">
-                <h2 class="filter-row-title">Cardano Liquidity Pools</h2>
+                <h2 class="filter-row-title">Cardano Liquidity Pools & Farms</h2>
                 <p class="filter-row-subtitle">Compare LP yields across DEXs</p>
             </div>
             <div class="row g-2">
@@ -421,7 +421,7 @@
     <!-- Pie charts sidebar - full height -->
     <div class="col-lg-4">
         <div class="card p-3 card-styled breakdown-sidebar">
-            <h5 class="mb-3" style="color: #1a1a1a;">Reward Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
+            <h5 class="mb-3" style="color: #1a1a1a;">Yield Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
             <div id="breakdownCharts">
                 <div class="breakdown-loading">
                     <span>Loading...</span>
@@ -1140,6 +1140,14 @@ function renderBreakdownCharts() {
             swapFeePercent: weightedSwapFee
         };
     }).filter(p => p.totalApr > 0);
+    
+    // Sort protocols in desired order: Minswap, SundaeSwap, WingRiders
+    const protocolOrder = ['minswap', 'sundaeswap', 'wingriders'];
+    protocolData.sort((a, b) => {
+        const aIndex = protocolOrder.indexOf(a.protocol);
+        const bIndex = protocolOrder.indexOf(b.protocol);
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    });
     
     if (protocolData.length === 0) {
         container.innerHTML = `
