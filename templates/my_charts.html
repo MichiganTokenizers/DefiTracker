@@ -182,13 +182,16 @@ function renderChartCard(chart) {
         chartUrl = '/cardano/lending';
     }
     
+    // Add chart_id as query parameter to load saved settings
+    const chartUrlWithId = `${chartUrl}?chart_id=${chart.chart_id}`;
+    
     return `
         <div class="chart-card" data-chart-id="${chart.chart_id}">
             <div class="chart-name">${escapeHtml(chart.name)}</div>
             <div class="chart-filters">${badges.join('')}</div>
             <div class="chart-meta">Created: ${created}</div>
             <div class="chart-actions">
-                <a href="${chartUrl}" class="btn btn-sm btn-primary">View</a>
+                <a href="${chartUrlWithId}" class="btn btn-sm btn-primary">View</a>
                 <button class="btn btn-sm btn-outline-secondary" onclick="editChart(${chart.chart_id})">Edit</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteChart(${chart.chart_id})">Delete</button>
             </div>

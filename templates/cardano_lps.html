@@ -931,7 +931,67 @@ document.querySelectorAll('input[name="aprType"]').forEach(radio => {
     });
 });
 
-loadAssets().then(() => {
+// Check for saved chart_id in URL and load settings
+async function loadSavedChartSettings() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const chartId = urlParams.get('chart_id');
+    
+    if (!chartId) return false;
+    
+    try {
+        const response = await fetch('/api/auth/charts');
+        if (!response.ok) return false;
+        
+        const charts = await response.json();
+        const savedChart = charts.find(c => c.chart_id === parseInt(chartId));
+        
+        if (!savedChart || !savedChart.filters) return false;
+        
+        const filters = savedChart.filters;
+        
+        // Apply time range
+        if (filters.days) {
+            document.getElementById('timeRange').value = filters.days;
+        }
+        
+        // Apply APR type
+        if (filters.apr_type) {
+            selectedAprType = filters.apr_type;
+            const radio = document.getElementById(filters.apr_type === '1d' ? 'apr1d' : 'apr30d');
+            if (radio) radio.checked = true;
+        }
+        
+        // Apply selected assets
+        if (filters.assets && filters.assets.length > 0) {
+            selectedAssets.clear();
+            filters.assets.forEach(symbol => {
+                selectedAssets.add(symbol);
+                const checkbox = document.getElementById(`asset-${symbol}`);
+                if (checkbox) checkbox.checked = true;
+            });
+            
+            // Uncheck non-selected assets
+            allAssets.forEach(asset => {
+                if (!filters.assets.includes(asset.symbol)) {
+                    const checkbox = document.getElementById(`asset-${asset.symbol}`);
+                    if (checkbox) checkbox.checked = false;
+                }
+            });
+            
+            updateAssetLabel();
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('Error loading saved chart:', e);
+        return false;
+    }
+}
+
+loadAssets().then(async () => {
+    // Try to load saved chart settings first
+    await loadSavedChartSettings();
+    
     loadChart();
     // Render breakdown charts after history data is loaded
     setTimeout(renderBreakdownCharts, 500);
@@ -961,13 +1021,11 @@ async function handleSaveChart(event) {
         apr_type: selectedAprType
     };
     
-    const displayOptions = { colors: pairColorMap };
-    
     try {
         const response = await fetch('/api/auth/charts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, filters, display_options: displayOptions })
+            body: JSON.stringify({ name, filters })
         });
         
         const data = await response.json();

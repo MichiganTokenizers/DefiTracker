@@ -593,8 +593,66 @@ function sortTable(columnIndex) {
 // Event listeners
 document.getElementById('timeRange').addEventListener('change', loadData);
 
+// Check for saved chart_id in URL and load settings
+async function loadSavedChartSettings() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const chartId = urlParams.get('chart_id');
+    
+    if (!chartId) return null;
+    
+    try {
+        const response = await fetch('/api/auth/charts');
+        if (!response.ok) return null;
+        
+        const charts = await response.json();
+        const savedChart = charts.find(c => c.chart_id === parseInt(chartId));
+        
+        if (!savedChart || !savedChart.filters) return null;
+        
+        return savedChart.filters;
+    } catch (e) {
+        console.error('Error loading saved chart:', e);
+        return null;
+    }
+}
+
+async function applySavedFilters(filters) {
+    // Apply time range
+    if (filters.days) {
+        document.getElementById('timeRange').value = filters.days;
+    }
+    
+    // Apply selected assets (after data is loaded)
+    if (filters.assets && filters.assets.length > 0) {
+        selectedAssets.clear();
+        filters.assets.forEach(symbol => selectedAssets.add(symbol));
+        
+        // Update checkboxes
+        document.querySelectorAll('#assetOptions input').forEach(cb => {
+            cb.checked = filters.assets.includes(cb.value);
+        });
+        
+        updateAssetLabel();
+    }
+}
+
 // Initialize
-loadData();
+(async function init() {
+    const savedFilters = await loadSavedChartSettings();
+    
+    // Apply time range before loading data
+    if (savedFilters && savedFilters.days) {
+        document.getElementById('timeRange').value = savedFilters.days;
+    }
+    
+    await loadData();
+    
+    // Apply asset filters after data is loaded
+    if (savedFilters) {
+        await applySavedFilters(savedFilters);
+        applyFilters();
+    }
+})();
 
 // Save Chart functionality
 function saveCurrentChart() {
