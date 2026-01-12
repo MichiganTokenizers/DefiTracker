@@ -162,20 +162,6 @@
         border-radius: 0 6px 6px 0;
     }
     
-    /* Back link */
-    .back-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--text-secondary);
-        text-decoration: none;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-    }
-    .back-link:hover {
-        color: var(--sea-green);
-    }
-    
     /* Filter row */
     .filter-row {
         background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
@@ -202,56 +188,55 @@
     }
     
     /* Reward Breakdown Pie Charts */
-    .breakdown-section {
-        margin-top: 2rem;
+    .breakdown-sidebar {
+        height: fit-content;
+        position: sticky;
+        top: 1rem;
     }
-    .breakdown-section h4 {
-        color: var(--sand-dune);
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+    .breakdown-sidebar h5 {
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        padding-bottom: 0.75rem;
+        margin-bottom: 1rem;
     }
-    .breakdown-card {
-        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
-        border-radius: 12px;
-        padding: 1.5rem;
-        height: 100%;
+    .breakdown-card-wrapper {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .breakdown-card-wrapper:last-child {
+        border-bottom: none;
     }
     .breakdown-card-header {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-        padding-bottom: 0.75rem;
-        border-bottom: 1px solid rgba(0,0,0,0.2);
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
     }
     .breakdown-card-header img {
-        width: 32px;
-        height: 32px;
-        border-radius: 6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
     }
     .breakdown-card-header h5 {
         margin: 0;
-        font-size: 1.1rem;
+        font-size: 0.95rem;
         font-weight: 600;
         color: #1a1a1a;
         text-transform: capitalize;
     }
     .breakdown-card-meta {
-        font-size: 0.8rem;
-        color: #333;
+        font-size: 0.7rem;
+        color: #555;
         margin-left: auto;
     }
     .breakdown-content {
         display: flex;
         align-items: center;
-        gap: 1.5rem;
+        gap: 1rem;
     }
     .breakdown-chart-container {
         position: relative;
-        width: 140px;
-        height: 140px;
+        width: 100px;
+        height: 100px;
         flex-shrink: 0;
     }
     .breakdown-chart-center {
@@ -263,32 +248,32 @@
         pointer-events: none;
     }
     .breakdown-chart-center .swap-fee-label {
-        font-size: 0.7rem;
-        color: #333;
+        font-size: 0.5rem;
+        color: #555;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.3px;
     }
     .breakdown-chart-center .swap-fee-value {
-        font-size: 0.9rem;
+        font-size: 0.65rem;
         font-weight: 600;
         color: #1a1a1a;
     }
     .breakdown-legend {
         display: flex;
         flex-direction: column;
-        gap: 0.4rem;
+        gap: 0.25rem;
         flex: 1;
     }
     .breakdown-legend-item {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        font-size: 0.8rem;
+        gap: 0.4rem;
+        font-size: 0.7rem;
     }
     .breakdown-legend-color {
-        width: 12px;
-        height: 12px;
-        border-radius: 3px;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
         flex-shrink: 0;
     }
     .breakdown-legend-label {
@@ -303,18 +288,19 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 200px;
-        color: #333;
+        height: 100px;
+        color: #555;
+        font-size: 0.85rem;
     }
     .breakdown-filter {
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
     }
     .breakdown-filter select {
         width: 100%;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
+        padding: 0.35rem 0.5rem;
+        font-size: 0.75rem;
         border: 1px solid rgba(0,0,0,0.15);
-        border-radius: 8px;
+        border-radius: 6px;
         background: #fff;
         color: var(--carbon-black);
         cursor: pointer;
@@ -328,58 +314,6 @@
 {% endblock %}
 
 {% block content %}
-<!-- Back Link -->
-<a href="/cardano" class="back-link">← Back to Cardano</a>
-
-<div class="row mb-4 g-3 filter-row">
-    <div class="col-12 text-center mb-2">
-        <h2 class="filter-row-title">Cardano Liquidity Pools</h2>
-        <p class="filter-row-subtitle">Compare LP yields across Minswap, SundaeSwap, and WingRiders</p>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label">Time Range</label>
-        <select id="timeRange" class="form-select">
-            <option value="7">Last 7 Days</option>
-            <option value="30" selected>Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
-            <option value="365">Last Year</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label">APR Type</label>
-        <div class="apr-toggle" role="group" id="aprToggle">
-            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
-            <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
-            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
-            <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <label class="form-label">Asset Filter</label>
-        <div class="multi-select-container" id="assetFilterContainer">
-            <button type="button" class="multi-select-btn" id="assetFilterBtn">
-                <span id="assetFilterLabel">Loading...</span>
-                <span class="count-badge" id="assetCount">0</span>
-            </button>
-            <div class="multi-select-dropdown" id="assetDropdown">
-                <div class="multi-select-actions">
-                    <button type="button" onclick="selectAllAssets()">Select All</button>
-                    <button type="button" onclick="deselectAllAssets()">Clear</button>
-                    <button type="button" onclick="selectDefaults()">Defaults</button>
-                </div>
-                <div id="assetOptions">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2 d-flex align-items-end">
-        <button type="button" class="btn btn-outline-primary" id="saveChartBtn" onclick="saveCurrentChart()">
-            Save Chart
-        </button>
-    </div>
-</div>
-
 <!-- Save Chart Modal -->
 <div class="modal fade" id="saveChartModal" tabindex="-1">
     <div class="modal-dialog">
@@ -404,16 +338,67 @@
 </div>
 
 <div class="row">
-    <div class="col-12">
-        <div class="card p-4 chart-card-dark" style="height: 700px;">
+    <!-- Main content (filters + chart + table) -->
+    <div class="col-lg-8">
+        <!-- Filter card -->
+        <div class="filter-row mb-4">
+            <div class="text-center mb-3">
+                <h2 class="filter-row-title">Cardano Liquidity Pools</h2>
+                <p class="filter-row-subtitle">Compare LP yields across DEXs</p>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">Time Range</label>
+                    <select id="timeRange" class="form-select">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="365">Last Year</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">APR Type</label>
+                    <div class="apr-toggle" role="group" id="aprToggle">
+                        <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
+                        <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
+                        <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
+                        <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Asset Filter</label>
+                    <div class="multi-select-container" id="assetFilterContainer">
+                        <button type="button" class="multi-select-btn" id="assetFilterBtn">
+                            <span id="assetFilterLabel">Loading...</span>
+                            <span class="count-badge" id="assetCount">0</span>
+                        </button>
+                        <div class="multi-select-dropdown" id="assetDropdown">
+                            <div class="multi-select-actions">
+                                <button type="button" onclick="selectAllAssets()">Select All</button>
+                                <button type="button" onclick="deselectAllAssets()">Clear</button>
+                                <button type="button" onclick="selectDefaults()">Defaults</button>
+                            </div>
+                            <div id="assetOptions">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
+                        Save Chart
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chart -->
+        <div class="card p-4 chart-card-dark" style="height: 500px;">
             <canvas id="aprChart"></canvas>
         </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card p-4 card-styled">
+        
+        <!-- Table -->
+        <div class="card p-4 card-styled mt-4">
             <h5 class="mb-3">Current APRs</h5>
             <div class="table-responsive">
                 <table class="table table-hover" id="aprTable">
@@ -432,15 +417,15 @@
             </div>
         </div>
     </div>
-</div>
-
-<!-- Reward Breakdown Pie Charts -->
-<div class="breakdown-section">
-    <h4>🥧 Reward Source Breakdown <small class="text-muted" style="font-size: 0.75rem; font-weight: normal;">(1-day APR, TVL-weighted averages)</small></h4>
-    <div class="row g-4" id="breakdownCharts">
-        <div class="col-12">
-            <div class="breakdown-loading">
-                <span>Loading reward breakdown...</span>
+    
+    <!-- Pie charts sidebar - full height -->
+    <div class="col-lg-4">
+        <div class="card p-3 card-styled breakdown-sidebar">
+            <h5 class="mb-3" style="color: #1a1a1a;">Reward Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
+            <div id="breakdownCharts">
+                <div class="breakdown-loading">
+                    <span>Loading...</span>
+                </div>
             </div>
         </div>
     </div>
@@ -1183,29 +1168,27 @@ function renderBreakdownCharts() {
         ).join('');
         
         html += `
-            <div class="col-md-4">
-                <div class="breakdown-card">
-                    <div class="breakdown-card-header">
-                        <img src="${logo}" alt="${data.protocol}" onerror="this.style.display='none'">
-                        <h5>${data.protocol}</h5>
-                        <span class="breakdown-card-meta">${data.poolCount} pools</span>
-                    </div>
-                    <div class="breakdown-filter">
-                        <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
-                            <option value="all">All Pools (TVL-weighted avg)</option>
-                            ${poolOptions}
-                        </select>
-                    </div>
-                    <div class="breakdown-content">
-                        <div class="breakdown-chart-container">
-                            <canvas id="breakdownChart${index}"></canvas>
-                            <div class="breakdown-chart-center" id="breakdownChartCenter${index}">
-                                <!-- Swap fee displayed here -->
-                            </div>
+            <div class="breakdown-card-wrapper mb-3">
+                <div class="breakdown-card-header">
+                    <img src="${logo}" alt="${data.protocol}" onerror="this.style.display='none'">
+                    <h5>${data.protocol}</h5>
+                    <span class="breakdown-card-meta">${data.poolCount} pools</span>
+                </div>
+                <div class="breakdown-filter">
+                    <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
+                        <option value="all">All Pools (TVL-weighted avg)</option>
+                        ${poolOptions}
+                    </select>
+                </div>
+                <div class="breakdown-content">
+                    <div class="breakdown-chart-container">
+                        <canvas id="breakdownChart${index}"></canvas>
+                        <div class="breakdown-chart-center" id="breakdownChartCenter${index}">
+                            <!-- Swap fee displayed here -->
                         </div>
-                        <div class="breakdown-legend" id="breakdownLegend${index}">
-                            <!-- Legend populated by JS -->
-                        </div>
+                    </div>
+                    <div class="breakdown-legend" id="breakdownLegend${index}">
+                        <!-- Legend populated by JS -->
                     </div>
                 </div>
             </div>
