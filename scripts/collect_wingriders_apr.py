@@ -135,6 +135,8 @@ def collect_and_store_wingriders():
                 staking_apr=staking_apr,
                 farm_apr=farm_apr,
                 swap_fee_percent=pool.swap_fee_percent,
+                volume_24h=pool.volume_24h_usd,
+                fees_24h=pool.fees_24h_usd,
             )
             inserted += 1
             if pool.has_farm:
@@ -145,14 +147,16 @@ def collect_and_store_wingriders():
             staking_str = f"{staking_apr:.2f}%" if staking_apr else "0.00%"
             farm_str = f"{farm_apr:.2f}%" if farm_apr else "0.00%"
             total_str = f"{total_apr:.2f}%"
+            vol_str = f"${pool.volume_24h_usd:,.2f}" if pool.volume_24h_usd else "N/A"
+            fees_24h_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
             
             if pool.has_farm:
                 boost_str = f"{pool.boosting_apr:.2f}%" if pool.boosting_apr else "0.00%"
-                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s + Farm=%s), [Boost=%s not included], TVL=%s", 
-                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, farm_str, boost_str, tvl_str)
+                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s + Farm=%s), [Boost=%s not included], TVL=%s, Vol24h=%s", 
+                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, farm_str, boost_str, tvl_str, vol_str)
             else:
-                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s), TVL=%s", 
-                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, tvl_str)
+                logger.info("Stored %s (%s): APR(30d)=%s APR(1d)=%s (Fees=%s + Stake=%s), TVL=%s, Vol24h=%s, Fees24h=%s", 
+                           pool.pair, pool.version, total_str, total_str, fees_str, staking_str, tvl_str, vol_str, fees_24h_str)
 
         logger.info("WingRiders collection complete. Snapshots inserted: %s (%s with active farms)", 
                    inserted, farms_count)

@@ -27,7 +27,7 @@ from src.adapters.base import ProtocolAdapter
 logger = logging.getLogger(__name__)
 
 
-# GraphQL query to get pools with metadata
+# GraphQL query to get pools with metadata and market data (volume, fees)
 POOLS_QUERY = """
 {
   liquidityPoolsWithMetadata {
@@ -40,6 +40,12 @@ POOLS_QUERY = """
         tvlInAda
         feesAPR
         stakingAPR(timeframe: CURRENT_EPOCH)
+        marketData {
+          volumeA24h
+          volumeB24h
+          feeA24h
+          feeB24h
+        }
       }
       ... on LiquidityPoolV2 {
         version
@@ -51,6 +57,12 @@ POOLS_QUERY = """
         stakingAPR(timeframe: CURRENT_EPOCH)
         swapFeeInBasis
         feeBasis
+        marketData {
+          volumeA24h
+          volumeB24h
+          feeA24h
+          feeB24h
+        }
       }
     }
     metadata {
@@ -108,6 +120,8 @@ class WingRidersPoolMetrics:
     ticker_b: str = ""
     has_farm: bool = False  # Whether pool has active farm
     swap_fee_percent: Optional[Decimal] = None  # Swap fee percentage (e.g., 0.30 for 0.30%)
+    volume_24h_usd: Optional[Decimal] = None  # 24h trading volume in USD
+    fees_24h_usd: Optional[Decimal] = None  # 24h trading fees in USD
 
 
 class WingRidersAdapter(ProtocolAdapter):
@@ -390,6 +404,41 @@ class WingRidersAdapter(ProtocolAdapter):
                 # Parse reserves
                 reserve_a = Decimal(token_a.get("quantity", 0)) if token_a.get("quantity") else None
                 reserve_b = Decimal(token_b.get("quantity", 0)) if token_b.get("quantity") else None
+                
+                # Parse 24h volume and fees from marketData
+                # For ADA pairs, use the ADA side to calculate USD value
+                # Note: tokens were potentially swapped above to ensure ADA is second (ticker_b)
+                market_data = p.get("marketData", {})
+                volume_24h_usd = None
+                fees_24h_usd = None
+                
+                if market_data:
+                    # Volume is in native token units (lovelace for ADA)
+                    # After the swap above, token_b should be ADA for ADA pairs
+                    vol_a_raw = Decimal(str(market_data.get("volumeA24h", 0) or 0))
+                    vol_b_raw = Decimal(str(market_data.get("volumeB24h", 0) or 0))
+                    fee_a_raw = Decimal(str(market_data.get("feeA24h", 0) or 0))
+                    fee_b_raw = Decimal(str(market_data.get("feeB24h", 0) or 0))
+                    
+                    # If ticker_b is ADA, use volumeB (ADA side) for USD calculation
+                    # The tokens were swapped earlier if needed, but marketData wasn't
+                    # So we need to check original token positions
+                    original_ticker_a = self._get_ticker(p.get("tokenA", {}), ticker_map)
+                    original_ticker_b = self._get_ticker(p.get("tokenB", {}), ticker_map)
+                    
+                    if original_ticker_a == "ADA":
+                        # tokenA is ADA, use volumeA
+                        vol_ada = vol_a_raw / Decimal(1_000_000)  # lovelace to ADA
+                        fee_ada = fee_a_raw / Decimal(1_000_000)
+                        volume_24h_usd = vol_ada * Decimal(str(self.ada_price_usd))
+                        fees_24h_usd = fee_ada * Decimal(str(self.ada_price_usd))
+                    elif original_ticker_b == "ADA":
+                        # tokenB is ADA, use volumeB
+                        vol_ada = vol_b_raw / Decimal(1_000_000)
+                        fee_ada = fee_b_raw / Decimal(1_000_000)
+                        volume_24h_usd = vol_ada * Decimal(str(self.ada_price_usd))
+                        fees_24h_usd = fee_ada * Decimal(str(self.ada_price_usd))
+                    # For non-ADA pairs (like USDM-USDA), we can't easily calculate USD volume
 
                 pool_metrics = WingRidersPoolMetrics(
                     pair=pair,
@@ -408,6 +457,8 @@ class WingRidersAdapter(ProtocolAdapter):
                     ticker_b=ticker_b,
                     has_farm=has_farm,
                     swap_fee_percent=swap_fee_percent,
+                    volume_24h_usd=volume_24h_usd,
+                    fees_24h_usd=fees_24h_usd,
                 )
                 pools.append(pool_metrics)
                 seen_pairs.add(pair_key)
