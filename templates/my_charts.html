@@ -171,15 +171,15 @@ function renderChartCard(chart) {
     // Build URL to load chart
     let chartUrl = '/';
     if (filters.chain && filters.yield_type === 'lp') {
-        chartUrl = `/chain/${filters.chain}`;
+        chartUrl = `/${filters.chain}/lps`;
+    } else if (filters.chain && filters.yield_type === 'supply') {
+        chartUrl = `/${filters.chain}/lending`;
+    } else if (filters.chain && filters.yield_type === 'borrow') {
+        chartUrl = `/${filters.chain}/lending`;
     } else if (filters.yield_type === 'lp') {
-        chartUrl = '/lps';
-    } else if (filters.yield_type === 'supply') {
-        chartUrl = '/earn';
-    } else if (filters.yield_type === 'borrow') {
-        chartUrl = '/borrow';
-    } else if (filters.chain) {
-        chartUrl = `/chain/${filters.chain}`;
+        chartUrl = '/cardano/lps';
+    } else if (filters.yield_type === 'supply' || filters.yield_type === 'borrow') {
+        chartUrl = '/cardano/lending';
     }
     
     return `

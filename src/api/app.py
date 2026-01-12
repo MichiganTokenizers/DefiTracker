@@ -595,11 +595,6 @@ def index():
     """Main landing page"""
     return render_template('index.html')
 
-@app.route('/chain/<chain_name>')
-def chain_page(chain_name):
-    """Chain-specific page with all protocols"""
-    return render_template('chain.html', chain=chain_name)
-
 # Legacy routes - redirect to chain-specific pages
 @app.route('/lps')
 def lps_page():
@@ -618,11 +613,6 @@ def borrow_page():
     """Redirect to Cardano lending (borrow rates shown there)"""
     from flask import redirect
     return redirect('/cardano/lending')
-
-@app.route('/cardano')
-def cardano_page():
-    """Cardano blockchain overview page"""
-    return render_template('cardano.html')
 
 @app.route('/cardano/lps')
 def cardano_lps_page():
