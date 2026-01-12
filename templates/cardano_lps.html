@@ -6,25 +6,29 @@
 <style>
     #aprTable {
         margin-bottom: 0;
+        background-color: transparent;
     }
     #aprTable th {
         border-top: none;
-        border-bottom: 2px solid rgba(255,255,255,0.2);
+        border-bottom: 2px solid rgba(0,0,0,0.2);
         padding: 1rem;
         font-weight: 600;
-        color: #b0b3c1;
+        color: #1a1a1a;
         user-select: none;
+        background-color: transparent;
     }
     #aprTable th:hover {
-        color: #ffffff;
+        color: #333;
     }
     #aprTable td {
         padding: 1rem;
         vertical-align: middle;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        color: #1a1a1a;
+        background-color: transparent;
     }
     #aprTable tbody tr:hover {
-        background-color: rgba(255,255,255,0.05);
+        background-color: rgba(0,0,0,0.05);
     }
     .table-responsive {
         border-radius: 8px;
@@ -410,15 +414,15 @@
 <div class="row mt-4">
     <div class="col-12">
         <div class="card p-4 card-styled">
-            <h5 class="mb-3">Current APRs <small class="text-muted" id="aprTypeLabel">(30-day)</small></h5>
+            <h5 class="mb-3">Current APRs</h5>
             <div class="table-responsive">
-                <table class="table table-dark table-hover" id="aprTable">
+                <table class="table table-hover" id="aprTable">
                     <thead>
                         <tr>
                             <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
-                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1"><span id="aprColumnLabel">APR (30d)</span> ↓</th>
-                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
-                            <th>Last Updated</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APR (1d)</th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">APR (30d) ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(3)" id="th-3">24h Change</th>
                         </tr>
                     </thead>
                     <tbody id="currentAprs">
@@ -448,7 +452,7 @@
 const chain = "{{ chain }}";
 const yieldType = "{{ yield_type }}";
 let chart = null;
-let currentSortColumn = 1;
+let currentSortColumn = 2;
 let currentSortDirection = 'desc';
 let allAssets = [];
 let selectedAssets = new Set();
@@ -603,11 +607,7 @@ function getPairColor(symbol) {
 }
 
 function updateAprLabels() {
-    const is1d = selectedAprType === '1d';
-    const typeLabel = document.getElementById('aprTypeLabel');
-    const columnLabel = document.getElementById('aprColumnLabel');
-    if (typeLabel) typeLabel.textContent = is1d ? '(1-day)' : '(30-day)';
-    if (columnLabel) columnLabel.textContent = is1d ? 'APR (1d)' : 'APR (30d)';
+    // Labels are now static since table shows both APR types
 }
 
 async function loadChart() {
@@ -744,25 +744,22 @@ function updateCurrentAprs(data) {
     const tbody = document.getElementById('currentAprs');
     tbody.innerHTML = '';
     
-    const is1d = selectedAprType === '1d';
-    
     const sortedData = data.map(assetData => {
-        // For 1d mode, only use data points that have apr_1d
-        const relevantData = is1d 
-            ? assetData.data.filter(d => d.apr_1d != null)
-            : assetData.data.filter(d => d.apr != null);
+        // Get data that has at least 30d APR
+        const relevantData = assetData.data.filter(d => d.apr != null);
         
         if (relevantData.length === 0) return null;
         
         const latest = relevantData[relevantData.length - 1];
         if (!latest) return null;
         
-        // Get the APR value based on selected type - no fallback
-        const aprValue = is1d ? latest.apr_1d : latest.apr;
+        // Get both APR values
+        const apr1d = latest.apr_1d;
+        const apr30d = latest.apr;
         
-        if (aprValue == null) return null;
+        if (apr30d == null) return null;
         
-        // Calculate 24h change using only the relevant data
+        // Calculate 24h change based on 30d APR
         let change24h = null;
         if (relevantData.length > 1) {
             const now = new Date(latest.timestamp);
@@ -779,10 +776,8 @@ function updateCurrentAprs(data) {
                 }
             }
             
-            const closestApr = is1d ? closest.apr_1d : closest.apr;
-            
-            if (closestApr != null) {
-                change24h = aprValue - closestApr;
+            if (closest.apr != null) {
+                change24h = apr30d - closest.apr;
             }
         }
         
@@ -790,10 +785,10 @@ function updateCurrentAprs(data) {
             symbol: assetData.symbol,
             protocol: assetData.protocol,
             version: assetData.version,
-            apr: aprValue,
+            apr1d: apr1d,
+            apr30d: apr30d,
             tvl_usd: latest.tvl_usd,
-            change24h: change24h,
-            timestamp: new Date(latest.timestamp)
+            change24h: change24h
         };
     }).filter(x => x !== null);
     
@@ -817,10 +812,14 @@ function applySortToTable() {
                 const cmp = aVal.localeCompare(bVal);
                 return currentSortDirection === 'asc' ? cmp : -cmp;
             case 1:
-                aVal = a.apr;
-                bVal = b.apr;
+                aVal = a.apr1d ?? -Infinity;
+                bVal = b.apr1d ?? -Infinity;
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             case 2:
+                aVal = a.apr30d ?? -Infinity;
+                bVal = b.apr30d ?? -Infinity;
+                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            case 3:
                 aVal = a.change24h ?? -Infinity;
                 bVal = b.change24h ?? -Infinity;
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
@@ -829,7 +828,7 @@ function applySortToTable() {
         }
     });
     
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         const th = document.getElementById(`th-${i}`);
         if (th) {
             let text = th.textContent.replace(/ [↑↓]/g, '');
@@ -843,26 +842,26 @@ function applySortToTable() {
     sorted.forEach(item => {
         const row = document.createElement('tr');
         
-        let changeHtml = '<span class="text-muted">-</span>';
+        let changeHtml = '<span style="color: #555;">-</span>';
         if (item.change24h !== null) {
-            const changeClass = item.change24h >= 0 ? 'text-success' : 'text-danger';
+            const changeColor = item.change24h >= 0 ? '#16a34a' : '#dc2626';
             const changeSymbol = item.change24h >= 0 ? '+' : '';
-            changeHtml = `<span class="${changeClass}">${changeSymbol}${item.change24h.toFixed(2)}%</span>`;
+            changeHtml = `<span style="color: ${changeColor}; font-weight: 500;">${changeSymbol}${item.change24h.toFixed(2)}%</span>`;
         }
         
-        const timeAgo = formatTimeAgo(item.timestamp);
         const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
         const versionStr = item.version ? ` ${item.version}` : '';
+        const apr1dDisplay = item.apr1d != null ? `${item.apr1d.toFixed(2)}%` : '-';
+        const apr30dDisplay = item.apr30d != null ? `${item.apr30d.toFixed(2)}%` : '-';
         
         row.innerHTML = `
             <td>
-                <img src="${logo}" alt="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
-                <strong>${item.symbol}</strong>
-                <span class="text-muted" style="font-size: 0.8rem; margin-left: 5px;">${item.protocol}${versionStr}</span>
+                <img src="${logo}" alt="${item.protocol}" title="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
+                <strong>${item.symbol}${versionStr}</strong>
             </td>
-            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
+            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${apr1dDisplay}</span></td>
+            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${apr30dDisplay}</span></td>
             <td>${changeHtml}</td>
-            <td class="text-secondary">${timeAgo}</td>
         `;
         tbody.appendChild(row);
     });
