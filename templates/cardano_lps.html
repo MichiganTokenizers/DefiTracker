@@ -948,17 +948,27 @@ async function loadSavedChartSettings() {
         if (!savedChart || !savedChart.filters) return false;
         
         const filters = savedChart.filters;
+        console.log('Loading saved chart filters:', filters);
         
         // Apply time range
         if (filters.days) {
             document.getElementById('timeRange').value = filters.days;
         }
         
-        // Apply APR type
-        if (filters.apr_type) {
-            selectedAprType = filters.apr_type;
-            const radio = document.getElementById(filters.apr_type === '1d' ? 'apr1d' : 'apr30d');
-            if (radio) radio.checked = true;
+        // Apply APR type (default to 30d if not specified)
+        const aprType = filters.apr_type || '30d';
+        console.log('Setting APR type to:', aprType);
+        selectedAprType = aprType;
+        
+        // Update radio buttons
+        const apr1dRadio = document.getElementById('apr1d');
+        const apr30dRadio = document.getElementById('apr30d');
+        if (aprType === '1d') {
+            if (apr1dRadio) apr1dRadio.checked = true;
+            if (apr30dRadio) apr30dRadio.checked = false;
+        } else {
+            if (apr30dRadio) apr30dRadio.checked = true;
+            if (apr1dRadio) apr1dRadio.checked = false;
         }
         
         // Apply selected assets

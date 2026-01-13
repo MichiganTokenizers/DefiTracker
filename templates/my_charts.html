@@ -166,7 +166,8 @@ function renderChartCard(chart) {
     if (filters.assets && filters.assets.length) {
         badges.push(`<span class="filter-badge">${filters.assets.length} assets</span>`);
     }
-    if (filters.days) badges.push(`<span class="filter-badge">${filters.days}d</span>`);
+    if (filters.days) badges.push(`<span class="filter-badge">${filters.days}d range</span>`);
+    if (filters.apr_type) badges.push(`<span class="filter-badge">${filters.apr_type} APR</span>`);
     
     // Build URL to load chart
     let chartUrl = '/';

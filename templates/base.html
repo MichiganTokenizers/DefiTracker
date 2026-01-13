@@ -337,23 +337,28 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Home</a>
-                    </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            ♠️ Cardano
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+                            <img src="https://cryptologos.cc/logos/cardano-ada-logo.svg" alt="Cardano" width="22" height="22" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));">
+                            Cardano
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark">
-                            <li><a class="dropdown-item" href="/cardano">Overview</a></li>
-                            <li><a class="dropdown-item" href="/cardano/lps">🌊 Liquidity Pools</a></li>
+                            <li><a class="dropdown-item" href="/cardano/lps">🌊 Liquidity Pool & Farms</a></li>
                             <li><a class="dropdown-item" href="/cardano/lending">💰 Lending</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#embedModal">
-                            Embed
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+                            <img src="https://cryptologos.cc/logos/flare-flr-logo.svg" alt="Flare" width="22" height="22" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));">
+                            Flare
+                            <span class="badge bg-secondary ms-1" style="font-size: 0.6rem; padding: 2px 5px;">Soon</span>
                         </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><span class="dropdown-item disabled text-muted">🌊 Liquidity Pool & Farms</span></li>
+                            <li><span class="dropdown-item disabled text-muted">💰 Lending</span></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><span class="dropdown-item disabled text-muted fst-italic" style="font-size: 0.85rem;">Coming Soon!</span></li>
+                        </ul>
                     </li>
                     
                     <!-- Auth Section -->
