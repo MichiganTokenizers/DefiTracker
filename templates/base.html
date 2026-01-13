@@ -369,7 +369,7 @@
                                 {{ (current_user.display_name or current_user.email or current_user.wallet_address[:4])[0].upper() }}
                             </span>
                             <span class="d-none d-md-inline">
-                                {{ current_user.display_name or current_user.email or (current_user.wallet_address[:8] + '...' if current_user.wallet_address else 'User') }}
+                                {{ current_user.display_name or current_user.email or ('...' + current_user.wallet_address[-8:] if current_user.wallet_address else 'User') }}
                             </span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
