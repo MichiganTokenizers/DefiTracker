@@ -162,29 +162,53 @@
         border-radius: 0 6px 6px 0;
     }
     
-    /* Filter row */
-    .filter-row {
-        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin-left: 0;
-        margin-right: 0;
+    /* Title card */
+    .title-card {
+        text-align: center;
     }
-    .filter-row-title {
+    .chart-title {
         margin: 0;
-        font-size: 1.75rem;
-        color: var(--carbon-black);
+        font-size: 1.5rem;
+        color: #1a1a1a;
         font-weight: 600;
     }
-    .filter-row-subtitle {
-        color: var(--carbon-black);
-        font-size: 0.95rem;
+    .chart-subtitle {
+        color: #555;
+        font-size: 0.9rem;
         margin: 0;
-        opacity: 0.75;
     }
-    .filter-row .form-label {
-        color: var(--carbon-black);
+    
+    /* Chart filters row */
+    .chart-filters-row {
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .chart-filters-row .form-label {
+        color: #1a1a1a;
         font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .chart-container {
+        position: relative;
+    }
+    .chart-section-title {
+        color: #1a1a1a;
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.75rem 0;
+        text-align: left;
+    }
+    
+    /* Connected cards - no gap between chart and table */
+    .card-top {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        margin-bottom: 0;
+    }
+    .card-bottom {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        border-top: 1px solid rgba(0,0,0,0.1);
     }
     
     /* Reward Breakdown Pie Charts */
@@ -360,68 +384,75 @@
 </div>
 
 <div class="row">
-    <!-- Main content (filters + chart + table) -->
+    <!-- Main content -->
     <div class="col-lg-8">
-        <!-- Filter card -->
-        <div class="filter-row mb-4">
-            <div class="text-center mb-3">
-                <h2 class="filter-row-title">Cardano Liquidity Pools & Farms</h2>
-                <p class="filter-row-subtitle">Compare LP yields across DEXs</p>
+        <!-- Title Card -->
+        <div class="card p-3 card-styled title-card mb-3">
+            <div class="text-center">
+                <h2 class="chart-title">Cardano Liquidity Pools & Farms</h2>
+                <p class="chart-subtitle mb-0">Compare LP yields across DEXs</p>
             </div>
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label">Time Range</label>
-                    <select id="timeRange" class="form-select">
-                        <option value="7">Last 7 Days</option>
-                        <option value="30" selected>Last 30 Days</option>
-                        <option value="90">Last 90 Days</option>
-                        <option value="365">Last Year</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">APR Type</label>
-                    <div class="apr-toggle" role="group" id="aprToggle">
-                        <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
-                        <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
-                        <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
-                        <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
+        </div>
+        
+        <!-- Chart Card with Filters -->
+        <div class="card p-4 chart-card-dark card-top">
+            <h5 class="chart-section-title">Multi Asset, One Measure</h5>
+            <!-- Filters -->
+            <div class="chart-filters-row mb-3">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label">Time Range</label>
+                        <select id="timeRange" class="form-select">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="365">Last Year</option>
+                        </select>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Asset Filter</label>
-                    <div class="multi-select-container" id="assetFilterContainer">
-                        <button type="button" class="multi-select-btn" id="assetFilterBtn">
-                            <span id="assetFilterLabel">Loading...</span>
-                            <span class="count-badge" id="assetCount">0</span>
-                        </button>
-                        <div class="multi-select-dropdown" id="assetDropdown">
-                            <div class="multi-select-actions">
-                                <button type="button" onclick="selectAllAssets()">Select All</button>
-                                <button type="button" onclick="deselectAllAssets()">Clear</button>
-                                <button type="button" onclick="selectDefaults()">Defaults</button>
-                            </div>
-                            <div id="assetOptions">
-                                <!-- Populated by JS -->
+                    <div class="col-md-3">
+                        <label class="form-label">APR Type</label>
+                        <div class="apr-toggle" role="group" id="aprToggle">
+                            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
+                            <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
+                            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
+                            <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Asset Filter</label>
+                        <div class="multi-select-container" id="assetFilterContainer">
+                            <button type="button" class="multi-select-btn" id="assetFilterBtn">
+                                <span id="assetFilterLabel">Loading...</span>
+                                <span class="count-badge" id="assetCount">0</span>
+                            </button>
+                            <div class="multi-select-dropdown" id="assetDropdown">
+                                <div class="multi-select-actions">
+                                    <button type="button" onclick="selectAllAssets()">Select All</button>
+                                    <button type="button" onclick="deselectAllAssets()">Clear</button>
+                                    <button type="button" onclick="selectDefaults()">Defaults</button>
+                                </div>
+                                <div id="assetOptions">
+                                    <!-- Populated by JS -->
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
+                            Save Chart
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
-                        Save Chart
-                    </button>
-                </div>
+            </div>
+            
+            <!-- Chart Canvas -->
+            <div class="chart-container" style="height: 400px;">
+                <canvas id="aprChart"></canvas>
             </div>
         </div>
         
-        <!-- Chart -->
-        <div class="card p-4 chart-card-dark" style="height: 500px;">
-            <canvas id="aprChart"></canvas>
-        </div>
-        
-        <!-- Table -->
-        <div class="card p-4 card-styled mt-4">
-            <h5 class="mb-3">Current APRs</h5>
+        <!-- Table Card (no margin between chart and table) -->
+        <div class="card p-4 card-styled card-bottom">
             <div class="table-responsive">
                 <table class="table table-hover" id="aprTable">
                     <thead>
