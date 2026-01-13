@@ -508,9 +508,21 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Protocol</label>
-                        <select id="singleAssetProtocol" class="form-select">
-                            <option value="all" selected>All Protocols</option>
-                        </select>
+                        <div class="multi-select-container" id="protocolFilterContainer">
+                            <button type="button" class="multi-select-btn" id="protocolFilterBtn">
+                                <span id="protocolFilterLabel">All Protocols</span>
+                                <span class="count-badge" id="protocolCount">0</span>
+                            </button>
+                            <div class="multi-select-dropdown" id="protocolDropdown">
+                                <div class="multi-select-actions">
+                                    <button type="button" onclick="selectAllProtocols()">Select All</button>
+                                    <button type="button" onclick="deselectAllProtocols()">Clear</button>
+                                </div>
+                                <div id="protocolOptions">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Select Asset</label>
@@ -702,11 +714,16 @@ function getSelectedAssets() {
 document.getElementById('assetFilterBtn').addEventListener('click', function(e) {
     e.stopPropagation();
     document.getElementById('assetDropdown').classList.toggle('show');
+    // Close protocol dropdown if open
+    document.getElementById('protocolDropdown').classList.remove('show');
 });
 
 document.addEventListener('click', function(e) {
     if (!document.getElementById('assetFilterContainer').contains(e.target)) {
         document.getElementById('assetDropdown').classList.remove('show');
+    }
+    if (!document.getElementById('protocolFilterContainer').contains(e.target)) {
+        document.getElementById('protocolDropdown').classList.remove('show');
     }
 });
 
@@ -1121,10 +1138,27 @@ loadAssets().then(async () => {
 // Single Asset, Multi Measures Chart
 // ============================================
 let singleAssetChart = null;
+const selectedProtocols = new Set();
+const versionedProtocols = ['wingriders', 'sundaeswap'];
+const protocolDisplayNames = {
+    'wingriders': 'WingRiders',
+    'sundaeswap': 'SundaeSwap',
+    'minswap': 'Minswap'
+};
+let allProtocolOptions = [];
+
+function getProtocolDisplayName(protocol) {
+    const parts = protocol.split('_');
+    if (parts.length === 2 && versionedProtocols.includes(parts[0])) {
+        const baseName = protocolDisplayNames[parts[0]] || parts[0];
+        const version = parts[1].toUpperCase();
+        return `${baseName} ${version}`;
+    }
+    return protocolDisplayNames[protocol] || protocol.charAt(0).toUpperCase() + protocol.slice(1);
+}
 
 function initSingleAssetChart() {
     const assetSelect = document.getElementById('singleAssetSelect');
-    const protocolSelect = document.getElementById('singleAssetProtocol');
     
     // Populate asset dropdown from allAssets
     assetSelect.innerHTML = '<option value="">Select an asset...</option>';
@@ -1135,15 +1169,35 @@ function initSingleAssetChart() {
         assetSelect.appendChild(option);
     });
     
-    // Populate protocol dropdown from allHistoryData
-    const protocols = [...new Set(allHistoryData.map(d => d.protocol))].sort();
-    protocolSelect.innerHTML = '<option value="all">All Protocols</option>';
-    protocols.forEach(protocol => {
-        const option = document.createElement('option');
-        option.value = protocol;
-        option.textContent = protocol;
-        protocolSelect.appendChild(option);
+    // Build protocol options from allHistoryData
+    // For protocols with versions (WingRiders, SundaeSwap), create separate entries
+    const protocolVersions = new Set();
+    allHistoryData.forEach(d => {
+        if (versionedProtocols.includes(d.protocol) && d.version) {
+            protocolVersions.add(`${d.protocol}_${d.version.toLowerCase()}`);
+        } else {
+            protocolVersions.add(d.protocol);
+        }
     });
+    allProtocolOptions = [...protocolVersions].sort();
+    
+    // Populate protocol multi-select options
+    const optionsContainer = document.getElementById('protocolOptions');
+    optionsContainer.innerHTML = '';
+    
+    allProtocolOptions.forEach(protocol => {
+        const div = document.createElement('div');
+        div.className = 'multi-select-option';
+        div.innerHTML = `
+            <input type="checkbox" id="protocol-${protocol}" value="${protocol}" 
+                   checked onchange="toggleProtocol('${protocol}')">
+            <label for="protocol-${protocol}">${getProtocolDisplayName(protocol)}</label>
+        `;
+        optionsContainer.appendChild(div);
+        selectedProtocols.add(protocol);
+    });
+    
+    updateProtocolLabel();
     
     // Set default to first NIGHT asset if available
     const nightAsset = allAssets.find(a => a.symbol.includes('NIGHT'));
@@ -1154,13 +1208,60 @@ function initSingleAssetChart() {
     
     // Event listeners
     assetSelect.addEventListener('change', loadSingleAssetChart);
-    protocolSelect.addEventListener('change', loadSingleAssetChart);
     document.getElementById('singleAssetTimeRange').addEventListener('change', loadSingleAssetChart);
+    
+    // Protocol dropdown toggle
+    document.getElementById('protocolFilterBtn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('protocolDropdown').classList.toggle('show');
+        // Close asset dropdown if open
+        document.getElementById('assetDropdown').classList.remove('show');
+    });
+}
+
+function toggleProtocol(protocol) {
+    if (selectedProtocols.has(protocol)) {
+        selectedProtocols.delete(protocol);
+    } else {
+        selectedProtocols.add(protocol);
+    }
+    updateProtocolLabel();
+    loadSingleAssetChart();
+}
+
+function selectAllProtocols() {
+    allProtocolOptions.forEach(p => selectedProtocols.add(p));
+    document.querySelectorAll('#protocolOptions input').forEach(cb => cb.checked = true);
+    updateProtocolLabel();
+    loadSingleAssetChart();
+}
+
+function deselectAllProtocols() {
+    selectedProtocols.clear();
+    document.querySelectorAll('#protocolOptions input').forEach(cb => cb.checked = false);
+    updateProtocolLabel();
+    loadSingleAssetChart();
+}
+
+function updateProtocolLabel() {
+    const count = selectedProtocols.size;
+    const total = allProtocolOptions.length;
+    document.getElementById('protocolCount').textContent = count;
+    
+    if (count === 0) {
+        document.getElementById('protocolFilterLabel').textContent = 'None selected';
+    } else if (count === total) {
+        document.getElementById('protocolFilterLabel').textContent = 'All Protocols';
+    } else if (count <= 2) {
+        const names = [...selectedProtocols].map(p => getProtocolDisplayName(p)).join(', ');
+        document.getElementById('protocolFilterLabel').textContent = names;
+    } else {
+        document.getElementById('protocolFilterLabel').textContent = `${count} selected`;
+    }
 }
 
 async function loadSingleAssetChart() {
     const selectedAsset = document.getElementById('singleAssetSelect').value;
-    const selectedProtocol = document.getElementById('singleAssetProtocol').value;
     const days = parseInt(document.getElementById('singleAssetTimeRange').value);
     
     if (!selectedAsset) {
@@ -1171,10 +1272,17 @@ async function loadSingleAssetChart() {
     // Filter data for the selected asset from allHistoryData
     let assetData = allHistoryData.filter(d => d.symbol === selectedAsset);
     
-    // Apply protocol filter if not "all"
-    if (selectedProtocol !== 'all') {
-        assetData = assetData.filter(d => d.protocol === selectedProtocol);
-    }
+    // Apply protocol filter based on multi-select
+    // Build a key for each data item to match against selected protocols
+    assetData = assetData.filter(d => {
+        let protocolKey;
+        if (versionedProtocols.includes(d.protocol) && d.version) {
+            protocolKey = `${d.protocol}_${d.version.toLowerCase()}`;
+        } else {
+            protocolKey = d.protocol;
+        }
+        return selectedProtocols.has(protocolKey);
+    });
     
     if (assetData.length === 0) {
         updateSingleAssetTable([]);
