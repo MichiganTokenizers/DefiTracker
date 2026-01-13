@@ -393,10 +393,16 @@
             <div class="modal-body">
                 <div id="saveChartAlert" class="alert d-none" role="alert"></div>
                 <form id="saveChartForm" onsubmit="handleSaveChart(event)">
+                    <input type="hidden" id="chartType" value="multi_asset">
                     <div class="mb-3">
                         <label for="chartName" class="form-label">Chart Name</label>
                         <input type="text" class="form-control" id="chartName" required maxlength="100" 
                                placeholder="e.g., My Cardano LP Watchlist">
+                    </div>
+                    <div class="mb-3">
+                        <div id="chartTypeIndicator" class="text-muted small">
+                            📊 Saving: <strong>Multi Asset, One Measure</strong> chart
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Save</button>
                 </form>
@@ -497,8 +503,8 @@
             <h5 class="chart-section-title">One Asset, Multi Measures</h5>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
-                <div class="row g-2">
-                    <div class="col-md-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
                         <label class="form-label">Time Range</label>
                         <select id="singleAssetTimeRange" class="form-select">
                             <option value="30" selected>Last 30 Days</option>
@@ -524,11 +530,16 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Select Asset</label>
                         <select id="singleAssetSelect" class="form-select">
                             <option value="">Loading assets...</option>
                         </select>
+                    </div>
+                    <div class="col-md-2 ms-auto d-flex align-items-end">
+                        <button type="button" class="btn btn-login w-100" id="saveSingleAssetChartBtn" onclick="saveSingleAssetChart()">
+                            Save Chart
+                        </button>
                     </div>
                 </div>
             </div>
@@ -546,9 +557,9 @@
                     <thead>
                         <tr>
                             <th>Protocol</th>
-                            <th>1-Day Avg</th>
-                            <th>7-Day Avg</th>
-                            <th>30-Day Avg</th>
+                            <th><span style="opacity: 0.6;">●</span> 1-Day <small style="font-weight: 400; opacity: 0.7;">(solid)</small></th>
+                            <th><span style="opacity: 0.6;">▲</span> 7-Day <small style="font-weight: 400; opacity: 0.7;">(dashed)</small></th>
+                            <th><span style="opacity: 0.6;">■</span> 30-Day <small style="font-weight: 400; opacity: 0.7;">(dotted)</small></th>
                         </tr>
                     </thead>
                     <tbody id="singleAssetTableBody">
@@ -1060,71 +1071,129 @@ async function loadSavedChartSettings() {
     const urlParams = new URLSearchParams(window.location.search);
     const chartId = urlParams.get('chart_id');
     
-    if (!chartId) return false;
+    if (!chartId) return { loaded: false, chartType: null };
     
     try {
         const response = await fetch('/api/auth/charts');
-        if (!response.ok) return false;
+        if (!response.ok) return { loaded: false, chartType: null };
         
         const charts = await response.json();
         const savedChart = charts.find(c => c.chart_id === parseInt(chartId));
         
-        if (!savedChart || !savedChart.filters) return false;
+        if (!savedChart || !savedChart.filters) return { loaded: false, chartType: null };
         
         const filters = savedChart.filters;
-        console.log('Loading saved chart filters:', filters);
+        const chartType = filters.chart_type || 'multi_asset';
+        console.log('Loading saved chart filters:', filters, 'Type:', chartType);
         
-        // Apply time range
-        if (filters.days) {
-            document.getElementById('timeRange').value = filters.days;
-        }
-        
-        // Apply APR type (default to 30d if not specified)
-        const aprType = filters.apr_type || '30d';
-        console.log('Setting APR type to:', aprType);
-        selectedAprType = aprType;
-        
-        // Update radio buttons
-        const apr1dRadio = document.getElementById('apr1d');
-        const apr30dRadio = document.getElementById('apr30d');
-        if (aprType === '1d') {
-            if (apr1dRadio) apr1dRadio.checked = true;
-            if (apr30dRadio) apr30dRadio.checked = false;
+        if (chartType === 'single_asset') {
+            // Load settings for "One Asset, Multi Measures" chart
+            // These will be applied after the chart is initialized
+            window.savedSingleAssetFilters = filters;
+            return { loaded: true, chartType: 'single_asset' };
         } else {
-            if (apr30dRadio) apr30dRadio.checked = true;
-            if (apr1dRadio) apr1dRadio.checked = false;
-        }
-        
-        // Apply selected assets
-        if (filters.assets && filters.assets.length > 0) {
-            selectedAssets.clear();
-            filters.assets.forEach(symbol => {
-                selectedAssets.add(symbol);
-                const checkbox = document.getElementById(`asset-${symbol}`);
-                if (checkbox) checkbox.checked = true;
-            });
+            // Load settings for "Multi Asset, One Measure" chart
             
-            // Uncheck non-selected assets
-            allAssets.forEach(asset => {
-                if (!filters.assets.includes(asset.symbol)) {
-                    const checkbox = document.getElementById(`asset-${asset.symbol}`);
-                    if (checkbox) checkbox.checked = false;
-                }
-            });
+            // Apply time range
+            if (filters.days) {
+                document.getElementById('timeRange').value = filters.days;
+            }
             
-            updateAssetLabel();
+            // Apply APR type (default to 30d if not specified)
+            const aprType = filters.apr_type || '30d';
+            console.log('Setting APR type to:', aprType);
+            selectedAprType = aprType;
+            
+            // Update radio buttons
+            const apr1dRadio = document.getElementById('apr1d');
+            const apr30dRadio = document.getElementById('apr30d');
+            if (aprType === '1d') {
+                if (apr1dRadio) apr1dRadio.checked = true;
+                if (apr30dRadio) apr30dRadio.checked = false;
+            } else {
+                if (apr30dRadio) apr30dRadio.checked = true;
+                if (apr1dRadio) apr1dRadio.checked = false;
+            }
+            
+            // Apply selected assets
+            if (filters.assets && filters.assets.length > 0) {
+                selectedAssets.clear();
+                filters.assets.forEach(symbol => {
+                    selectedAssets.add(symbol);
+                    const checkbox = document.getElementById(`asset-${symbol}`);
+                    if (checkbox) checkbox.checked = true;
+                });
+                
+                // Uncheck non-selected assets
+                allAssets.forEach(asset => {
+                    if (!filters.assets.includes(asset.symbol)) {
+                        const checkbox = document.getElementById(`asset-${asset.symbol}`);
+                        if (checkbox) checkbox.checked = false;
+                    }
+                });
+                
+                updateAssetLabel();
+            }
+            
+            return { loaded: true, chartType: 'multi_asset' };
         }
-        
-        return true;
     } catch (e) {
         console.error('Error loading saved chart:', e);
-        return false;
+        return { loaded: false, chartType: null };
     }
+}
+
+// Apply saved settings for single asset chart after initialization
+function applySavedSingleAssetFilters() {
+    const filters = window.savedSingleAssetFilters;
+    if (!filters) return;
+    
+    console.log('Applying saved single asset filters:', filters);
+    
+    // Apply time range
+    if (filters.days) {
+        document.getElementById('singleAssetTimeRange').value = filters.days;
+    }
+    
+    // Apply protocols
+    if (filters.protocols && filters.protocols.length > 0) {
+        selectedProtocols.clear();
+        allProtocolOptions.forEach(protocol => {
+            const checkbox = document.getElementById(`protocol-${protocol}`);
+            if (filters.protocols.includes(protocol)) {
+                selectedProtocols.add(protocol);
+                if (checkbox) checkbox.checked = true;
+            } else {
+                if (checkbox) checkbox.checked = false;
+            }
+        });
+        updateProtocolLabel();
+    }
+    
+    // Apply selected asset
+    if (filters.selected_asset) {
+        const assetSelect = document.getElementById('singleAssetSelect');
+        assetSelect.value = filters.selected_asset;
+    }
+    
+    // Load the chart with saved settings
+    loadSingleAssetChart();
+    
+    // Scroll to the single asset chart section
+    setTimeout(() => {
+        const singleAssetSection = document.getElementById('singleAssetChart');
+        if (singleAssetSection) {
+            singleAssetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 500);
+    
+    // Clear the saved filters
+    window.savedSingleAssetFilters = null;
 }
 
 loadAssets().then(async () => {
     // Try to load saved chart settings first
-    await loadSavedChartSettings();
+    const savedResult = await loadSavedChartSettings();
     
     await loadChart();
     // Render breakdown charts after history data is loaded
@@ -1132,6 +1201,11 @@ loadAssets().then(async () => {
     
     // Initialize single asset chart
     initSingleAssetChart();
+    
+    // If we loaded a single_asset chart, apply its settings after initialization
+    if (savedResult.loaded && savedResult.chartType === 'single_asset') {
+        setTimeout(applySavedSingleAssetFilters, 100);
+    }
 });
 
 // ============================================
@@ -1293,7 +1367,7 @@ async function loadSingleAssetChart() {
     const datasets = [];
     const tableData = [];
     
-    // Protocol colors - assign unique color per protocol
+    // Protocol colors - assign unique color per protocol+version
     const protocolColors = [
         '#2563eb',   // Blue
         '#dc2626',   // Red
@@ -1305,14 +1379,30 @@ async function loadSingleAssetChart() {
         '#65a30d'    // Lime
     ];
     
-    // Line styles for each measure type (dash pattern only - shape comes from protocol)
+    // Build a unique key for each protocol+version and assign a unique color
+    const protocolVersionMap = {};
+    let colorIndex = 0;
+    assetData.forEach(protocolData => {
+        const protocol = protocolData.protocol;
+        const version = protocolData.version;
+        const key = version ? `${protocol}_${version.toLowerCase()}` : protocol;
+        
+        if (!protocolVersionMap[key]) {
+            protocolVersionMap[key] = {
+                color: protocolColors[colorIndex % protocolColors.length]
+            };
+            colorIndex++;
+        }
+    });
+    
+    // Measure styles: shape AND line style distinguish each measure type
     const measureStyles = {
-        '1d': { dash: [], width: 2 },        // Solid
-        '7d': { dash: [6, 4], width: 2.5 },  // Dashed
-        '30d': { dash: [2, 2], width: 3 }    // Dotted
+        '1d': { dash: [], width: 2, pointStyle: 'circle' },           // Solid line, circle
+        '7d': { dash: [6, 4], width: 2.5, pointStyle: 'triangle' },   // Dashed line, triangle
+        '30d': { dash: [2, 2], width: 3, pointStyle: 'rect' }         // Dotted line, square
     };
     
-    assetData.forEach((protocolData, idx) => {
+    assetData.forEach((protocolData) => {
         const protocol = protocolData.protocol;
         const version = protocolData.version;
         const rawData = protocolData.data.filter(d => d.apr_1d != null);
@@ -1327,11 +1417,10 @@ async function loadSingleAssetChart() {
         
         const versionSuffix = version ? ` ${version}` : '';
         const label = `${protocol}${versionSuffix}`;
-        const protocolColor = protocolColors[idx % protocolColors.length];
         
-        // Create datasets for each average type
-        // Get protocol point style from first chart's styles
-        const protocolStyle = protocolLineStyles[protocol.toLowerCase()] || { pointStyle: 'circle' };
+        // Get unique color for this protocol+version combination
+        const key = version ? `${protocol}_${version.toLowerCase()}` : protocol;
+        const protocolColor = protocolVersionMap[key].color;
         
         ['1d', '7d', '30d'].forEach((avgType) => {
             const style = measureStyles[avgType];
@@ -1342,7 +1431,7 @@ async function loadSingleAssetChart() {
                 backgroundColor: protocolColor + '20',
                 borderWidth: style.width,
                 borderDash: style.dash,
-                pointStyle: protocolStyle.pointStyle,
+                pointStyle: style.pointStyle,
                 tension: 0.4,
                 fill: false
             });
@@ -1465,6 +1554,51 @@ function calculateRollingAverages(data, maxDays) {
     return result;
 }
 
+function getShapeSvg(pointStyle, color) {
+    // Generate SVG for each Chart.js point style
+    const size = 14;
+    const half = size / 2;
+    
+    switch (pointStyle) {
+        case 'circle':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <circle cx="${half}" cy="${half}" r="${half - 1}" fill="${color}"/>
+            </svg>`;
+        case 'triangle':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <polygon points="${half},1 ${size - 1},${size - 1} 1,${size - 1}" fill="${color}"/>
+            </svg>`;
+        case 'rect':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="${color}"/>
+            </svg>`;
+        case 'rectRot': // Diamond
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <polygon points="${half},1 ${size - 1},${half} ${half},${size - 1} 1,${half}" fill="${color}"/>
+            </svg>`;
+        case 'star':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <polygon points="7,1 8.5,5 13,5.5 9.5,8.5 10.5,13 7,10.5 3.5,13 4.5,8.5 1,5.5 5.5,5" fill="${color}"/>
+            </svg>`;
+        case 'crossRot': // X shape
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <path d="M2,2 L12,12 M12,2 L2,12" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+            </svg>`;
+        case 'rectRounded':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <rect x="1" y="1" width="${size - 2}" height="${size - 2}" rx="3" ry="3" fill="${color}"/>
+            </svg>`;
+        case 'cross':
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <path d="M${half},2 L${half},${size - 2} M2,${half} L${size - 2},${half}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+            </svg>`;
+        default:
+            return `<svg width="${size}" height="${size}" style="vertical-align: middle; margin-right: 8px;">
+                <circle cx="${half}" cy="${half}" r="${half - 1}" fill="${color}"/>
+            </svg>`;
+    }
+}
+
 function updateSingleAssetTable(data) {
     const tbody = document.getElementById('singleAssetTableBody');
     
@@ -1476,12 +1610,21 @@ function updateSingleAssetTable(data) {
     tbody.innerHTML = data.map(row => `
         <tr>
             <td>
-                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: ${row.color}; margin-right: 8px; vertical-align: middle;"></span>
+                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: ${row.color}; margin-right: 8px; vertical-align: middle;"></span>
                 <strong>${row.protocol}</strong>
             </td>
-            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg1d?.toFixed(2) || '-'}%</td>
-            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg7d?.toFixed(2) || '-'}%</td>
-            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg30d?.toFixed(2) || '-'}%</td>
+            <td style="color: var(--carbon-black); font-weight: 600;">
+                ${getShapeSvg('circle', row.color)}
+                ${row.avg1d?.toFixed(2) || '-'}%
+            </td>
+            <td style="color: var(--carbon-black); font-weight: 600;">
+                ${getShapeSvg('triangle', row.color)}
+                ${row.avg7d?.toFixed(2) || '-'}%
+            </td>
+            <td style="color: var(--carbon-black); font-weight: 600;">
+                ${getShapeSvg('rect', row.color)}
+                ${row.avg30d?.toFixed(2) || '-'}%
+            </td>
         </tr>
     `).join('');
 }
@@ -1489,7 +1632,21 @@ function updateSingleAssetTable(data) {
 // Save Chart functionality
 function saveCurrentChart() {
     {% if current_user.is_authenticated %}
+    document.getElementById('chartType').value = 'multi_asset';
+    document.getElementById('chartTypeIndicator').innerHTML = '📊 Saving: <strong>Multi Asset, One Measure</strong> chart';
     document.getElementById('chartName').value = 'Cardano LP Chart';
+    new bootstrap.Modal(document.getElementById('saveChartModal')).show();
+    {% else %}
+    new bootstrap.Modal(document.getElementById('authModal')).show();
+    {% endif %}
+}
+
+function saveSingleAssetChart() {
+    {% if current_user.is_authenticated %}
+    const selectedAsset = document.getElementById('singleAssetSelect').value;
+    document.getElementById('chartType').value = 'single_asset';
+    document.getElementById('chartTypeIndicator').innerHTML = '📈 Saving: <strong>One Asset, Multi Measures</strong> chart';
+    document.getElementById('chartName').value = selectedAsset ? `${selectedAsset} Analysis` : 'Single Asset Chart';
     new bootstrap.Modal(document.getElementById('saveChartModal')).show();
     {% else %}
     new bootstrap.Modal(document.getElementById('authModal')).show();
@@ -1500,15 +1657,32 @@ async function handleSaveChart(event) {
     event.preventDefault();
     
     const name = document.getElementById('chartName').value;
+    const chartType = document.getElementById('chartType').value;
     const alert = document.getElementById('saveChartAlert');
     
-    const filters = {
-        chain: chain,
-        days: parseInt(document.getElementById('timeRange').value),
-        assets: Array.from(selectedAssets),
-        yield_type: yieldType,
-        apr_type: selectedAprType
-    };
+    let filters;
+    
+    if (chartType === 'single_asset') {
+        // Save settings for "One Asset, Multi Measures" chart
+        filters = {
+            chain: chain,
+            chart_type: 'single_asset',
+            days: parseInt(document.getElementById('singleAssetTimeRange').value),
+            selected_asset: document.getElementById('singleAssetSelect').value,
+            protocols: Array.from(selectedProtocols),
+            yield_type: yieldType
+        };
+    } else {
+        // Save settings for "Multi Asset, One Measure" chart
+        filters = {
+            chain: chain,
+            chart_type: 'multi_asset',
+            days: parseInt(document.getElementById('timeRange').value),
+            assets: Array.from(selectedAssets),
+            yield_type: yieldType,
+            apr_type: selectedAprType
+        };
+    }
     
     try {
         const response = await fetch('/api/auth/charts', {

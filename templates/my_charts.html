@@ -40,6 +40,21 @@
         font-size: 0.8rem;
         font-weight: 500;
     }
+    .chart-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: linear-gradient(135deg, #0E8749 0%, #16a34a 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .chart-type-badge.single-asset {
+        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    }
     .chart-meta {
         font-size: 0.8rem;
         color: var(--text-secondary);
@@ -158,16 +173,41 @@ function renderChartCard(chart) {
     const filters = chart.filters || {};
     const created = new Date(chart.created_at).toLocaleDateString();
     
+    // Determine chart type
+    const chartType = filters.chart_type || 'multi_asset';
+    const isMultiAsset = chartType === 'multi_asset';
+    
+    // Build chart type badge
+    let chartTypeBadge;
+    if (isMultiAsset) {
+        chartTypeBadge = `<span class="chart-type-badge">📊 Multi Asset, One Measure</span>`;
+    } else {
+        chartTypeBadge = `<span class="chart-type-badge single-asset">📈 One Asset, Multi Measures</span>`;
+    }
+    
     // Build filter badges
     let badges = [];
     if (filters.chain) badges.push(`<span class="filter-badge">${filters.chain}</span>`);
     if (filters.protocol) badges.push(`<span class="filter-badge">${filters.protocol}</span>`);
     if (filters.yield_type) badges.push(`<span class="filter-badge">${filters.yield_type}</span>`);
-    if (filters.assets && filters.assets.length) {
+    
+    // For multi-asset chart
+    if (isMultiAsset && filters.assets && filters.assets.length) {
         badges.push(`<span class="filter-badge">${filters.assets.length} assets</span>`);
     }
+    if (isMultiAsset && filters.apr_type) {
+        badges.push(`<span class="filter-badge">${filters.apr_type} APR</span>`);
+    }
+    
+    // For single-asset chart
+    if (!isMultiAsset && filters.selected_asset) {
+        badges.push(`<span class="filter-badge">${filters.selected_asset}</span>`);
+    }
+    if (!isMultiAsset && filters.protocols && filters.protocols.length) {
+        badges.push(`<span class="filter-badge">${filters.protocols.length} protocols</span>`);
+    }
+    
     if (filters.days) badges.push(`<span class="filter-badge">${filters.days}d range</span>`);
-    if (filters.apr_type) badges.push(`<span class="filter-badge">${filters.apr_type} APR</span>`);
     
     // Build URL to load chart
     let chartUrl = '/';
@@ -188,6 +228,7 @@ function renderChartCard(chart) {
     
     return `
         <div class="chart-card" data-chart-id="${chart.chart_id}">
+            ${chartTypeBadge}
             <div class="chart-name">${escapeHtml(chart.name)}</div>
             <div class="chart-filters">${badges.join('')}</div>
             <div class="chart-meta">Created: ${created}</div>
