@@ -30,6 +30,28 @@
     #aprTable tbody tr:hover {
         background-color: rgba(0,0,0,0.05);
     }
+    #singleAssetTable {
+        margin-bottom: 0;
+        background-color: transparent;
+    }
+    #singleAssetTable th {
+        border-top: none;
+        border-bottom: 2px solid rgba(0,0,0,0.2);
+        padding: 1rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        background-color: transparent;
+    }
+    #singleAssetTable td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        color: #1a1a1a;
+        background-color: transparent;
+    }
+    #singleAssetTable tbody tr:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
     .table-responsive {
         border-radius: 8px;
     }
@@ -465,6 +487,60 @@
                     </thead>
                     <tbody id="currentAprs">
                         <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Single Asset Chart - Multiple Time Measures -->
+        <div class="card p-4 chart-card-dark card-top mt-4">
+            <h5 class="chart-section-title">One Asset, Multi Measures</h5>
+            <!-- Filters -->
+            <div class="chart-filters-row mb-3">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">Select Asset</label>
+                        <select id="singleAssetSelect" class="form-select">
+                            <option value="">Loading assets...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Protocol</label>
+                        <select id="singleAssetProtocol" class="form-select">
+                            <option value="all" selected>All Protocols</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Time Range</label>
+                        <select id="singleAssetTimeRange" class="form-select">
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="365">Last Year</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chart Canvas -->
+            <div class="chart-container" style="height: 350px;">
+                <canvas id="singleAssetChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Single Asset Table -->
+        <div class="card p-4 card-styled card-bottom">
+            <div class="table-responsive">
+                <table class="table table-hover" id="singleAssetTable">
+                    <thead>
+                        <tr>
+                            <th>Protocol</th>
+                            <th>1-Day Avg</th>
+                            <th>7-Day Avg</th>
+                            <th>30-Day Avg</th>
+                        </tr>
+                    </thead>
+                    <tbody id="singleAssetTableBody">
+                        <tr><td colspan="4" class="text-center" style="color: #555;">Select an asset to view data</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -914,7 +990,7 @@ function applySortToTable() {
                 <img src="${logo}" alt="${item.protocol}" title="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${item.symbol}${versionStr}</strong>
             </td>
-            <td><span style="color: #16a34a; font-size: 1.1rem; font-weight: 600;">${aprDisplay}</span></td>
+            <td><span style="color: var(--carbon-black); font-size: 1.1rem; font-weight: 600;">${aprDisplay}</span></td>
             <td>${changeHtml}</td>
             <td style="color: #1a1a1a;">${volumeDisplay}</td>
         `;
@@ -1033,10 +1109,274 @@ loadAssets().then(async () => {
     // Try to load saved chart settings first
     await loadSavedChartSettings();
     
-    loadChart();
+    await loadChart();
     // Render breakdown charts after history data is loaded
     setTimeout(renderBreakdownCharts, 500);
+    
+    // Initialize single asset chart
+    initSingleAssetChart();
 });
+
+// ============================================
+// Single Asset, Multi Measures Chart
+// ============================================
+let singleAssetChart = null;
+
+function initSingleAssetChart() {
+    const assetSelect = document.getElementById('singleAssetSelect');
+    const protocolSelect = document.getElementById('singleAssetProtocol');
+    
+    // Populate asset dropdown from allAssets
+    assetSelect.innerHTML = '<option value="">Select an asset...</option>';
+    allAssets.forEach(asset => {
+        const option = document.createElement('option');
+        option.value = asset.symbol;
+        option.textContent = asset.symbol;
+        assetSelect.appendChild(option);
+    });
+    
+    // Populate protocol dropdown from allHistoryData
+    const protocols = [...new Set(allHistoryData.map(d => d.protocol))].sort();
+    protocolSelect.innerHTML = '<option value="all">All Protocols</option>';
+    protocols.forEach(protocol => {
+        const option = document.createElement('option');
+        option.value = protocol;
+        option.textContent = protocol;
+        protocolSelect.appendChild(option);
+    });
+    
+    // Set default to first NIGHT asset if available
+    const nightAsset = allAssets.find(a => a.symbol.includes('NIGHT'));
+    if (nightAsset) {
+        assetSelect.value = nightAsset.symbol;
+        loadSingleAssetChart();
+    }
+    
+    // Event listeners
+    assetSelect.addEventListener('change', loadSingleAssetChart);
+    protocolSelect.addEventListener('change', loadSingleAssetChart);
+    document.getElementById('singleAssetTimeRange').addEventListener('change', loadSingleAssetChart);
+}
+
+async function loadSingleAssetChart() {
+    const selectedAsset = document.getElementById('singleAssetSelect').value;
+    const selectedProtocol = document.getElementById('singleAssetProtocol').value;
+    const days = parseInt(document.getElementById('singleAssetTimeRange').value);
+    
+    if (!selectedAsset) {
+        updateSingleAssetTable([]);
+        return;
+    }
+    
+    // Filter data for the selected asset from allHistoryData
+    let assetData = allHistoryData.filter(d => d.symbol === selectedAsset);
+    
+    // Apply protocol filter if not "all"
+    if (selectedProtocol !== 'all') {
+        assetData = assetData.filter(d => d.protocol === selectedProtocol);
+    }
+    
+    if (assetData.length === 0) {
+        updateSingleAssetTable([]);
+        return;
+    }
+    
+    // Process data for each protocol that has this asset
+    const datasets = [];
+    const tableData = [];
+    
+    // Protocol colors - assign unique color per protocol
+    const protocolColors = [
+        '#2563eb',   // Blue
+        '#dc2626',   // Red
+        '#16a34a',   // Green
+        '#9333ea',   // Purple
+        '#ea580c',   // Orange
+        '#0891b2',   // Cyan
+        '#c026d3',   // Magenta
+        '#65a30d'    // Lime
+    ];
+    
+    // Line styles for each measure type (dash pattern only - shape comes from protocol)
+    const measureStyles = {
+        '1d': { dash: [], width: 2 },        // Solid
+        '7d': { dash: [6, 4], width: 2.5 },  // Dashed
+        '30d': { dash: [2, 2], width: 3 }    // Dotted
+    };
+    
+    assetData.forEach((protocolData, idx) => {
+        const protocol = protocolData.protocol;
+        const version = protocolData.version;
+        const rawData = protocolData.data.filter(d => d.apr_1d != null);
+        
+        if (rawData.length === 0) return;
+        
+        // Sort by timestamp
+        rawData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate rolling averages
+        const processed = calculateRollingAverages(rawData, days);
+        
+        const versionSuffix = version ? ` ${version}` : '';
+        const label = `${protocol}${versionSuffix}`;
+        const protocolColor = protocolColors[idx % protocolColors.length];
+        
+        // Create datasets for each average type
+        // Get protocol point style from first chart's styles
+        const protocolStyle = protocolLineStyles[protocol.toLowerCase()] || { pointStyle: 'circle' };
+        
+        ['1d', '7d', '30d'].forEach((avgType) => {
+            const style = measureStyles[avgType];
+            datasets.push({
+                label: `${label} (${avgType} avg)`,
+                data: processed.map(d => ({ x: new Date(d.timestamp), y: d[`avg_${avgType}`] })),
+                borderColor: protocolColor,
+                backgroundColor: protocolColor + '20',
+                borderWidth: style.width,
+                borderDash: style.dash,
+                pointStyle: protocolStyle.pointStyle,
+                tension: 0.4,
+                fill: false
+            });
+        });
+        
+        // Get latest values for table
+        const latest = processed[processed.length - 1];
+        if (latest) {
+            tableData.push({
+                protocol: label,
+                color: protocolColor,
+                avg1d: latest.avg_1d,
+                avg7d: latest.avg_7d,
+                avg30d: latest.avg_30d,
+                dataPoints: rawData.length
+            });
+        }
+    });
+    
+    // Render chart
+    if (singleAssetChart) {
+        singleAssetChart.destroy();
+    }
+    
+    const ctx = document.getElementById('singleAssetChart').getContext('2d');
+    singleAssetChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#1a1a1a',
+                        usePointStyle: true,
+                        padding: 15,
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: days <= 30 ? 'day' : 'week' },
+                    grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                    ticks: { color: '#1a1a1a' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                    ticks: {
+                        color: '#1a1a1a',
+                        callback: (value) => value + '%'
+                    }
+                }
+            }
+        }
+    });
+    
+    updateSingleAssetTable(tableData);
+}
+
+function calculateRollingAverages(data, maxDays) {
+    const result = [];
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - maxDays);
+    
+    // Filter to time range
+    const filteredData = data.filter(d => new Date(d.timestamp) >= cutoffDate);
+    
+    // If not enough data, extrapolate by repeating available data pattern
+    let workingData = filteredData;
+    if (filteredData.length < 7 && data.length > 0) {
+        // Use all available data and extrapolate
+        workingData = data.slice(-Math.min(data.length, 30));
+    }
+    
+    workingData.forEach((point, i) => {
+        const timestamp = point.timestamp;
+        const apr1d = point.apr_1d;
+        
+        // 1-day average is just the current value
+        const avg1d = apr1d;
+        
+        // 7-day rolling average
+        const last7 = workingData.slice(Math.max(0, i - 6), i + 1);
+        let avg7d;
+        if (last7.length >= 7) {
+            avg7d = last7.reduce((sum, p) => sum + p.apr_1d, 0) / last7.length;
+        } else {
+            // Extrapolate: use available data average
+            avg7d = last7.reduce((sum, p) => sum + p.apr_1d, 0) / last7.length;
+        }
+        
+        // 30-day rolling average
+        const last30 = workingData.slice(Math.max(0, i - 29), i + 1);
+        let avg30d;
+        if (last30.length >= 30) {
+            avg30d = last30.reduce((sum, p) => sum + p.apr_1d, 0) / last30.length;
+        } else {
+            // Extrapolate: use available data average
+            avg30d = last30.reduce((sum, p) => sum + p.apr_1d, 0) / last30.length;
+        }
+        
+        result.push({
+            timestamp,
+            avg_1d: avg1d,
+            avg_7d: avg7d,
+            avg_30d: avg30d
+        });
+    });
+    
+    return result;
+}
+
+function updateSingleAssetTable(data) {
+    const tbody = document.getElementById('singleAssetTableBody');
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="color: #555;">Select an asset to view data</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = data.map(row => `
+        <tr>
+            <td>
+                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: ${row.color}; margin-right: 8px; vertical-align: middle;"></span>
+                <strong>${row.protocol}</strong>
+            </td>
+            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg1d?.toFixed(2) || '-'}%</td>
+            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg7d?.toFixed(2) || '-'}%</td>
+            <td style="color: var(--carbon-black); font-weight: 600;">${row.avg30d?.toFixed(2) || '-'}%</td>
+        </tr>
+    `).join('');
+}
 
 // Save Chart functionality
 function saveCurrentChart() {
