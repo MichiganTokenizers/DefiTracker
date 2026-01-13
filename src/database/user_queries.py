@@ -17,6 +17,7 @@ class User:
     email_verified: bool = False
     wallet_address: Optional[str] = None
     display_name: Optional[str] = None
+    newsletter_subscribed: bool = False
     created_at: Optional[datetime] = None
     
     def to_dict(self) -> dict:
@@ -28,8 +29,14 @@ class User:
             'email_verified': self.email_verified,
             'wallet_address': self.wallet_address,
             'display_name': self.display_name,
+            'newsletter_subscribed': self.newsletter_subscribed,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+    
+    @property
+    def needs_email_prompt(self) -> bool:
+        """Check if wallet user should be prompted for email"""
+        return self.auth_method == 'wallet' and not self.email and not self.newsletter_subscribed
     
     def get_id(self) -> str:
         """Required for Flask-Login"""
@@ -108,7 +115,7 @@ class UserQueries:
                 cur.execute("""
                     INSERT INTO users (auth_method, email, password_hash, verification_token, display_name)
                     VALUES ('email', %s, %s, %s, %s)
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                 """, (email, password_hash, verification_token, display_name))
                 row = cur.fetchone()
                 conn.commit()
@@ -120,7 +127,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         except Exception as e:
             conn.rollback()
@@ -142,7 +150,7 @@ class UserQueries:
                 cur.execute("""
                     INSERT INTO users (auth_method, wallet_address, display_name)
                     VALUES ('wallet', %s, %s)
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                 """, (wallet_address, display_name))
                 row = cur.fetchone()
                 conn.commit()
@@ -154,7 +162,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         except Exception as e:
             conn.rollback()
@@ -170,7 +179,7 @@ class UserQueries:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    SELECT user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                     FROM users WHERE user_id = %s
                 """, (user_id,))
                 row = cur.fetchone()
@@ -182,7 +191,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         finally:
             self.db.return_connection(conn)
@@ -195,7 +205,7 @@ class UserQueries:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT user_id, auth_method, email, email_verified, wallet_address, 
-                           display_name, created_at, password_hash
+                           display_name, newsletter_subscribed, created_at, password_hash
                     FROM users WHERE email = %s
                 """, (email,))
                 row = cur.fetchone()
@@ -207,9 +217,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
-                    return (user, row[7])  # Return user and password_hash
+                    return (user, row[8])  # Return user and password_hash
         finally:
             self.db.return_connection(conn)
         return None
@@ -220,7 +231,7 @@ class UserQueries:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    SELECT user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                     FROM users WHERE wallet_address = %s
                 """, (wallet_address,))
                 row = cur.fetchone()
@@ -232,7 +243,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         finally:
             self.db.return_connection(conn)
@@ -247,7 +259,7 @@ class UserQueries:
                     UPDATE users 
                     SET email_verified = TRUE, verification_token = NULL
                     WHERE verification_token = %s
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                 """, (token,))
                 row = cur.fetchone()
                 conn.commit()
@@ -259,7 +271,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         except Exception as e:
             conn.rollback()
@@ -300,7 +313,7 @@ class UserQueries:
                     UPDATE users 
                     SET password_hash = %s, reset_token = NULL, reset_token_expires = NULL
                     WHERE reset_token = %s AND reset_token_expires > NOW()
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, display_name, newsletter_subscribed, created_at
                 """, (password_hash, token))
                 row = cur.fetchone()
                 conn.commit()
@@ -312,7 +325,8 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         display_name=row[5],
-                        created_at=row[6]
+                        newsletter_subscribed=row[6],
+                        created_at=row[7]
                     )
         except Exception as e:
             conn.rollback()
@@ -325,7 +339,8 @@ class UserQueries:
         self,
         user_id: int,
         email: str,
-        verification_token: str
+        verification_token: str,
+        subscribe_newsletter: bool = False
     ) -> bool:
         """Add email to a wallet-authenticated user"""
         conn = self.db.get_connection()
@@ -333,16 +348,39 @@ class UserQueries:
             with conn.cursor() as cur:
                 cur.execute("""
                     UPDATE users 
-                    SET email = %s, verification_token = %s, email_verified = FALSE
+                    SET email = %s, verification_token = %s, email_verified = FALSE, newsletter_subscribed = %s
                     WHERE user_id = %s AND auth_method = 'wallet' AND email IS NULL
                     RETURNING user_id
-                """, (email, verification_token, user_id))
+                """, (email, verification_token, subscribe_newsletter, user_id))
                 row = cur.fetchone()
                 conn.commit()
                 return row is not None
         except Exception as e:
             conn.rollback()
             print(f"Error adding email to wallet user: {e}")
+        finally:
+            self.db.return_connection(conn)
+        return False
+    
+    def dismiss_newsletter_prompt(self, user_id: int) -> bool:
+        """Mark that user dismissed the newsletter prompt (set newsletter_subscribed to indicate they've seen it)"""
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                # We use newsletter_subscribed=True to indicate they've been prompted
+                # In the future, could add a separate 'newsletter_prompt_dismissed' column
+                cur.execute("""
+                    UPDATE users 
+                    SET newsletter_subscribed = TRUE
+                    WHERE user_id = %s
+                    RETURNING user_id
+                """, (user_id,))
+                row = cur.fetchone()
+                conn.commit()
+                return row is not None
+        except Exception as e:
+            conn.rollback()
+            print(f"Error dismissing newsletter prompt: {e}")
         finally:
             self.db.return_connection(conn)
         return False

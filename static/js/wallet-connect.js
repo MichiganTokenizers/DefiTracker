@@ -155,8 +155,25 @@ async function connectWallet() {
         const loginData = await loginResponse.json();
         
         if (loginResponse.ok) {
-            // Success - reload page
-            window.location.reload();
+            // Check if we should show the newsletter prompt
+            if (loginData.show_email_prompt) {
+                // Close auth modal first
+                const authModal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+                if (authModal) authModal.hide();
+                
+                // Show newsletter modal after a brief delay
+                setTimeout(() => {
+                    if (typeof showNewsletterModal === 'function') {
+                        showNewsletterModal();
+                    } else {
+                        // Fallback: reload page
+                        window.location.reload();
+                    }
+                }, 300);
+            } else {
+                // No prompt needed - reload page
+                window.location.reload();
+            }
         } else {
             throw new Error(loginData.error || 'Wallet login failed');
         }

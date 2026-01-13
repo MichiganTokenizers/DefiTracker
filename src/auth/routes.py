@@ -371,7 +371,8 @@ def wallet_login():
     return jsonify({
         'message': 'Login successful',
         'user': user.to_dict(),
-        'is_new_user': is_new
+        'is_new_user': is_new,
+        'show_email_prompt': user.needs_email_prompt
     })
 
 
@@ -397,7 +398,7 @@ def get_current_user():
 @auth_bp.route('/add-email', methods=['POST'])
 @login_required
 def add_email():
-    """Add email to wallet account"""
+    """Add email to wallet account (with optional newsletter subscription)"""
     if current_user.auth_method != 'wallet':
         return jsonify({'error': 'This action is only for wallet accounts'}), 400
     
@@ -410,6 +411,7 @@ def add_email():
         return jsonify({'error': 'No data provided'}), 400
     
     email = data.get('email', '').strip().lower()
+    subscribe_newsletter = data.get('subscribe_newsletter', True)  # Default to subscribed
     
     if not email:
         return jsonify({'error': 'Email is required'}), 400
@@ -425,12 +427,27 @@ def add_email():
     # Add email with verification token
     verification_token = generate_token()
     
-    if user_queries.add_email_to_wallet_user(current_user.user_id, email, verification_token):
+    if user_queries.add_email_to_wallet_user(
+        current_user.user_id, 
+        email, 
+        verification_token,
+        subscribe_newsletter=subscribe_newsletter
+    ):
         base_url = get_base_url()
         send_verification_email(email, verification_token, base_url)
         return jsonify({'message': 'Email added. Please check your inbox to verify.'})
     else:
         return jsonify({'error': 'Failed to add email'}), 500
+
+
+@auth_bp.route('/dismiss-newsletter', methods=['POST'])
+@login_required
+def dismiss_newsletter():
+    """Dismiss the newsletter prompt for wallet users"""
+    if user_queries.dismiss_newsletter_prompt(current_user.user_id):
+        return jsonify({'message': 'Newsletter prompt dismissed'})
+    else:
+        return jsonify({'error': 'Failed to dismiss prompt'}), 500
 
 
 @auth_bp.route('/profile', methods=['PUT'])
