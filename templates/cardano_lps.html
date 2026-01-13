@@ -421,8 +421,8 @@
             <h5 class="chart-section-title">Multi Asset, One Measure</h5>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
-                <div class="row g-2">
-                    <div class="col-md-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
                         <label class="form-label">Time Range</label>
                         <select id="timeRange" class="form-select">
                             <option value="7">Last 7 Days</option>
@@ -430,15 +430,6 @@
                             <option value="90">Last 90 Days</option>
                             <option value="365">Last Year</option>
                         </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">APR Type</label>
-                        <div class="apr-toggle" role="group" id="aprToggle">
-                            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
-                            <label class="btn" for="apr1d" title="1-day APR snapshot">1d APR</label>
-                            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
-                            <label class="btn" for="apr30d" title="30-day extrapolated APR">30d APR</label>
-                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Asset Filter</label>
@@ -459,7 +450,16 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">APR Measure</label>
+                        <div class="apr-toggle" role="group" id="aprToggle">
+                            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
+                            <label class="btn" for="apr1d" title="1-day actual APR">1d Actual</label>
+                            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
+                            <label class="btn" for="apr30d" title="30-day average APR">30d Avg</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 ms-auto d-flex align-items-end">
                         <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
                             Save Chart
                         </button>
@@ -498,10 +498,12 @@
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
                 <div class="row g-2">
-                    <div class="col-md-4">
-                        <label class="form-label">Select Asset</label>
-                        <select id="singleAssetSelect" class="form-select">
-                            <option value="">Loading assets...</option>
+                    <div class="col-md-3">
+                        <label class="form-label">Time Range</label>
+                        <select id="singleAssetTimeRange" class="form-select">
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="365">Last Year</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -510,12 +512,10 @@
                             <option value="all" selected>All Protocols</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Time Range</label>
-                        <select id="singleAssetTimeRange" class="form-select">
-                            <option value="30" selected>Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                            <option value="365">Last Year</option>
+                    <div class="col-md-4">
+                        <label class="form-label">Select Asset</label>
+                        <select id="singleAssetSelect" class="form-select">
+                            <option value="">Loading assets...</option>
                         </select>
                     </div>
                 </div>
