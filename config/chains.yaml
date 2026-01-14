@@ -97,6 +97,72 @@ chains:
         # Router is optional (alternative method)
         router: ""  # Optional: BlazeSwap router address if it exists
         # Protocol-specific configuration will go here
+      
+      enosys:
+        enabled: true
+        # ========================================================
+        # Enosys DEX V3 - Concentrated Liquidity AMM on Flare
+        # ========================================================
+        # Documentation: https://help.enosys.global/enosys/enosys-ecosystem/enosys-dex-v3
+        # 
+        # Enosys uses Uniswap V3-style concentrated liquidity with:
+        # - NFT LP positions with custom price ranges
+        # - 6-hour epochs for incentive distribution
+        # - Fees/incentives proportional to active liquidity during swaps
+        #
+        # HOW TO FIND CONTRACT ADDRESSES:
+        # 1. Visit https://dex.enosys.global and open browser dev tools (F12)
+        # 2. Go to Network tab, filter by "contract" or look at XHR requests
+        # 3. Or inspect the dApp source (right-click -> View Source)
+        # 4. Search for "factory", "positionManager", "quoter" in the JS bundles
+        # 5. Alternatively, browse verified contracts on https://flarescan.com
+        #
+        # Core V3 Contracts (Uniswap V3 architecture)
+        # NOTE: These are PLACEHOLDER addresses - replace with actual addresses
+        factory: ""                    # EnosysV3Factory - creates pools
+        position_manager: ""           # NonfungiblePositionManager - NFT positions
+        quoter: ""                     # QuoterV2 - price quotes
+        
+        # Incentive/Staking contracts (for 6-hour epoch rewards)
+        incentive_controller: ""       # Manages epoch incentive distribution
+        
+        # Incentive token (rewards distributed to LPs)
+        incentive_token:
+          symbol: "WFLR"
+          address: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d"  # Wrapped FLR
+          decimals: 18
+        
+        # Configuration
+        epoch_duration_hours: 6        # Incentive epoch duration
+        timeout: 30
+        max_retries: 3
+        cache_ttl: 300                 # Cache position data for 5 minutes
+        min_tvl_usd: 1000              # Minimum pool TVL to track
+        
+        # Range category thresholds (percentage of price)
+        range_categories:
+          narrow_max_pct: 1.0          # <1% range width = narrow
+          medium_max_pct: 5.0          # 1-5% range width = medium
+          # >5% = wide
+        
+        # Pools to track
+        # Each pool has token0, token1, and fee tier
+        # Pool addresses discovered from CoinGecko/GeckoTerminal
+        pools:
+          - name: "USDC.e-WFLR"
+            symbol: "USDC.e-WFLR"
+            address: "0x3bc1ecbcd645e525508c570a0ff04480a5614a86"  # From CoinGecko API
+            token0: "USDC.e"
+            token1: "WFLR"
+            fee_tier: 500              # 0.05% fee tier
+          - name: "WFLR-eUSDT"
+            symbol: "WFLR-eUSDT"
+            address: ""                # Discover from factory or flarescan
+            token0: "WFLR"
+            token1: "eUSDT"
+            fee_tier: 3000             # 0.3% fee tier
+          # Add more pools as needed
+          # Find pool addresses on: https://www.geckoterminal.com/flare/enosys-v3/pools
   cardano:
     enabled: true
     chain_id: 1  # Cardano mainnet network id
