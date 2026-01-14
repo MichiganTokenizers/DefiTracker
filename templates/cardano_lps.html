@@ -1369,14 +1369,12 @@ async function loadSingleAssetChart() {
     
     // Protocol colors - assign unique color per protocol+version
     const protocolColors = [
-        '#2563eb',   // Blue
-        '#dc2626',   // Red
         '#16a34a',   // Green
-        '#9333ea',   // Purple
-        '#ea580c',   // Orange
+        '#d97706',   // Orange
+        '#2563eb',   // Blue
         '#0891b2',   // Cyan
-        '#c026d3',   // Magenta
-        '#65a30d'    // Lime
+        '#dc2626',   // Red
+        '#9333ea'    // Purple
     ];
     
     // Build a unique key for each protocol+version and assign a unique color
@@ -1607,10 +1605,15 @@ function updateSingleAssetTable(data) {
         return;
     }
     
-    tbody.innerHTML = data.map(row => `
+    tbody.innerHTML = data.map(row => {
+        // Extract base protocol name for logo lookup (remove version suffix)
+        const baseProtocol = row.protocol.split(' ')[0].toLowerCase();
+        const logo = protocolLogos[baseProtocol] || '/static/default-logo.png';
+        
+        return `
         <tr>
             <td>
-                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: ${row.color}; margin-right: 8px; vertical-align: middle;"></span>
+                <img src="${logo}" alt="${row.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${row.protocol}</strong>
             </td>
             <td style="color: var(--carbon-black); font-weight: 600;">
@@ -1626,7 +1629,7 @@ function updateSingleAssetTable(data) {
                 ${row.avg30d?.toFixed(2) || '-'}%
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 // Save Chart functionality
