@@ -503,6 +503,123 @@ def api_get_yields_by_type(yield_type):
     finally:
         db.return_connection(conn)
 
+@app.route('/api/liqwid/lending')
+def api_get_liqwid_lending():
+    """Get Liqwid lending data with both supply and borrow rates
+
+    Query params:
+        days: Number of days of history (default: 30)
+
+    Returns supply_apy, borrow_apy, and spread for each asset over time
+    """
+    days = request.args.get('days', default=30, type=int)
+
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    a.symbol,
+                    s.total_supply_apy,
+                    s.borrow_apy,
+                    s.total_supply,
+                    s.total_borrows,
+                    s.utilization_rate,
+                    s.timestamp
+                FROM liqwid_apy_snapshots s
+                JOIN assets a ON s.asset_id = a.asset_id
+                WHERE s.timestamp >= NOW() - INTERVAL '%s days'
+                ORDER BY a.symbol, s.timestamp ASC
+            """, (days,))
+
+            # Group by asset
+            data = {}
+            for row in cur.fetchall():
+                symbol = row[0]
+                supply_apy = row[1]
+                borrow_apy = row[2]
+                total_supply = row[3]
+                total_borrows = row[4]
+                utilization = row[5]
+                timestamp = row[6]
+
+                if symbol not in data:
+                    data[symbol] = {
+                        'symbol': symbol,
+                        'data': []
+                    }
+
+                # Calculate spread (borrow - supply)
+                spread = None
+                if supply_apy is not None and borrow_apy is not None:
+                    spread = float(borrow_apy) - float(supply_apy)
+
+                data[symbol]['data'].append({
+                    'timestamp': timestamp.isoformat(),
+                    'supply_apy': float(supply_apy) if supply_apy else None,
+                    'borrow_apy': float(borrow_apy) if borrow_apy else None,
+                    'spread': spread,
+                    'total_supply': float(total_supply) if total_supply else None,
+                    'total_borrows': float(total_borrows) if total_borrows else None,
+                    'utilization': float(utilization) if utilization else None
+                })
+
+        return jsonify(list(data.values()))
+    finally:
+        db.return_connection(conn)
+
+
+@app.route('/api/liqwid/lending/latest')
+def api_get_liqwid_lending_latest():
+    """Get latest Liqwid lending data for all assets
+
+    Returns current supply_apy, borrow_apy, spread, and TVL for each asset
+    Sorted by total_supply (TVL) descending to identify top collateral
+    """
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT ON (a.symbol)
+                    a.symbol,
+                    s.total_supply_apy,
+                    s.borrow_apy,
+                    s.total_supply,
+                    s.total_borrows,
+                    s.utilization_rate,
+                    s.timestamp
+                FROM liqwid_apy_snapshots s
+                JOIN assets a ON s.asset_id = a.asset_id
+                ORDER BY a.symbol, s.timestamp DESC
+            """)
+
+            results = []
+            for row in cur.fetchall():
+                supply_apy = row[1]
+                borrow_apy = row[2]
+                spread = None
+                if supply_apy is not None and borrow_apy is not None:
+                    spread = float(borrow_apy) - float(supply_apy)
+
+                results.append({
+                    'symbol': row[0],
+                    'supply_apy': float(supply_apy) if supply_apy else None,
+                    'borrow_apy': float(borrow_apy) if borrow_apy else None,
+                    'spread': spread,
+                    'total_supply': float(row[3]) if row[3] else None,
+                    'total_borrows': float(row[4]) if row[4] else None,
+                    'utilization': float(row[5]) if row[5] else None,
+                    'timestamp': row[6].isoformat()
+                })
+
+        # Sort by total_supply (TVL) descending
+        results.sort(key=lambda x: x['total_supply'] if x['total_supply'] else 0, reverse=True)
+
+        return jsonify(results)
+    finally:
+        db.return_connection(conn)
+
+
 @app.route('/api/yields/<yield_type>/latest')
 def api_get_latest_yields_by_type(yield_type):
     """Get latest yields of a specific type across all chains (for dashboard cards)

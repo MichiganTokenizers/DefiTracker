@@ -4,27 +4,37 @@
 
 {% block extra_css %}
 <style>
+    #aprTable {
+        margin-bottom: 0;
+        background-color: transparent;
+    }
     #aprTable th {
         border-top: none;
-        border-bottom: 2px solid rgba(255,255,255,0.2);
+        border-bottom: 2px solid rgba(0,0,0,0.2);
         padding: 1rem;
         font-weight: 600;
-        color: #b0b3c1;
+        color: #1a1a1a;
         cursor: pointer;
         user-select: none;
+        background-color: transparent;
     }
     #aprTable th:hover {
-        color: #ffffff;
+        color: #333;
     }
     #aprTable td {
         padding: 1rem;
         vertical-align: middle;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        color: #1a1a1a;
+        background-color: transparent;
     }
     #aprTable tbody tr:hover {
-        background-color: rgba(255,255,255,0.05);
+        background-color: rgba(0,0,0,0.05);
     }
-    
+    .table-responsive {
+        border-radius: 8px;
+    }
+
     /* Multi-select dropdown styles */
     .multi-select-container {
         position: relative;
@@ -41,14 +51,13 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        min-height: 38px;
     }
     .multi-select-btn:hover {
         border-color: var(--sea-green);
     }
     .multi-select-btn .count-badge {
-        background: var(--sea-green);
-        color: #fff;
+        background: var(--accent-primary);
+        color: #000;
         padding: 2px 8px;
         border-radius: 10px;
         font-size: 0.8rem;
@@ -99,134 +108,147 @@
         padding: 8px 12px;
         cursor: pointer;
         transition: background 0.15s;
+        color: var(--carbon-black);
     }
     .multi-select-option:hover {
         background: rgba(14, 135, 73, 0.1);
     }
     .multi-select-option input {
         margin-right: 10px;
-        accent-color: var(--sea-green);
+        accent-color: var(--accent-primary);
     }
     .multi-select-option label {
         cursor: pointer;
+        margin: 0;
         flex: 1;
+    }
+
+    /* Styled cards - sand dune theme */
+    .chart-card-dark,
+    .card-styled {
+        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%) !important;
+        border-radius: 12px;
+    }
+    .card-styled h5 {
+        color: #1a1a1a;
+    }
+    .card-styled .text-muted {
+        color: #333 !important;
+    }
+
+    /* Title card */
+    .title-card {
+        text-align: center;
+    }
+    .chart-title {
         margin: 0;
-        color: var(--carbon-black);
-    }
-    
-    /* Back link */
-    .back-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--text-secondary);
-        text-decoration: none;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-    }
-    .back-link:hover {
-        color: var(--sea-green);
-    }
-    
-    /* Page header */
-    .page-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-    }
-    .page-header-icon {
-        font-size: 2rem;
-    }
-    .page-header h2 {
-        margin: 0;
-        font-size: 1.75rem;
-    }
-    .page-header-subtitle {
-        color: var(--text-secondary);
-        font-size: 0.95rem;
-        margin: 0;
-    }
-    
-    /* Protocol badge */
-    .protocol-badge-inline {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        background: rgba(0, 51, 173, 0.1);
-        padding: 0.25rem 0.75rem;
-        border-radius: 8px;
-        margin-left: 1rem;
-    }
-    .protocol-badge-inline span {
-        background: var(--cardano-color);
-        color: white;
-        width: 24px;
-        height: 24px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 1.5rem;
+        color: #1a1a1a;
         font-weight: 600;
-        font-size: 0.7rem;
     }
-    .protocol-badge-inline small {
-        color: var(--text-secondary);
+    .chart-subtitle {
+        color: #555;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    /* Chart filters row */
+    .chart-filters-row {
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .chart-filters-row .form-label {
+        color: #1a1a1a;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .chart-container {
+        position: relative;
+    }
+    .chart-section-title {
+        color: #1a1a1a;
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.75rem 0;
+        text-align: left;
+    }
+
+    /* Connected cards - no gap between chart and table */
+    .card-top {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        margin-bottom: 0;
+    }
+    .card-bottom {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        border-top: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Moving average selector - toggle button style */
+    .ma-toggle {
+        display: flex;
+        gap: 0;
+    }
+    .ma-toggle .btn-check + .btn {
+        border: 1px solid var(--sea-green);
+        color: var(--sea-green);
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        background: transparent;
+    }
+    .ma-toggle .btn-check + .btn:hover {
+        background-color: rgba(14, 135, 73, 0.1);
+    }
+    .ma-toggle .btn-check:checked + .btn {
+        background-color: var(--sea-green);
+        border-color: var(--sea-green);
+        color: white;
+    }
+    .ma-toggle .btn:first-of-type {
+        border-radius: 6px 0 0 6px;
+    }
+    .ma-toggle .btn:last-of-type {
+        border-radius: 0 6px 6px 0;
+    }
+    .ma-toggle .btn:not(:first-of-type):not(:last-of-type) {
+        border-radius: 0;
+    }
+
+    /* Chart legend styles */
+    .chart-legend-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        padding: 0.5rem 0;
+        font-size: 0.8rem;
+        color: #555;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .legend-line {
+        width: 24px;
+        height: 3px;
+        background: #555;
+        border-radius: 2px;
+    }
+    .legend-line.dashed {
+        background: repeating-linear-gradient(
+            90deg,
+            #555 0px,
+            #555 4px,
+            transparent 4px,
+            transparent 8px
+        );
+        height: 2px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Back Link -->
-<a href="/cardano" class="back-link">← Back to Cardano</a>
-
-<div class="page-header">
-    <span class="page-header-icon">💰</span>
-    <div>
-        <h2>Cardano Lending</h2>
-        <p class="page-header-subtitle">Track supply APY on Liqwid Finance</p>
-    </div>
-    <div class="protocol-badge-inline">
-        <span>LQ</span>
-        <small>Liqwid</small>
-    </div>
-</div>
-
-<!-- Filters -->
-<div class="row mb-4 g-3">
-    <div class="col-md-2">
-        <label class="form-label">Time Range</label>
-        <select id="timeRange" class="form-select">
-            <option value="7">Last 7 Days</option>
-            <option value="30" selected>Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
-        </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Assets</label>
-        <div class="multi-select-container" id="assetSelectContainer">
-            <button type="button" class="multi-select-btn" id="assetSelectBtn">
-                <span id="assetSelectLabel">All Assets</span>
-                <span class="count-badge" id="assetCount" style="display: none;">0</span>
-            </button>
-            <div class="multi-select-dropdown" id="assetDropdown">
-                <div class="multi-select-actions">
-                    <button type="button" onclick="selectAllAssets()">Select All</button>
-                    <button type="button" onclick="clearAssets()">Clear</button>
-                </div>
-                <div id="assetOptions">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 d-flex align-items-end">
-        <button type="button" class="btn btn-outline-primary" id="saveChartBtn" onclick="saveCurrentChart()">
-            Save Chart
-        </button>
-    </div>
-</div>
-
 <!-- Save Chart Modal -->
 <div class="modal fade" id="saveChartModal" tabindex="-1">
     <div class="modal-dialog">
@@ -240,7 +262,7 @@
                 <form id="saveChartForm" onsubmit="handleSaveChart(event)">
                     <div class="mb-3">
                         <label for="chartName" class="form-label">Chart Name</label>
-                        <input type="text" class="form-control" id="chartName" required maxlength="100" 
+                        <input type="text" class="form-control" id="chartName" required maxlength="100"
                                placeholder="e.g., My Lending Watchlist">
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Save</button>
@@ -250,27 +272,98 @@
     </div>
 </div>
 
-<!-- Chart -->
 <div class="row">
-    <div class="col-12">
-        <div class="card p-4" style="height: 600px;">
-            <canvas id="aprChart"></canvas>
+    <div class="col-lg-12">
+        <!-- Title Card -->
+        <div class="card p-3 card-styled title-card mb-3">
+            <div class="text-center">
+                <h2 class="chart-title">Cardano Lending</h2>
+                <p class="chart-subtitle mb-0">Supply & Borrow rates on Liqwid Finance</p>
+            </div>
         </div>
-    </div>
-</div>
 
-<!-- Table -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card p-4">
-            <h5 class="mb-3">Current Supply APYs</h5>
+        <!-- Chart Card with Filters -->
+        <div class="card p-4 chart-card-dark card-top">
+            <h5 class="chart-section-title">Supply & Borrow Rates <span style="font-weight: 400; color: #555;">(bars show spread)</span></h5>
+            <!-- Filters -->
+            <div class="chart-filters-row mb-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label">Time Range</label>
+                        <select id="timeRange" class="form-select">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Assets</label>
+                        <div class="multi-select-container" id="assetSelectContainer">
+                            <button type="button" class="multi-select-btn" id="assetSelectBtn">
+                                <span id="assetSelectLabel">Top 3 by TVL</span>
+                                <span class="count-badge" id="assetCount" style="display: none;">0</span>
+                            </button>
+                            <div class="multi-select-dropdown" id="assetDropdown">
+                                <div class="multi-select-actions">
+                                    <button type="button" onclick="selectTop3()">Top 3</button>
+                                    <button type="button" onclick="selectAllAssets()">All</button>
+                                    <button type="button" onclick="clearAssets()">Clear</button>
+                                </div>
+                                <div id="assetOptions">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Moving Average</label>
+                        <div class="ma-toggle" role="group">
+                            <input type="radio" class="btn-check" name="maType" id="ma1" value="1" checked>
+                            <label class="btn" for="ma1">1 Day</label>
+                            <input type="radio" class="btn-check" name="maType" id="ma7" value="7">
+                            <label class="btn" for="ma7">7 Day</label>
+                            <input type="radio" class="btn-check" name="maType" id="ma30" value="30">
+                            <label class="btn" for="ma30">30 Day</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 ms-auto d-flex align-items-end">
+                        <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
+                            Save Chart
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Legend Info -->
+            <div class="chart-legend-info mb-2">
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>Supply APY (solid)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line dashed"></div>
+                    <span>Borrow APY (dashed)</span>
+                </div>
+            </div>
+
+            <!-- Chart Canvas -->
+            <div class="chart-container" style="height: 420px;">
+                <canvas id="combinedChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Table Card (no margin between chart and table) -->
+        <div class="card p-4 card-styled card-bottom">
             <div class="table-responsive">
-                <table class="table table-dark table-hover" id="aprTable">
+                <table class="table table-hover" id="aprTable">
                     <thead>
                         <tr>
                             <th onclick="sortTable(0)" id="th-0">Asset</th>
-                            <th onclick="sortTable(1)" id="th-1">Current APY ↓</th>
-                            <th onclick="sortTable(2)" id="th-2">24h Change</th>
+                            <th onclick="sortTable(1)" id="th-1">Supply APY</th>
+                            <th onclick="sortTable(2)" id="th-2">Borrow APY</th>
+                            <th onclick="sortTable(3)" id="th-3">Spread</th>
+                            <th onclick="sortTable(4)" id="th-4">Utilization</th>
+                            <th onclick="sortTable(5)" id="th-5">TVL ↓</th>
                             <th>Last Updated</th>
                         </tr>
                     </thead>
@@ -286,28 +379,42 @@
 
 {% block extra_js %}
 <script>
-const chain = "{{ chain }}";
-const yieldType = "{{ yield_type }}";
-let chart = null;
+let combinedChart = null;
 let allData = [];
 let latestData = [];
-let currentSortColumn = 1;
+let currentSortColumn = 5; // TVL column
 let currentSortDirection = 'desc';
 
 // Selected filters
-let selectedAssets = new Set(); // Empty = all assets
+let selectedAssets = new Set();
 let allAssetsList = [];
+let movingAverageDays = 1;
 
-// Protocol info
-const protocolLogos = {
-    'liqwid': '/static/liqwid-logo.png'
+// Color palette for assets
+const assetColors = {
+    'ADA': '#0033ad',
+    'DJED': '#16a34a',
+    'iUSD': '#2563eb',
+    'USDA': '#d97706',
+    'SHEN': '#dc2626',
+    'MIN': '#7c3aed',
+    'SNEK': '#db2777',
+    'NIGHT': '#0d9488',
+    'wanUSDC': '#ea580c',
+    'wanDAI': '#6d28d9'
 };
 
-// Color palette
-const assetColors = [
-    '#4ade80', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa',
-    '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4'
-];
+// Default colors for assets not in palette
+const defaultColors = ['#0891b2', '#65a30d', '#e11d48', '#0f766e', '#9333ea'];
+let colorIndex = 0;
+
+function getAssetColor(symbol) {
+    if (assetColors[symbol]) return assetColors[symbol];
+    const color = defaultColors[colorIndex % defaultColors.length];
+    colorIndex++;
+    assetColors[symbol] = color;
+    return color;
+}
 
 // Dropdown toggle handlers
 document.getElementById('assetSelectBtn').addEventListener('click', (e) => {
@@ -321,51 +428,71 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Moving average toggle event listeners
+document.querySelectorAll('input[name="maType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        movingAverageDays = parseInt(e.target.value);
+        applyFilters();
+    });
+});
+
 function updateAssetOptions() {
     const container = document.getElementById('assetOptions');
-    container.innerHTML = allAssetsList.map(symbol => `
+    container.innerHTML = allAssetsList.map((item, idx) => `
         <div class="multi-select-option">
-            <input type="checkbox" id="asset-${symbol}" value="${symbol}" 
-                   ${selectedAssets.size === 0 || selectedAssets.has(symbol) ? 'checked' : ''} 
-                   onchange="toggleAsset('${symbol}')">
-            <label for="asset-${symbol}">${symbol}</label>
+            <input type="checkbox" id="asset-${item.symbol}" value="${item.symbol}"
+                   ${selectedAssets.has(item.symbol) ? 'checked' : ''}
+                   onchange="toggleAsset('${item.symbol}')">
+            <label for="asset-${item.symbol}">
+                <span style="color: ${getAssetColor(item.symbol)};">●</span>
+                ${item.symbol}
+                <small class="text-muted ms-1">${formatTVL(item.total_supply)}</small>
+            </label>
         </div>
     `).join('');
-    
+
     updateAssetLabel();
 }
 
+function formatTVL(value) {
+    if (!value) return '';
+    if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+    if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+    return value.toFixed(0);
+}
+
 function toggleAsset(symbol) {
-    if (selectedAssets.size === 0) {
-        // Switching from "all" to explicit selection
-        allAssetsList.forEach(s => {
-            if (s !== symbol) selectedAssets.add(s);
-        });
-    } else if (selectedAssets.has(symbol)) {
+    if (selectedAssets.has(symbol)) {
         selectedAssets.delete(symbol);
     } else {
         selectedAssets.add(symbol);
     }
-    
-    // If all selected, reset to empty (means "all")
-    if (selectedAssets.size === allAssetsList.length) {
-        selectedAssets.clear();
-        document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
-    }
-    
+    updateAssetLabel();
+    applyFilters();
+}
+
+function selectTop3() {
+    selectedAssets.clear();
+    // Select top 3 by TVL (allAssetsList is already sorted by TVL)
+    allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
+    document.querySelectorAll('#assetOptions input').forEach(cb => {
+        cb.checked = selectedAssets.has(cb.value);
+    });
     updateAssetLabel();
     applyFilters();
 }
 
 function selectAllAssets() {
     selectedAssets.clear();
+    allAssetsList.forEach(item => selectedAssets.add(item.symbol));
     document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = true);
     updateAssetLabel();
     applyFilters();
 }
 
 function clearAssets() {
-    selectedAssets = new Set();
+    selectedAssets.clear();
     document.querySelectorAll('#assetOptions input').forEach(cb => cb.checked = false);
     updateAssetLabel();
     applyFilters();
@@ -374,116 +501,257 @@ function clearAssets() {
 function updateAssetLabel() {
     const label = document.getElementById('assetSelectLabel');
     const badge = document.getElementById('assetCount');
-    const checkedCount = document.querySelectorAll('#assetOptions input:checked').length;
-    
-    if (selectedAssets.size === 0 && checkedCount === allAssetsList.length) {
-        label.textContent = 'All Assets';
+    const count = selectedAssets.size;
+
+    if (count === 0) {
+        label.textContent = 'No assets selected';
         badge.style.display = 'none';
-    } else if (checkedCount === 0) {
-        label.textContent = 'No assets';
+    } else if (count === allAssetsList.length) {
+        label.textContent = 'All assets';
         badge.style.display = 'none';
-    } else if (checkedCount === 1) {
-        const checked = document.querySelector('#assetOptions input:checked');
-        label.textContent = checked ? checked.value : 'Selected';
+    } else if (count <= 2) {
+        label.textContent = [...selectedAssets].join(', ');
         badge.style.display = 'none';
     } else {
-        label.textContent = 'Assets';
-        badge.textContent = checkedCount;
+        label.textContent = [...selectedAssets].slice(0, 2).join(', ') + ` +${count - 2} more`;
+        badge.textContent = count;
         badge.style.display = 'inline';
     }
 }
 
+// Calculate moving average for data array
+function calculateMovingAverage(dataPoints, window) {
+    if (window <= 1) return dataPoints;
+
+    const result = [];
+    for (let i = 0; i < dataPoints.length; i++) {
+        const start = Math.max(0, i - window + 1);
+        const windowData = dataPoints.slice(start, i + 1);
+
+        const supplyAvg = windowData.reduce((sum, d) => sum + (d.supply_apy || 0), 0) / windowData.length;
+        const borrowAvg = windowData.reduce((sum, d) => sum + (d.borrow_apy || 0), 0) / windowData.length;
+        const spreadAvg = windowData.reduce((sum, d) => sum + (d.spread || 0), 0) / windowData.length;
+
+        result.push({
+            ...dataPoints[i],
+            supply_apy: supplyAvg,
+            borrow_apy: borrowAvg,
+            spread: spreadAvg
+        });
+    }
+    return result;
+}
+
 async function loadData() {
     const days = document.getElementById('timeRange').value;
-    
-    // Load historical data - filter to supply type on cardano
-    const historyResponse = await fetch(`/api/yields/${yieldType}?days=${days}`);
-    const rawHistory = await historyResponse.json();
-    allData = rawHistory.filter(d => d.chain === chain);
-    
+
+    // Load historical data
+    const historyResponse = await fetch(`/api/liqwid/lending?days=${days}`);
+    allData = await historyResponse.json();
+
     // Load latest for table
-    const latestResponse = await fetch(`/api/yields/${yieldType}/latest`);
-    const rawLatest = await latestResponse.json();
-    latestData = rawLatest.filter(d => d.chain === chain);
-    
-    // Extract all asset symbols
-    allAssetsList = [...new Set(latestData.map(item => item.symbol))].sort();
-    
+    const latestResponse = await fetch('/api/liqwid/lending/latest');
+    latestData = await latestResponse.json();
+
+    // Store assets list sorted by TVL (already sorted from API)
+    allAssetsList = latestData.map(item => ({
+        symbol: item.symbol,
+        total_supply: item.total_supply
+    }));
+
+    // Default to top 3 by TVL
+    selectedAssets.clear();
+    allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
+
     // Initialize asset options
     updateAssetOptions();
-    
+
     // Apply filters
     applyFilters();
 }
 
 function applyFilters() {
-    const checkedAssets = new Set(
-        [...document.querySelectorAll('#assetOptions input:checked')].map(cb => cb.value)
-    );
-    
-    // Filter historical data
-    let filteredData = allData;
-    if (checkedAssets.size > 0 && checkedAssets.size < allAssetsList.length) {
-        filteredData = allData.filter(d => checkedAssets.has(d.symbol));
-    } else if (checkedAssets.size === 0) {
-        filteredData = [];
-    }
-    
+    // Filter historical data by selected assets
+    const filteredData = allData.filter(d => selectedAssets.has(d.symbol));
+
     // Filter latest data for table
-    let filteredLatest = latestData;
-    if (checkedAssets.size > 0 && checkedAssets.size < allAssetsList.length) {
-        filteredLatest = latestData.filter(d => checkedAssets.has(d.symbol));
-    } else if (checkedAssets.size === 0) {
-        filteredLatest = [];
-    }
-    
-    updateChart(filteredData);
+    const filteredLatest = latestData.filter(d => selectedAssets.has(d.symbol));
+
+    updateCharts(filteredData);
     updateTable(filteredLatest);
 }
 
-function updateChart(data) {
-    if (chart) {
-        chart.destroy();
-    }
-    
-    const days = document.getElementById('timeRange').value;
-    
-    const datasets = data.map((item, idx) => {
-        const color = assetColors[idx % assetColors.length];
-        
-        return {
-            label: `${item.symbol} (${item.protocol})`,
-            data: item.data.map(d => ({
+function updateCharts(data) {
+    const days = parseInt(document.getElementById('timeRange').value);
+
+    // Destroy existing chart
+    if (combinedChart) combinedChart.destroy();
+
+    // Build datasets with shaded area between supply and borrow
+    const allDatasets = [];
+
+    // Add supply and borrow lines with fill between them
+    data.forEach((assetData, assetIndex) => {
+        const color = getAssetColor(assetData.symbol);
+        const smoothedData = calculateMovingAverage(assetData.data, movingAverageDays);
+
+        // Supply line (solid, circle marker) - will be filled up to borrow line
+        allDatasets.push({
+            type: 'line',
+            label: `${assetData.symbol} Supply`,
+            data: smoothedData.map(d => ({
                 x: new Date(d.timestamp),
-                y: d.apr
+                y: d.supply_apy
             })),
             borderColor: color,
-            backgroundColor: color + '20',
-            borderWidth: 2,
+            backgroundColor: color + '25',
+            borderWidth: 2.5,
             tension: 0.4,
-            fill: false
-        };
+            fill: {
+                target: '+1', // Fill to the next dataset (borrow line)
+                above: color + '25', // 25% opacity when supply < borrow (normal)
+                below: color + '15'  // Lighter when supply > borrow (rare)
+            },
+            pointStyle: 'circle',
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            borderDash: [],
+            order: 2,
+            yAxisID: 'y'
+        });
+
+        // Borrow line (dashed, triangle marker)
+        allDatasets.push({
+            type: 'line',
+            label: `${assetData.symbol} Borrow`,
+            data: smoothedData.map(d => ({
+                x: new Date(d.timestamp),
+                y: d.borrow_apy
+            })),
+            borderColor: color,
+            backgroundColor: 'transparent',
+            borderWidth: 2.5,
+            tension: 0.4,
+            fill: false,
+            pointStyle: 'triangle',
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            borderDash: [5, 5],
+            order: 1,
+            yAxisID: 'y'
+        });
     });
-    
-    const ctx = document.getElementById('aprChart').getContext('2d');
-    chart = new Chart(ctx, {
+
+    // Create combined chart
+    const ctx = document.getElementById('combinedChart').getContext('2d');
+    combinedChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets },
+        data: { datasets: allDatasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: {
-                    labels: { 
-                        color: '#1f201f',
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: '#1a1a1a',
                         usePointStyle: true,
-                        pointStyle: 'circle',
-                        padding: 20
+                        padding: 15,
+                        font: { size: 11 }
                     }
                 },
+                filler: {
+                    propagate: false
+                },
                 tooltip: {
-                    callbacks: {
-                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
+                    enabled: false,
+                    external: function(context) {
+                        // Custom external tooltip with large spread display
+                        let tooltipEl = document.getElementById('chartTooltip');
+
+                        // Create tooltip element if it doesn't exist
+                        if (!tooltipEl) {
+                            tooltipEl = document.createElement('div');
+                            tooltipEl.id = 'chartTooltip';
+                            tooltipEl.style.cssText = `
+                                position: fixed;
+                                background: rgba(255, 255, 255, 0.95);
+                                border: 1px solid rgba(0,0,0,0.1);
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                pointer-events: none;
+                                z-index: 9999;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                font-family: inherit;
+                                transition: opacity 0.15s ease;
+                            `;
+                            document.body.appendChild(tooltipEl);
+                        }
+
+                        const tooltipModel = context.tooltip;
+
+                        // Hide if no tooltip
+                        if (tooltipModel.opacity === 0) {
+                            tooltipEl.style.opacity = '0';
+                            return;
+                        }
+
+                        // Build tooltip content
+                        if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                            // Group by asset (supply/borrow pairs)
+                            const assetData = {};
+                            tooltipModel.dataPoints.forEach(point => {
+                                const label = point.dataset.label;
+                                const parts = label.split(' ');
+                                const type = parts.pop(); // 'Supply' or 'Borrow'
+                                const asset = parts.join(' ');
+
+                                if (!assetData[asset]) {
+                                    assetData[asset] = { color: point.dataset.borderColor };
+                                }
+                                assetData[asset][type.toLowerCase()] = point.parsed.y;
+                            });
+
+                            let html = `<div style="font-size: 11px; color: #666; margin-bottom: 8px;">${new Date(tooltipModel.dataPoints[0].parsed.x).toLocaleDateString()}</div>`;
+
+                            Object.entries(assetData).forEach(([asset, values]) => {
+                                const spread = (values.borrow || 0) - (values.supply || 0);
+                                const spreadColor = spread >= 0 ? '#dc2626' : '#16a34a';
+
+                                html += `
+                                    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.08);">
+                                        <div style="font-weight: 600; color: ${values.color}; margin-bottom: 4px;">${asset}</div>
+                                        <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 12px; color: #333;">
+                                            <span>Supply: ${values.supply?.toFixed(2) || '-'}%</span>
+                                            <span>Borrow: ${values.borrow?.toFixed(2) || '-'}%</span>
+                                        </div>
+                                        <div style="text-align: center; margin-top: 6px;">
+                                            <span style="font-size: 18px; font-weight: 700; color: ${spreadColor};">
+                                                ${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%
+                                            </span>
+                                            <span style="font-size: 10px; color: #888; display: block;">spread</span>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+
+                            // Remove last border
+                            html = html.replace(/border-bottom: 1px solid rgba\(0,0,0,0\.08\);([^<]*<\/div>\s*$)/, '$1');
+
+                            tooltipEl.innerHTML = html;
+                        }
+
+                        // Position tooltip
+                        const canvas = context.chart.canvas;
+                        const rect = canvas.getBoundingClientRect();
+                        tooltipEl.style.opacity = '1';
+                        tooltipEl.style.left = (rect.left + window.scrollX + tooltipModel.caretX + 15) + 'px';
+                        tooltipEl.style.top = (rect.top + window.scrollY + tooltipModel.caretY - 20) + 'px';
                     }
                 }
             },
@@ -491,15 +759,22 @@ function updateChart(data) {
                 x: {
                     type: 'time',
                     time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
-                    grid: { display: false },
-                    ticks: { color: '#4a4a4a' }
+                    grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                    ticks: { color: '#1a1a1a' }
                 },
                 y: {
+                    type: 'linear',
+                    position: 'left',
                     beginAtZero: true,
-                    grid: { color: 'rgba(31, 32, 31, 0.1)' },
+                    grid: { color: 'rgba(0, 0, 0, 0.1)' },
                     ticks: {
-                        color: '#4a4a4a',
+                        color: '#1a1a1a',
                         callback: (value) => value + '%'
+                    },
+                    title: {
+                        display: true,
+                        text: 'APY',
+                        color: '#1a1a1a'
                     }
                 }
             }
@@ -508,41 +783,50 @@ function updateChart(data) {
 }
 
 function updateTable(data) {
-    window.tableData = data.map(item => ({
-        symbol: item.symbol,
-        protocol: item.protocol,
-        apr: item.apr,
-        timestamp: new Date(item.timestamp),
-        change24h: null
-    })).filter(item => item.apr != null);
-    
+    window.tableData = data;
     applySortToTable();
 }
 
 function applySortToTable() {
     const tbody = document.getElementById('yieldTable');
     tbody.innerHTML = '';
-    
+
     let sorted = [...(window.tableData || [])];
-    
+
     sorted.sort((a, b) => {
+        let aVal, bVal;
         switch(currentSortColumn) {
-            case 0:
-                return currentSortDirection === 'asc' ? 
+            case 0: // Asset
+                return currentSortDirection === 'asc' ?
                     a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
-            case 1:
-                return currentSortDirection === 'asc' ? a.apr - b.apr : b.apr - a.apr;
-            case 2:
-                const aVal = a.change24h ?? -Infinity;
-                const bVal = b.change24h ?? -Infinity;
-                return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            case 1: // Supply APY
+                aVal = a.supply_apy ?? -Infinity;
+                bVal = b.supply_apy ?? -Infinity;
+                break;
+            case 2: // Borrow APY
+                aVal = a.borrow_apy ?? -Infinity;
+                bVal = b.borrow_apy ?? -Infinity;
+                break;
+            case 3: // Spread
+                aVal = a.spread ?? -Infinity;
+                bVal = b.spread ?? -Infinity;
+                break;
+            case 4: // Utilization
+                aVal = a.utilization ?? -Infinity;
+                bVal = b.utilization ?? -Infinity;
+                break;
+            case 5: // TVL
+                aVal = a.total_supply ?? -Infinity;
+                bVal = b.total_supply ?? -Infinity;
+                break;
             default:
                 return 0;
         }
+        return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
     });
-    
+
     // Update column headers
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
         const th = document.getElementById(`th-${i}`);
         if (th) {
             let text = th.textContent.replace(/ [↑↓]/g, '');
@@ -552,21 +836,24 @@ function applySortToTable() {
             th.textContent = text;
         }
     }
-    
+
     sorted.forEach(item => {
-        const logo = protocolLogos[item.protocol] || '';
-        const timeAgo = formatTimeAgo(item.timestamp);
-        
+        const color = getAssetColor(item.symbol);
+        const timeAgo = formatTimeAgo(new Date(item.timestamp));
+        const utilPercent = item.utilization ? (item.utilization * 100).toFixed(1) : '-';
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>
-                ${logo ? `<img src="${logo}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;">` : ''}
-                <strong>${item.symbol}</strong>
-                <span class="text-muted ms-2" style="font-size: 0.8rem;">${item.protocol}</span>
+                <span style="color: ${color}; font-size: 1.2em;">●</span>
+                <strong class="ms-2">${item.symbol}</strong>
             </td>
-            <td><span style="color: #4ade80; font-size: 1.1rem; font-weight: 600;">${item.apr.toFixed(2)}%</span></td>
-            <td><span class="text-muted">-</span></td>
-            <td class="text-secondary">${timeAgo}</td>
+            <td><span style="color: #16a34a; font-weight: 600;">${item.supply_apy?.toFixed(2) ?? '-'}%</span></td>
+            <td><span style="color: #d97706; font-weight: 600;">${item.borrow_apy?.toFixed(2) ?? '-'}%</span></td>
+            <td><span style="color: ${item.spread >= 0 ? '#dc2626' : '#16a34a'};">${item.spread?.toFixed(2) ?? '-'}%</span></td>
+            <td>${utilPercent}%</td>
+            <td>${formatTVL(item.total_supply)}</td>
+            <td style="color: #555;">${timeAgo}</td>
         `;
         tbody.appendChild(row);
     });
@@ -597,18 +884,18 @@ document.getElementById('timeRange').addEventListener('change', loadData);
 async function loadSavedChartSettings() {
     const urlParams = new URLSearchParams(window.location.search);
     const chartId = urlParams.get('chart_id');
-    
+
     if (!chartId) return null;
-    
+
     try {
         const response = await fetch('/api/auth/charts');
         if (!response.ok) return null;
-        
+
         const charts = await response.json();
         const savedChart = charts.find(c => c.chart_id === parseInt(chartId));
-        
+
         if (!savedChart || !savedChart.filters) return null;
-        
+
         return savedChart.filters;
     } catch (e) {
         console.error('Error loading saved chart:', e);
@@ -621,17 +908,25 @@ async function applySavedFilters(filters) {
     if (filters.days) {
         document.getElementById('timeRange').value = filters.days;
     }
-    
+
+    // Apply moving average
+    if (filters.movingAverage) {
+        movingAverageDays = filters.movingAverage;
+        document.querySelectorAll('input[name="maType"]').forEach(radio => {
+            radio.checked = parseInt(radio.value) === movingAverageDays;
+        });
+    }
+
     // Apply selected assets (after data is loaded)
     if (filters.assets && filters.assets.length > 0) {
         selectedAssets.clear();
         filters.assets.forEach(symbol => selectedAssets.add(symbol));
-        
+
         // Update checkboxes
         document.querySelectorAll('#assetOptions input').forEach(cb => {
             cb.checked = filters.assets.includes(cb.value);
         });
-        
+
         updateAssetLabel();
     }
 }
@@ -639,14 +934,14 @@ async function applySavedFilters(filters) {
 // Initialize
 (async function init() {
     const savedFilters = await loadSavedChartSettings();
-    
+
     // Apply time range before loading data
     if (savedFilters && savedFilters.days) {
         document.getElementById('timeRange').value = savedFilters.days;
     }
-    
+
     await loadData();
-    
+
     // Apply asset filters after data is loaded
     if (savedFilters) {
         await applySavedFilters(savedFilters);
@@ -666,31 +961,33 @@ function saveCurrentChart() {
 
 async function handleSaveChart(event) {
     event.preventDefault();
-    
+
     const name = document.getElementById('chartName').value;
     const alert = document.getElementById('saveChartAlert');
-    
+
     const filters = {
-        chain: chain,
-        assets: selectedAssets.size === 0 ? null : [...selectedAssets],
+        chain: 'cardano',
+        protocol: 'liqwid',
+        assets: [...selectedAssets],
         days: parseInt(document.getElementById('timeRange').value),
-        yield_type: yieldType
+        movingAverage: movingAverageDays,
+        chart_type: 'lending'
     };
-    
+
     try {
         const response = await fetch('/api/auth/charts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, filters })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
             alert.textContent = 'Chart saved successfully!';
             alert.className = 'alert alert-success';
             alert.classList.remove('d-none');
-            
+
             setTimeout(() => {
                 bootstrap.Modal.getInstance(document.getElementById('saveChartModal')).hide();
                 alert.classList.add('d-none');
@@ -708,4 +1005,3 @@ async function handleSaveChart(event) {
 }
 </script>
 {% endblock %}
-
