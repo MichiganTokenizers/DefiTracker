@@ -296,7 +296,21 @@
                             <option value="90">Last 90 Days</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Protocol</label>
+                        <div class="multi-select-container" id="protocolSelectContainer">
+                            <button type="button" class="multi-select-btn" id="protocolSelectBtn">
+                                <span id="protocolSelectLabel">Liqwid</span>
+                            </button>
+                            <div class="multi-select-dropdown" id="protocolDropdown">
+                                <div class="multi-select-option">
+                                    <input type="checkbox" id="protocol-liqwid" value="liqwid" checked onchange="toggleProtocol('liqwid')">
+                                    <label for="protocol-liqwid">Liqwid</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Assets</label>
                         <div class="multi-select-container" id="assetSelectContainer">
                             <button type="button" class="multi-select-btn" id="assetSelectBtn">
@@ -315,7 +329,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Moving Average</label>
                         <div class="ma-toggle" role="group">
                             <input type="radio" class="btn-check" name="maType" id="ma1" value="1" checked>
@@ -326,7 +340,7 @@
                             <label class="btn" for="ma30">30 Day</label>
                         </div>
                     </div>
-                    <div class="col-md-2 ms-auto d-flex align-items-end">
+                    <div class="col-md-1 ms-auto d-flex align-items-end">
                         <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
                             Save Chart
                         </button>
@@ -346,9 +360,17 @@
                 </div>
             </div>
 
-            <!-- Chart Canvas -->
-            <div class="chart-container" style="height: 420px;">
-                <canvas id="combinedChart"></canvas>
+            <!-- Chart Canvas with Side Panel -->
+            <div class="d-flex" style="gap: 20px;">
+                <div class="chart-container" style="height: 420px; flex: 1;">
+                    <canvas id="combinedChart"></canvas>
+                </div>
+                <div id="sidePanel" style="width: 200px; min-width: 200px; background: radial-gradient(ellipse 120% 100% at 50% 30%, var(--sand-dune) 40%, transparent 90%); border-radius: 8px; padding: 15px; font-size: 12px; border: 1px solid rgba(0,0,0,0.08);">
+                    <div id="panelDate" style="font-size: 11px; color: var(--carbon-black); margin-bottom: 12px; text-align: center; font-weight: 500; opacity: 0.7;">Hover over chart</div>
+                    <div id="panelAssets">
+                        <!-- Populated by JS on mousemove -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -363,8 +385,7 @@
                             <th onclick="sortTable(2)" id="th-2">Borrow APY</th>
                             <th onclick="sortTable(3)" id="th-3">Spread</th>
                             <th onclick="sortTable(4)" id="th-4">Utilization</th>
-                            <th onclick="sortTable(5)" id="th-5">TVL ↓</th>
-                            <th>Last Updated</th>
+                            <th onclick="sortTable(5)" id="th-5">TVL (₳) ↓</th>
                         </tr>
                     </thead>
                     <tbody id="yieldTable">
@@ -384,6 +405,10 @@ let allData = [];
 let latestData = [];
 let currentSortColumn = 5; // TVL column
 let currentSortDirection = 'desc';
+
+// Global spread bounds (calculated from last 30 days)
+let spreadMin = 0;
+let spreadMax = 10;
 
 // Selected filters
 let selectedAssets = new Set();
@@ -416,10 +441,24 @@ function getAssetColor(symbol) {
     return color;
 }
 
+// Selected protocols
+let selectedProtocols = new Set(['liqwid']);
+
 // Dropdown toggle handlers
 document.getElementById('assetSelectBtn').addEventListener('click', (e) => {
     e.stopPropagation();
+    document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+        if (d.id !== 'assetDropdown') d.classList.remove('show');
+    });
     document.getElementById('assetDropdown').classList.toggle('show');
+});
+
+document.getElementById('protocolSelectBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+        if (d.id !== 'protocolDropdown') d.classList.remove('show');
+    });
+    document.getElementById('protocolDropdown').classList.toggle('show');
 });
 
 document.addEventListener('click', (e) => {
@@ -427,6 +466,25 @@ document.addEventListener('click', (e) => {
         document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('show'));
     }
 });
+
+function toggleProtocol(protocol) {
+    if (selectedProtocols.has(protocol)) {
+        selectedProtocols.delete(protocol);
+    } else {
+        selectedProtocols.add(protocol);
+    }
+    updateProtocolLabel();
+    applyFilters();
+}
+
+function updateProtocolLabel() {
+    const label = document.getElementById('protocolSelectLabel');
+    if (selectedProtocols.size === 0) {
+        label.textContent = 'None selected';
+    } else {
+        label.textContent = [...selectedProtocols].map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ');
+    }
+}
 
 // Moving average toggle event listeners
 document.querySelectorAll('input[name="maType"]').forEach(radio => {
@@ -456,10 +514,12 @@ function updateAssetOptions() {
 
 function formatTVL(value) {
     if (!value) return '';
-    if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
-    if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-    if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
-    return value.toFixed(0);
+    // ADA symbol with double crossbar (Unicode combining characters for the look)
+    const adaSymbol = '<span style="font-family: sans-serif; font-weight: 700;">₳</span>';
+    if (value >= 1e9) return `${adaSymbol}${(value / 1e9).toFixed(1)}B`;
+    if (value >= 1e6) return `${adaSymbol}${(value / 1e6).toFixed(1)}M`;
+    if (value >= 1e3) return `${adaSymbol}${(value / 1e3).toFixed(1)}K`;
+    return `${adaSymbol}${value.toFixed(0)}`;
 }
 
 function toggleAsset(symbol) {
@@ -590,10 +650,21 @@ function updateCharts(data) {
     // Build datasets with shaded area between supply and borrow
     const allDatasets = [];
 
+    // Calculate spread bounds from smoothed data (last 30 days)
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const allSmoothedSpreads = [];
+
     // Add supply and borrow lines with fill between them
     data.forEach((assetData, assetIndex) => {
         const color = getAssetColor(assetData.symbol);
         const smoothedData = calculateMovingAverage(assetData.data, movingAverageDays);
+
+        // Collect spreads from smoothed data for color scale bounds
+        smoothedData.forEach(d => {
+            if (new Date(d.timestamp).getTime() >= thirtyDaysAgo && d.spread !== null) {
+                allSmoothedSpreads.push(d.spread);
+            }
+        });
 
         // Supply line (solid, circle marker) - will be filled up to borrow line
         allDatasets.push({
@@ -604,13 +675,13 @@ function updateCharts(data) {
                 y: d.supply_apy
             })),
             borderColor: color,
-            backgroundColor: color + '25',
+            backgroundColor: color + '66',
             borderWidth: 2.5,
             tension: 0.4,
             fill: {
                 target: '+1', // Fill to the next dataset (borrow line)
-                above: color + '25', // 25% opacity when supply < borrow (normal)
-                below: color + '15'  // Lighter when supply > borrow (rare)
+                above: color + '66', // 40% opacity when supply < borrow (normal)
+                below: color + '33'  // Lighter when supply > borrow (rare)
             },
             pointStyle: 'circle',
             pointRadius: 0,
@@ -642,6 +713,12 @@ function updateCharts(data) {
         });
     });
 
+    // Update global spread bounds from smoothed data
+    if (allSmoothedSpreads.length > 0) {
+        spreadMin = Math.min(...allSmoothedSpreads);
+        spreadMax = Math.max(...allSmoothedSpreads);
+    }
+
     // Create combined chart
     const ctx = document.getElementById('combinedChart').getContext('2d');
     combinedChart = new Chart(ctx, {
@@ -669,97 +746,14 @@ function updateCharts(data) {
                     propagate: false
                 },
                 tooltip: {
-                    enabled: false,
-                    external: function(context) {
-                        // Custom external tooltip with large spread display
-                        let tooltipEl = document.getElementById('chartTooltip');
-
-                        // Create tooltip element if it doesn't exist
-                        if (!tooltipEl) {
-                            tooltipEl = document.createElement('div');
-                            tooltipEl.id = 'chartTooltip';
-                            tooltipEl.style.cssText = `
-                                position: fixed;
-                                background: rgba(255, 255, 255, 0.95);
-                                border: 1px solid rgba(0,0,0,0.1);
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                pointer-events: none;
-                                z-index: 9999;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                                font-family: inherit;
-                                transition: opacity 0.15s ease;
-                            `;
-                            document.body.appendChild(tooltipEl);
-                        }
-
-                        const tooltipModel = context.tooltip;
-
-                        // Hide if no tooltip
-                        if (tooltipModel.opacity === 0) {
-                            tooltipEl.style.opacity = '0';
-                            return;
-                        }
-
-                        // Build tooltip content
-                        if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                            // Group by asset (supply/borrow pairs)
-                            const assetData = {};
-                            tooltipModel.dataPoints.forEach(point => {
-                                const label = point.dataset.label;
-                                const parts = label.split(' ');
-                                const type = parts.pop(); // 'Supply' or 'Borrow'
-                                const asset = parts.join(' ');
-
-                                if (!assetData[asset]) {
-                                    assetData[asset] = { color: point.dataset.borderColor };
-                                }
-                                assetData[asset][type.toLowerCase()] = point.parsed.y;
-                            });
-
-                            let html = `<div style="font-size: 11px; color: #666; margin-bottom: 8px;">${new Date(tooltipModel.dataPoints[0].parsed.x).toLocaleDateString()}</div>`;
-
-                            Object.entries(assetData).forEach(([asset, values]) => {
-                                const spread = (values.borrow || 0) - (values.supply || 0);
-                                const spreadColor = spread >= 0 ? '#dc2626' : '#16a34a';
-
-                                html += `
-                                    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.08);">
-                                        <div style="font-weight: 600; color: ${values.color}; margin-bottom: 4px;">${asset}</div>
-                                        <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 12px; color: #333;">
-                                            <span>Supply: ${values.supply?.toFixed(2) || '-'}%</span>
-                                            <span>Borrow: ${values.borrow?.toFixed(2) || '-'}%</span>
-                                        </div>
-                                        <div style="text-align: center; margin-top: 6px;">
-                                            <span style="font-size: 18px; font-weight: 700; color: ${spreadColor};">
-                                                ${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%
-                                            </span>
-                                            <span style="font-size: 10px; color: #888; display: block;">spread</span>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-
-                            // Remove last border
-                            html = html.replace(/border-bottom: 1px solid rgba\(0,0,0,0\.08\);([^<]*<\/div>\s*$)/, '$1');
-
-                            tooltipEl.innerHTML = html;
-                        }
-
-                        // Position tooltip
-                        const canvas = context.chart.canvas;
-                        const rect = canvas.getBoundingClientRect();
-                        tooltipEl.style.opacity = '1';
-                        tooltipEl.style.left = (rect.left + window.scrollX + tooltipModel.caretX + 15) + 'px';
-                        tooltipEl.style.top = (rect.top + window.scrollY + tooltipModel.caretY - 20) + 'px';
-                    }
+                    enabled: false
                 }
             },
             scales: {
                 x: {
                     type: 'time',
                     time: { unit: days <= 7 ? 'day' : days <= 30 ? 'day' : 'week' },
-                    grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                    grid: { display: false },
                     ticks: { color: '#1a1a1a' }
                 },
                 y: {
@@ -769,6 +763,7 @@ function updateCharts(data) {
                     grid: { color: 'rgba(0, 0, 0, 0.1)' },
                     ticks: {
                         color: '#1a1a1a',
+                        stepSize: 1,
                         callback: (value) => value + '%'
                     },
                     title: {
@@ -780,6 +775,91 @@ function updateCharts(data) {
             }
         }
     });
+
+    // Update side panel on mousemove
+    const canvas = document.getElementById('combinedChart');
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+
+        // Get timestamp from X position
+        const xScale = combinedChart.scales.x;
+        const timestamp = xScale.getValueForPixel(mouseX);
+
+        if (timestamp) {
+            updateSidePanel(timestamp, combinedChart.data.datasets);
+        }
+    });
+
+    // Clear side panel when mouse leaves chart
+    canvas.addEventListener('mouseleave', function() {
+        document.getElementById('panelDate').textContent = 'Hover over chart';
+        document.getElementById('panelAssets').innerHTML = '';
+    });
+}
+
+function updateSidePanel(timestamp, datasets) {
+    const date = new Date(timestamp);
+    const panelDate = document.getElementById('panelDate');
+    panelDate.textContent = date.toLocaleDateString();
+    panelDate.style.opacity = '1';
+
+    // Group datasets by asset
+    const assetData = {};
+    datasets.forEach(dataset => {
+        const label = dataset.label;
+        const parts = label.split(' ');
+        const type = parts.pop(); // 'Supply' or 'Borrow'
+        const asset = parts.join(' ');
+
+        if (!assetData[asset]) {
+            assetData[asset] = { color: dataset.borderColor };
+        }
+
+        // Find nearest data point to timestamp
+        const nearestPoint = dataset.data.reduce((prev, curr) => {
+            const prevDiff = Math.abs(prev.x.getTime() - timestamp);
+            const currDiff = Math.abs(curr.x.getTime() - timestamp);
+            return currDiff < prevDiff ? curr : prev;
+        }, dataset.data[0]);
+
+        if (nearestPoint) {
+            assetData[asset][type.toLowerCase()] = nearestPoint.y;
+        }
+    });
+
+    // Build HTML for side panel with YieldLife theme
+    let html = '';
+    Object.entries(assetData).forEach(([asset, values]) => {
+        const spread = (values.borrow || 0) - (values.supply || 0);
+        // Use same color scale as table (30-day bounds: green for low spread, red for high)
+        const spreadColor = getSpreadColor(spread, spreadMin, spreadMax);
+
+        html += `
+            <div style="margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(31, 32, 31, 0.1);">
+                <div style="font-weight: 600; color: ${values.color}; margin-bottom: 8px; font-size: 13px;">${asset}</div>
+                <div style="display: flex; justify-content: space-between; color: var(--carbon-black); margin-bottom: 3px;">
+                    <span style="opacity: 0.7;">Supply</span>
+                    <span style="font-weight: 600;">${values.supply?.toFixed(2) ?? '-'}%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: var(--carbon-black); margin-bottom: 8px;">
+                    <span style="opacity: 0.7;">Borrow</span>
+                    <span style="font-weight: 600;">${values.borrow?.toFixed(2) ?? '-'}%</span>
+                </div>
+                <div style="text-align: center; background: rgba(31, 32, 31, 0.05); border-radius: 6px; padding: 8px;">
+                    <span style="font-size: 20px; font-weight: 700; color: ${spreadColor};">
+                        ${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%
+                    </span>
+                    <span style="font-size: 10px; color: var(--carbon-black); opacity: 0.6; display: block; margin-top: 2px;">spread</span>
+                </div>
+            </div>
+        `;
+    });
+
+    // Remove last border
+    html = html.replace(/border-bottom: 1px solid rgba\(31, 32, 31, 0\.1\);([^<]*<\/div>\s*$)/, '$1');
+
+    document.getElementById('panelAssets').innerHTML = html;
 }
 
 function updateTable(data) {
@@ -837,10 +917,13 @@ function applySortToTable() {
         }
     }
 
+    // Use global spread bounds (calculated from last 30 days)
     sorted.forEach(item => {
         const color = getAssetColor(item.symbol);
-        const timeAgo = formatTimeAgo(new Date(item.timestamp));
         const utilPercent = item.utilization ? (item.utilization * 100).toFixed(1) : '-';
+
+        // Scale spread color from green (min) to red (max) using 30-day bounds
+        const spreadColor = getSpreadColor(item.spread, spreadMin, spreadMax);
 
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -848,15 +931,31 @@ function applySortToTable() {
                 <span style="color: ${color}; font-size: 1.2em;">●</span>
                 <strong class="ms-2">${item.symbol}</strong>
             </td>
-            <td><span style="color: #16a34a; font-weight: 600;">${item.supply_apy?.toFixed(2) ?? '-'}%</span></td>
-            <td><span style="color: #d97706; font-weight: 600;">${item.borrow_apy?.toFixed(2) ?? '-'}%</span></td>
-            <td><span style="color: ${item.spread >= 0 ? '#dc2626' : '#16a34a'};">${item.spread?.toFixed(2) ?? '-'}%</span></td>
+            <td><span style="color: #1a1a1a; font-weight: 600;">${item.supply_apy?.toFixed(2) ?? '-'}%</span></td>
+            <td><span style="color: #1a1a1a; font-weight: 600;">${item.borrow_apy?.toFixed(2) ?? '-'}%</span></td>
+            <td><span style="color: ${spreadColor}; font-weight: 600;">${item.spread?.toFixed(2) ?? '-'}%</span></td>
             <td>${utilPercent}%</td>
             <td>${formatTVL(item.total_supply)}</td>
-            <td style="color: #555;">${timeAgo}</td>
         `;
         tbody.appendChild(row);
     });
+}
+
+function getSpreadColor(spread, minSpread, maxSpread) {
+    if (spread === null || spread === undefined) return '#666';
+
+    // Normalize spread to 0-1 range (0 = min/green, 1 = max/red)
+    const range = maxSpread - minSpread;
+    if (range === 0) return '#666';
+
+    const normalized = (spread - minSpread) / range;
+
+    // Interpolate from green (#16a34a) to red (#dc2626)
+    const r = Math.round(22 + (220 - 22) * normalized);
+    const g = Math.round(163 + (38 - 163) * normalized);
+    const b = Math.round(74 + (38 - 74) * normalized);
+
+    return `rgb(${r}, ${g}, ${b})`;
 }
 
 function formatTimeAgo(date) {
