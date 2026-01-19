@@ -183,7 +183,10 @@
     .apr-toggle .btn:last-of-type {
         border-radius: 0 6px 6px 0;
     }
-    
+    .apr-toggle .btn:not(:first-of-type):not(:last-of-type) {
+        border-radius: 0;
+    }
+
     /* Title card */
     .title-card {
         text-align: center;
@@ -460,7 +463,9 @@
                         <label class="form-label">APR Measure</label>
                         <div class="apr-toggle" role="group" id="aprToggle">
                             <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
-                            <label class="btn" for="apr1d" title="1-day actual APR">1d Actual</label>
+                            <label class="btn" for="apr1d" title="1-day actual APR">1d</label>
+                            <input type="radio" class="btn-check" name="aprType" id="apr7d" value="7d">
+                            <label class="btn" for="apr7d" title="7-day average APR">7d Avg</label>
                             <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
                             <label class="btn" for="apr30d" title="30-day average APR">30d Avg</label>
                         </div>
@@ -593,7 +598,29 @@ let currentSortColumn = 1;
 let currentSortDirection = 'desc';
 let allAssets = [];
 let selectedAssets = new Set();
-let selectedAprType = '30d'; // '1d' or '30d'
+let selectedAprType = '30d'; // '1d', '7d', or '30d'
+
+// Calculate moving average for APR data
+function calculateAprMovingAverage(dataPoints, window) {
+    if (window <= 1) return dataPoints;
+
+    const result = [];
+    for (let i = 0; i < dataPoints.length; i++) {
+        const start = Math.max(0, i - window + 1);
+        const windowData = dataPoints.slice(start, i + 1);
+
+        // Average apr_1d values over the window
+        const validValues = windowData.filter(d => d.apr_1d != null);
+        if (validValues.length > 0) {
+            const avgApr = validValues.reduce((sum, d) => sum + d.apr_1d, 0) / validValues.length;
+            result.push({
+                ...dataPoints[i],
+                apr_avg: avgApr
+            });
+        }
+    }
+    return result;
+}
 
 // Protocol logo mapping
 const protocolLogos = {
@@ -788,7 +815,7 @@ async function loadChart() {
         const versionSuffix = version ? ` ${version}` : '';
         const label = `${symbol} (${protocol}${versionSuffix})`;
         
-        // Select which APR field to use - no fallback
+        // Select which APR field to use based on selected type
         let processedData;
         if (is1d) {
             // Use apr_1d only - no fallback to 30d
@@ -797,6 +824,15 @@ async function loadChart() {
                 .map(d => ({
                     x: new Date(d.timestamp),
                     y: d.apr_1d
+                }));
+        } else if (selectedAprType === '7d') {
+            // Calculate 7-day moving average from apr_1d data
+            const smoothedData = calculateAprMovingAverage(assetData.data, 7);
+            processedData = smoothedData
+                .filter(d => d.apr_avg != null)
+                .map(d => ({
+                    x: new Date(d.timestamp),
+                    y: d.apr_avg
                 }));
         } else {
             // Use stored apr value (30-day)
@@ -821,10 +857,10 @@ async function loadChart() {
         };
     }).filter(ds => ds.data.length > 0);
     
-    const aprTypeLabel = is1d ? '1-Day APR' : '30-Day APR';
-    
+    const aprTypeLabel = is1d ? '1-Day APR' : selectedAprType === '7d' ? '7-Day Avg APR' : '30-Day Avg APR';
+
     // Handle empty datasets gracefully
-    const noDataMessage = datasets.length === 0 
+    const noDataMessage = datasets.length === 0
         ? (is1d ? 'No 1-day APR data available for selected assets' : 'No data available for selected assets')
         : null;
     
@@ -899,7 +935,15 @@ function updateCurrentAprs(data) {
         const apr1d = latest.apr_1d;
         const apr30d = latest.apr;
         const volume24h = latest.volume_24h;
-        
+
+        // Calculate 7-day average from recent apr_1d values
+        let apr7d = null;
+        const recentData = relevantData.slice(-7);
+        const valid7dValues = recentData.filter(d => d.apr_1d != null);
+        if (valid7dValues.length > 0) {
+            apr7d = valid7dValues.reduce((sum, d) => sum + d.apr_1d, 0) / valid7dValues.length;
+        }
+
         if (apr30d == null) return null;
         
         // Calculate 24h change based on 30d APR
@@ -929,6 +973,7 @@ function updateCurrentAprs(data) {
             protocol: assetData.protocol,
             version: assetData.version,
             apr1d: apr1d,
+            apr7d: apr7d,
             apr30d: apr30d,
             tvl_usd: latest.tvl_usd,
             change24h: change24h,
@@ -947,10 +992,11 @@ function applySortToTable() {
     let sorted = [...window.tableData];
     
     const is1d = selectedAprType === '1d';
-    
+    const is7d = selectedAprType === '7d';
+
     sorted.sort((a, b) => {
         let aVal, bVal;
-        
+
         switch(currentSortColumn) {
             case 0:
                 aVal = a.symbol;
@@ -958,8 +1004,8 @@ function applySortToTable() {
                 const cmp = aVal.localeCompare(bVal);
                 return currentSortDirection === 'asc' ? cmp : -cmp;
             case 1:
-                aVal = is1d ? (a.apr1d ?? -Infinity) : (a.apr30d ?? -Infinity);
-                bVal = is1d ? (b.apr1d ?? -Infinity) : (b.apr30d ?? -Infinity);
+                aVal = is1d ? (a.apr1d ?? -Infinity) : is7d ? (a.apr7d ?? -Infinity) : (a.apr30d ?? -Infinity);
+                bVal = is1d ? (b.apr1d ?? -Infinity) : is7d ? (b.apr7d ?? -Infinity) : (b.apr30d ?? -Infinity);
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             case 2:
                 aVal = a.change24h ?? -Infinity;
@@ -977,7 +1023,7 @@ function applySortToTable() {
     // Update APR column header based on toggle
     const aprHeader = document.getElementById('th-1');
     if (aprHeader) {
-        let aprText = is1d ? 'APR (1d)' : 'APR (30d)';
+        let aprText = is1d ? 'APR (1d)' : is7d ? 'APR (7d)' : 'APR (30d)';
         if (currentSortColumn === 1) {
             aprText += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
         }
@@ -1009,7 +1055,7 @@ function applySortToTable() {
         
         const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
         const versionStr = item.version ? ` ${item.version}` : '';
-        const aprValue = is1d ? item.apr1d : item.apr30d;
+        const aprValue = is1d ? item.apr1d : is7d ? item.apr7d : item.apr30d;
         const aprDisplay = aprValue != null ? `${aprValue.toFixed(2)}%` : '-';
         const volumeDisplay = item.volume24h != null ? formatVolume(item.volume24h) : '-';
         
@@ -1103,17 +1149,11 @@ async function loadSavedChartSettings() {
             const aprType = filters.apr_type || '30d';
             console.log('Setting APR type to:', aprType);
             selectedAprType = aprType;
-            
+
             // Update radio buttons
-            const apr1dRadio = document.getElementById('apr1d');
-            const apr30dRadio = document.getElementById('apr30d');
-            if (aprType === '1d') {
-                if (apr1dRadio) apr1dRadio.checked = true;
-                if (apr30dRadio) apr30dRadio.checked = false;
-            } else {
-                if (apr30dRadio) apr30dRadio.checked = true;
-                if (apr1dRadio) apr1dRadio.checked = false;
-            }
+            document.querySelectorAll('input[name="aprType"]').forEach(radio => {
+                radio.checked = radio.value === aprType;
+            });
             
             // Apply selected assets
             if (filters.assets && filters.assets.length > 0) {

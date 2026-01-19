@@ -185,33 +185,33 @@
         border-top: 1px solid rgba(0,0,0,0.1);
     }
 
-    /* Moving average selector - toggle button style */
-    .ma-toggle {
+    /* APY Toggle Button Styles */
+    .apr-toggle {
         display: flex;
         gap: 0;
     }
-    .ma-toggle .btn-check + .btn {
+    .apr-toggle .btn-check + .btn {
         border: 1px solid var(--sea-green);
         color: var(--sea-green);
         font-size: 0.85rem;
         padding: 0.5rem 1rem;
         background: transparent;
     }
-    .ma-toggle .btn-check + .btn:hover {
+    .apr-toggle .btn-check + .btn:hover {
         background-color: rgba(14, 135, 73, 0.1);
     }
-    .ma-toggle .btn-check:checked + .btn {
+    .apr-toggle .btn-check:checked + .btn {
         background-color: var(--sea-green);
         border-color: var(--sea-green);
         color: white;
     }
-    .ma-toggle .btn:first-of-type {
+    .apr-toggle .btn:first-of-type {
         border-radius: 6px 0 0 6px;
     }
-    .ma-toggle .btn:last-of-type {
+    .apr-toggle .btn:last-of-type {
         border-radius: 0 6px 6px 0;
     }
-    .ma-toggle .btn:not(:first-of-type):not(:last-of-type) {
+    .apr-toggle .btn:not(:first-of-type):not(:last-of-type) {
         border-radius: 0;
     }
 
@@ -272,19 +272,25 @@
     </div>
 </div>
 
+<!-- Title Card -->
 <div class="row">
     <div class="col-lg-12">
-        <!-- Title Card -->
         <div class="card p-3 card-styled title-card mb-3">
             <div class="text-center">
                 <h2 class="chart-title">Cardano Lending</h2>
                 <p class="chart-subtitle mb-0">Supply & Borrow rates on Liqwid Finance</p>
             </div>
         </div>
+    </div>
+</div>
 
+<!-- Main content with side panel -->
+<div class="row">
+    <!-- Left column: Chart and Table -->
+    <div class="col-lg-10">
         <!-- Chart Card with Filters -->
         <div class="card p-4 chart-card-dark card-top">
-            <h5 class="chart-section-title">Supply & Borrow Rates <span style="font-weight: 400; color: #555;">(bars show spread)</span></h5>
+            <h5 class="chart-section-title">Supply & Borrow Rates</h5>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
                 <div class="row g-2 align-items-end">
@@ -330,17 +336,17 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Moving Average</label>
-                        <div class="ma-toggle" role="group">
-                            <input type="radio" class="btn-check" name="maType" id="ma1" value="1" checked>
-                            <label class="btn" for="ma1">1 Day</label>
-                            <input type="radio" class="btn-check" name="maType" id="ma7" value="7">
-                            <label class="btn" for="ma7">7 Day</label>
-                            <input type="radio" class="btn-check" name="maType" id="ma30" value="30">
-                            <label class="btn" for="ma30">30 Day</label>
+                        <label class="form-label">APY Measure</label>
+                        <div class="apr-toggle" role="group" id="apyToggle">
+                            <input type="radio" class="btn-check" name="apyType" id="apy1d" value="1d">
+                            <label class="btn" for="apy1d" title="1-day actual APY">1d</label>
+                            <input type="radio" class="btn-check" name="apyType" id="apy7d" value="7d">
+                            <label class="btn" for="apy7d" title="7-day average APY">7d Avg</label>
+                            <input type="radio" class="btn-check" name="apyType" id="apy30d" value="30d" checked>
+                            <label class="btn" for="apy30d" title="30-day average APY">30d Avg</label>
                         </div>
                     </div>
-                    <div class="col-md-1 ms-auto d-flex align-items-end">
+                    <div class="col-md-2 ms-auto d-flex align-items-end">
                         <button type="button" class="btn btn-login w-100" id="saveChartBtn" onclick="saveCurrentChart()">
                             Save Chart
                         </button>
@@ -360,17 +366,9 @@
                 </div>
             </div>
 
-            <!-- Chart Canvas with Side Panel -->
-            <div class="d-flex" style="gap: 20px;">
-                <div class="chart-container" style="height: 420px; flex: 1;">
-                    <canvas id="combinedChart"></canvas>
-                </div>
-                <div id="sidePanel" style="width: 200px; min-width: 200px; background: radial-gradient(ellipse 120% 100% at 50% 30%, var(--sand-dune) 40%, transparent 90%); border-radius: 8px; padding: 15px; font-size: 12px; border: 1px solid rgba(0,0,0,0.08);">
-                    <div id="panelDate" style="font-size: 11px; color: var(--carbon-black); margin-bottom: 12px; text-align: center; font-weight: 500; opacity: 0.7;">Hover over chart</div>
-                    <div id="panelAssets">
-                        <!-- Populated by JS on mousemove -->
-                    </div>
-                </div>
+            <!-- Chart Canvas -->
+            <div class="chart-container" style="height: 420px;">
+                <canvas id="combinedChart"></canvas>
             </div>
         </div>
 
@@ -395,6 +393,16 @@
             </div>
         </div>
     </div>
+
+    <!-- Right column: Side Panel (full height) -->
+    <div class="col-lg-2">
+        <div id="sidePanel" class="card p-3 card-styled" style="position: sticky; top: 1rem;">
+            <div id="panelDate" style="font-size: 12px; color: var(--carbon-black); margin-bottom: 12px; text-align: center; font-weight: 500; opacity: 0.7;">Hover over chart</div>
+            <div id="panelAssets">
+                <!-- Populated by JS on mousemove -->
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -413,7 +421,8 @@ let spreadMax = 10;
 // Selected filters
 let selectedAssets = new Set();
 let allAssetsList = [];
-let movingAverageDays = 1;
+let apyMeasure = '30d'; // '1d' for actual, '30d' for 30-day average
+let movingAverageDays = 30; // Derived from apyMeasure
 
 // Color palette for assets
 const assetColors = {
@@ -486,10 +495,13 @@ function updateProtocolLabel() {
     }
 }
 
-// Moving average toggle event listeners
-document.querySelectorAll('input[name="maType"]').forEach(radio => {
+// APY measure toggle event listeners
+document.querySelectorAll('input[name="apyType"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
-        movingAverageDays = parseInt(e.target.value);
+        apyMeasure = e.target.value;
+        movingAverageDays = apyMeasure === '1d' ? 1 : apyMeasure === '7d' ? 7 : 30;
+        // Recalculate global spread bounds for the new setting
+        updateGlobalSpreadBounds();
         applyFilters();
     });
 });
@@ -619,6 +631,9 @@ async function loadData() {
         total_supply: item.total_supply
     }));
 
+    // Calculate global spread bounds from ALL assets (not just selected)
+    updateGlobalSpreadBounds();
+
     // Default to top 3 by TVL
     selectedAssets.clear();
     allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
@@ -628,6 +643,27 @@ async function loadData() {
 
     // Apply filters
     applyFilters();
+}
+
+// Calculate spread bounds from ALL assets' smoothed data
+function updateGlobalSpreadBounds() {
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const allSmoothedSpreads = [];
+
+    // Calculate smoothed spreads for ALL assets (not just selected)
+    allData.forEach(assetData => {
+        const smoothedData = calculateMovingAverage(assetData.data, movingAverageDays);
+        smoothedData.forEach(d => {
+            if (new Date(d.timestamp).getTime() >= thirtyDaysAgo && d.spread !== null) {
+                allSmoothedSpreads.push(d.spread);
+            }
+        });
+    });
+
+    if (allSmoothedSpreads.length > 0) {
+        spreadMin = Math.min(...allSmoothedSpreads);
+        spreadMax = Math.max(...allSmoothedSpreads);
+    }
 }
 
 function applyFilters() {
@@ -650,21 +686,10 @@ function updateCharts(data) {
     // Build datasets with shaded area between supply and borrow
     const allDatasets = [];
 
-    // Calculate spread bounds from smoothed data (last 30 days)
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const allSmoothedSpreads = [];
-
     // Add supply and borrow lines with fill between them
     data.forEach((assetData, assetIndex) => {
         const color = getAssetColor(assetData.symbol);
         const smoothedData = calculateMovingAverage(assetData.data, movingAverageDays);
-
-        // Collect spreads from smoothed data for color scale bounds
-        smoothedData.forEach(d => {
-            if (new Date(d.timestamp).getTime() >= thirtyDaysAgo && d.spread !== null) {
-                allSmoothedSpreads.push(d.spread);
-            }
-        });
 
         // Supply line (solid, circle marker) - will be filled up to borrow line
         allDatasets.push({
@@ -712,12 +737,6 @@ function updateCharts(data) {
             yAxisID: 'y'
         });
     });
-
-    // Update global spread bounds from smoothed data
-    if (allSmoothedSpreads.length > 0) {
-        spreadMin = Math.min(...allSmoothedSpreads);
-        spreadMax = Math.max(...allSmoothedSpreads);
-    }
 
     // Create combined chart
     const ctx = document.getElementById('combinedChart').getContext('2d');
@@ -1008,11 +1027,19 @@ async function applySavedFilters(filters) {
         document.getElementById('timeRange').value = filters.days;
     }
 
-    // Apply moving average
-    if (filters.movingAverage) {
+    // Apply APY measure
+    if (filters.apyMeasure) {
+        apyMeasure = filters.apyMeasure;
+        movingAverageDays = apyMeasure === '1d' ? 1 : apyMeasure === '7d' ? 7 : 30;
+        document.querySelectorAll('input[name="apyType"]').forEach(radio => {
+            radio.checked = radio.value === apyMeasure;
+        });
+    } else if (filters.movingAverage) {
+        // Legacy support for old saved charts
         movingAverageDays = filters.movingAverage;
-        document.querySelectorAll('input[name="maType"]').forEach(radio => {
-            radio.checked = parseInt(radio.value) === movingAverageDays;
+        apyMeasure = movingAverageDays === 1 ? '1d' : movingAverageDays === 7 ? '7d' : '30d';
+        document.querySelectorAll('input[name="apyType"]').forEach(radio => {
+            radio.checked = radio.value === apyMeasure;
         });
     }
 
@@ -1069,7 +1096,7 @@ async function handleSaveChart(event) {
         protocol: 'liqwid',
         assets: [...selectedAssets],
         days: parseInt(document.getElementById('timeRange').value),
-        movingAverage: movingAverageDays,
+        apyMeasure: apyMeasure,
         chart_type: 'lending'
     };
 
