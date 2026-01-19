@@ -57,9 +57,6 @@
     .chain-card.cardano:hover {
         border-color: var(--cardano-color);
     }
-    .chain-card.flare:hover {
-        border-color: var(--flare-color);
-    }
     
     .chain-logo {
         width: 80px;
@@ -74,10 +71,6 @@
     }
     .chain-logo.cardano {
         background: linear-gradient(135deg, #0033ad 0%, #0052ff 100%);
-        color: white;
-    }
-    .chain-logo.flare {
-        background: linear-gradient(135deg, #e84142 0%, #ff5e5f 100%);
         color: white;
     }
     .chain-logo svg {
@@ -138,25 +131,6 @@
         color: white;
         transform: scale(1.03);
         box-shadow: 0 6px 20px rgba(0, 51, 173, 0.3);
-    }
-    
-    /* Flare buttons */
-    .chain-card.flare .nav-btn {
-        background: linear-gradient(135deg, rgba(232, 65, 66, 0.08) 0%, rgba(255, 94, 95, 0.12) 100%);
-        border-color: rgba(232, 65, 66, 0.25);
-        color: var(--flare-color);
-    }
-    .chain-card.flare .nav-btn:hover {
-        background: linear-gradient(135deg, #e84142 0%, #ff5e5f 100%);
-        border-color: #e84142;
-        color: white;
-        transform: scale(1.03);
-        box-shadow: 0 6px 20px rgba(232, 65, 66, 0.3);
-    }
-    .chain-card.flare .nav-btn.disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
     }
     
     .nav-btn-icon {
@@ -286,35 +260,6 @@
             </div>
         </div>
         
-        <!-- Flare Chain Card (Right) -->
-        <div class="col-lg-4 col-md-6 order-3">
-            <div class="chain-card flare">
-                <div class="chain-logo flare">
-                    <!-- Flare stylized F -->
-                    <svg viewBox="0 0 100 100" fill="currentColor">
-                        <path d="M25 15h50v12H40v18h30v12H40v28H25V15z"/>
-                    </svg>
-                </div>
-                <h2 class="chain-name">Flare</h2>
-                <div class="chain-status"><span class="coming">Coming Soon</span></div>
-                
-                <div class="nav-buttons">
-                    <a href="#" class="nav-btn disabled">
-                        <span class="nav-btn-icon">🌊</span>
-                        <span class="nav-btn-label">Liquidity Pools<br>& Farms</span>
-                    </a>
-                    <a href="#" class="nav-btn disabled">
-                        <span class="nav-btn-icon">💰</span>
-                        <span class="nav-btn-label">Supply<br>& Borrow</span>
-                    </a>
-                </div>
-                
-                <div class="protocol-badges">
-                    <img src="/static/blazeswap-logo.svg" alt="BlazeSwap" title="BlazeSwap">
-                    <img src="/static/kinetic-logo.png" alt="Kinetic" title="Kinetic">
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}

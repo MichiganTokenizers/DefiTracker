@@ -19,7 +19,6 @@
             --sand-dune: #ddd6b9;
             
             /* Semantic mappings */
-            --flare-color: #e84142;
             --cardano-color: #0033ad;
             --primary-bg: var(--sand-dune);
             --secondary-bg: #ccc5a8;
@@ -84,7 +83,6 @@
             font-size: 0.875rem;
             font-weight: 600;
         }
-        .chain-flare { background: var(--flare-color); }
         .chain-cardano { background: var(--cardano-color); }
         .apr-value {
             font-size: 2rem;
@@ -347,20 +345,6 @@
                             <li><a class="dropdown-item" href="/cardano/lending">💰 Lending</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
-                            <img src="https://cryptologos.cc/logos/flare-flr-logo.svg" alt="Flare" width="22" height="22" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));">
-                            Flare
-                            <span class="badge bg-secondary ms-1" style="font-size: 0.6rem; padding: 2px 5px;">Soon</span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-dark">
-                            <li><span class="dropdown-item disabled text-muted">🌊 Liquidity Pool & Farms</span></li>
-                            <li><span class="dropdown-item disabled text-muted">💰 Lending</span></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><span class="dropdown-item disabled text-muted fst-italic" style="font-size: 0.85rem;">Coming Soon!</span></li>
-                        </ul>
-                    </li>
-                    
                     <!-- Auth Section -->
                     {% if current_user.is_authenticated %}
                     <li class="nav-item dropdown">
@@ -499,7 +483,7 @@
                     <div id="newsletterAlert" class="alert alert-auth d-none" role="alert"></div>
                     
                     <p style="color: var(--text-secondary); margin-bottom: 1.25rem;">
-                        Get our monthly <strong>YieldLife newsletter</strong> with DeFi insights, new features, and yield opportunities across Cardano & Flare.
+                        Get our monthly <strong>YieldLife newsletter</strong> with DeFi insights, new features, and yield opportunities on Cardano.
                     </p>
                     
                     <form id="newsletterForm" onsubmit="handleNewsletterSubmit(event)">

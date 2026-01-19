@@ -6,7 +6,7 @@ from psycopg2.extras import RealDictCursor
 import logging
 
 from src.database.connection import DatabaseConnection
-from src.database.models import APRSnapshot, KineticAPYSnapshot, LiqwidAPYSnapshot, PriceSnapshot
+from src.database.models import APRSnapshot, LiqwidAPYSnapshot, PriceSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -409,137 +409,6 @@ class APYQueries:
                 
         except Exception as e:
             logger.error(f"Error getting latest price for {token_symbol}: {e}")
-            raise
-        finally:
-            self.db.return_connection(conn)
-    
-    # ============================================
-    # Kinetic APY snapshot operations
-    # ============================================
-    
-    def insert_kinetic_apy_snapshot(self, snapshot: KineticAPYSnapshot) -> int:
-        """Insert a Kinetic APY snapshot and return its ID"""
-        conn = self.db.get_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO kinetic_apy_snapshots (
-                        asset_id, supply_apy, supply_distribution_apy, total_supply_apy,
-                        borrow_apy, borrow_distribution_apy,
-                        total_supply_tokens, total_borrowed_tokens, utilization_rate,
-                        price_snapshot_id, timestamp, market_type, yield_type
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING snapshot_id
-                """, (
-                    snapshot.asset_id,
-                    snapshot.supply_apy,
-                    snapshot.supply_distribution_apy,
-                    snapshot.total_supply_apy,
-                    snapshot.borrow_apy,
-                    snapshot.borrow_distribution_apy,
-                    snapshot.total_supply_tokens,
-                    snapshot.total_borrowed_tokens,
-                    snapshot.utilization_rate,
-                    snapshot.price_snapshot_id,
-                    snapshot.timestamp or datetime.utcnow(),
-                    snapshot.market_type,
-                    snapshot.yield_type or 'supply'
-                ))
-                
-                snapshot_id = cur.fetchone()[0]
-                conn.commit()
-                logger.info(f"Inserted Kinetic APY snapshot for asset {snapshot.asset_symbol} (id={snapshot_id})")
-                return snapshot_id
-                
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Error inserting Kinetic APY snapshot: {e}")
-            raise
-        finally:
-            self.db.return_connection(conn)
-    
-    def get_latest_kinetic_apy(self, asset_symbol: str) -> Optional[KineticAPYSnapshot]:
-        """Get the latest Kinetic APY snapshot for an asset"""
-        conn = self.db.get_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT k.snapshot_id, k.asset_id, a.symbol,
-                           k.supply_apy, k.supply_distribution_apy, k.total_supply_apy,
-                           k.borrow_apy, k.borrow_distribution_apy,
-                           k.total_supply_tokens, k.total_borrowed_tokens, k.utilization_rate,
-                           k.price_snapshot_id, k.timestamp
-                    FROM kinetic_apy_snapshots k
-                    JOIN assets a ON k.asset_id = a.asset_id
-                    WHERE a.symbol = %s
-                    ORDER BY k.timestamp DESC
-                    LIMIT 1
-                """, (asset_symbol,))
-                
-                row = cur.fetchone()
-                if row:
-                    return KineticAPYSnapshot(
-                        snapshot_id=row[0],
-                        asset_id=row[1],
-                        asset_symbol=row[2],
-                        supply_apy=row[3],
-                        supply_distribution_apy=row[4],
-                        total_supply_apy=row[5],
-                        borrow_apy=row[6],
-                        borrow_distribution_apy=row[7],
-                        total_supply_tokens=row[8],
-                        total_borrowed_tokens=row[9],
-                        utilization_rate=row[10],
-                        price_snapshot_id=row[11],
-                        timestamp=row[12]
-                    )
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error getting latest Kinetic APY for {asset_symbol}: {e}")
-            raise
-        finally:
-            self.db.return_connection(conn)
-    
-    def get_kinetic_apy_history(self, asset_symbol: str, days: int = 30) -> List[KineticAPYSnapshot]:
-        """Get Kinetic APY history for an asset"""
-        conn = self.db.get_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT k.snapshot_id, k.asset_id, a.symbol,
-                           k.supply_apy, k.supply_distribution_apy, k.total_supply_apy,
-                           k.borrow_apy, k.borrow_distribution_apy,
-                           k.total_supply_tokens, k.total_borrowed_tokens, k.utilization_rate,
-                           k.price_snapshot_id, k.timestamp
-                    FROM kinetic_apy_snapshots k
-                    JOIN assets a ON k.asset_id = a.asset_id
-                    WHERE a.symbol = %s
-                      AND k.timestamp >= NOW() - INTERVAL '%s days'
-                    ORDER BY k.timestamp DESC
-                """, (asset_symbol, days))
-                
-                results = []
-                for row in cur.fetchall():
-                    results.append(KineticAPYSnapshot(
-                        snapshot_id=row[0],
-                        asset_id=row[1],
-                        asset_symbol=row[2],
-                        supply_apy=row[3],
-                        supply_distribution_apy=row[4],
-                        total_supply_apy=row[5],
-                        borrow_apy=row[6],
-                        borrow_distribution_apy=row[7],
-                        total_supply_tokens=row[8],
-                        total_borrowed_tokens=row[9],
-                        utilization_rate=row[10],
-                        price_snapshot_id=row[11],
-                        timestamp=row[12]
-                    ))
-                return results
-                
-        except Exception as e:
-            logger.error(f"Error getting Kinetic APY history for {asset_symbol}: {e}")
             raise
         finally:
             self.db.return_connection(conn)

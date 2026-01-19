@@ -33,58 +33,6 @@ class APRSnapshot:
 
 
 @dataclass
-class KineticAPYSnapshot:
-    """Represents a Kinetic protocol APY snapshot"""
-    asset_id: int
-    asset_symbol: str  # For convenience, not stored in DB
-    
-    # Supply side
-    supply_apy: Optional[Decimal] = None
-    supply_distribution_apy: Optional[Decimal] = None
-    total_supply_apy: Optional[Decimal] = None
-    
-    # Borrow side
-    borrow_apy: Optional[Decimal] = None
-    borrow_distribution_apy: Optional[Decimal] = None
-    
-    # Market data
-    total_supply_tokens: Optional[Decimal] = None
-    total_borrowed_tokens: Optional[Decimal] = None
-    utilization_rate: Optional[Decimal] = None
-    
-    # References
-    price_snapshot_id: Optional[int] = None
-    timestamp: Optional[datetime] = None
-    snapshot_id: Optional[int] = None
-    
-    # Market type (Primary, ISO: FXRP-USDT0-stXRP, ISO: JOULE-USDC-FLR)
-    market_type: Optional[str] = None
-    
-    # Yield type (supply or borrow - lending markets have both)
-    yield_type: Optional[str] = 'supply'  # lp, supply, or borrow
-    
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'snapshot_id': self.snapshot_id,
-            'asset_id': self.asset_id,
-            'asset_symbol': self.asset_symbol,
-            'supply_apy': float(self.supply_apy) if self.supply_apy else None,
-            'supply_distribution_apy': float(self.supply_distribution_apy) if self.supply_distribution_apy else None,
-            'total_supply_apy': float(self.total_supply_apy) if self.total_supply_apy else None,
-            'borrow_apy': float(self.borrow_apy) if self.borrow_apy else None,
-            'borrow_distribution_apy': float(self.borrow_distribution_apy) if self.borrow_distribution_apy else None,
-            'total_supply_tokens': float(self.total_supply_tokens) if self.total_supply_tokens else None,
-            'total_borrowed_tokens': float(self.total_borrowed_tokens) if self.total_borrowed_tokens else None,
-            'utilization_rate': float(self.utilization_rate) if self.utilization_rate else None,
-            'price_snapshot_id': self.price_snapshot_id,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'market_type': self.market_type,
-            'yield_type': self.yield_type
-        }
-
-
-@dataclass
 class PriceSnapshot:
     """Represents a token price snapshot"""
     token_symbol: str

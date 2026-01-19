@@ -3,7 +3,6 @@ import yaml
 from typing import Dict, List, Optional
 from pathlib import Path
 from src.adapters.base import ChainAdapter
-from src.adapters.flare.chain_adapter import FlareChainAdapter
 from src.adapters.cardano.chain_adapter import CardanoChainAdapter
 
 
@@ -44,7 +43,6 @@ class ChainRegistry:
         
         # Map chain names to adapter classes
         chain_adapters = {
-            'flare': FlareChainAdapter,
             'cardano': CardanoChainAdapter,
             # Add more chains here as they're implemented
         }
