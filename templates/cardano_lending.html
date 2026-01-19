@@ -140,16 +140,45 @@
     .title-card {
         text-align: center;
     }
-    .chart-title {
-        margin: 0;
-        font-size: 1.5rem;
-        color: #1a1a1a;
-        font-weight: 600;
-    }
-    .chart-subtitle {
+    .title-summary {
+        font-size: 0.85rem;
         color: #555;
-        font-size: 0.9rem;
-        margin: 0;
+        line-height: 1.4;
+        text-align: left;
+    }
+    .title-section-label {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #0033ad;
+    }
+    .title-protocols-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .title-protocol-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+    .title-protocol-logo {
+        height: 28px;
+        width: auto;
+    }
+    .future-protocol-indicator {
+        background: rgba(0,0,0,0.05);
+        border-radius: 8px;
+        padding: 8px 16px;
+        border: 1px dashed rgba(0,0,0,0.2);
+    }
+    .future-protocol-plus {
+        font-size: 1.5rem;
+        color: rgba(0,0,0,0.3);
+        font-weight: 300;
+    }
+    .future-protocol-text {
+        font-size: 0.8rem;
+        color: rgba(0,0,0,0.4);
     }
 
     /* Chart filters row */
@@ -272,13 +301,33 @@
     </div>
 </div>
 
-<!-- Title Card -->
-<div class="row">
-    <div class="col-lg-12">
-        <div class="card p-3 card-styled title-card mb-3">
-            <div class="text-center">
-                <h2 class="chart-title">Cardano Lending</h2>
-                <p class="chart-subtitle mb-0">Supply & Borrow rates on Liqwid Finance</p>
+<!-- Title Cards -->
+<div class="row mb-3">
+    <!-- Left card: Cardano + Summary -->
+    <div class="col-md-6 mb-2 mb-md-0">
+        <div class="card p-3 card-styled title-card h-100 d-flex justify-content-center">
+            <div class="d-flex align-items-center">
+                <img src="/static/cardano-symbol.svg" alt="Cardano" class="cardano-logo me-2" width="32" height="32">
+                <span class="title-section-label me-3">Cardano</span>
+                <p class="title-summary mb-0">Earn yield by supplying assets or borrow against your collateral on Cardano's leading lending markets.</p>
+            </div>
+        </div>
+    </div>
+    <!-- Right card: Protocols -->
+    <div class="col-md-6">
+        <div class="card p-3 card-styled title-card h-100">
+            <div class="d-flex align-items-center justify-content-start">
+                <div class="me-4">
+                    <span class="text-muted title-protocols-label">Protocols</span>
+                    <div class="d-flex align-items-center mt-1">
+                        <img src="/static/liqwid-logo.png" alt="Liqwid" class="title-protocol-logo me-2">
+                        <span class="title-protocol-name">Liqwid</span>
+                    </div>
+                </div>
+                <div class="future-protocol-indicator d-flex align-items-center">
+                    <span class="future-protocol-plus">+</span>
+                    <span class="future-protocol-text ms-2">Growth incoming</span>
+                </div>
             </div>
         </div>
     </div>
@@ -670,11 +719,11 @@ function applyFilters() {
     // Filter historical data by selected assets
     const filteredData = allData.filter(d => selectedAssets.has(d.symbol));
 
-    // Filter latest data for table
+    // Filter latest data for table (used for TVL/utilization)
     const filteredLatest = latestData.filter(d => selectedAssets.has(d.symbol));
 
     updateCharts(filteredData);
-    updateTable(filteredLatest);
+    updateTable(filteredData, filteredLatest);
 }
 
 function updateCharts(data) {
@@ -856,7 +905,7 @@ function updateSidePanel(timestamp, datasets) {
 
         html += `
             <div style="margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(31, 32, 31, 0.1);">
-                <div style="font-weight: 600; color: ${values.color}; margin-bottom: 8px; font-size: 13px;">${asset}</div>
+                <div style="font-weight: 600; color: ${values.color}; margin-bottom: 8px; font-size: 17px;">${asset}</div>
                 <div style="display: flex; justify-content: space-between; color: var(--carbon-black); margin-bottom: 3px;">
                     <span style="opacity: 0.7;">Supply</span>
                     <span style="font-weight: 600;">${values.supply?.toFixed(2) ?? '-'}%</span>
@@ -881,8 +930,29 @@ function updateSidePanel(timestamp, datasets) {
     document.getElementById('panelAssets').innerHTML = html;
 }
 
-function updateTable(data) {
-    window.tableData = data;
+function updateTable(historyData, latestDataForTVL) {
+    // Calculate table data using the same moving average as the chart
+    // historyData is the time-series data, latestDataForTVL provides TVL/utilization
+    const tableData = historyData.map(assetData => {
+        const smoothedData = calculateMovingAverage(assetData.data, movingAverageDays);
+        if (smoothedData.length === 0) return null;
+
+        const latest = smoothedData[smoothedData.length - 1];
+
+        // Get TVL and utilization from latestData (most accurate)
+        const latestInfo = latestDataForTVL.find(d => d.symbol === assetData.symbol);
+
+        return {
+            symbol: assetData.symbol,
+            supply_apy: latest.supply_apy,
+            borrow_apy: latest.borrow_apy,
+            spread: latest.spread,
+            utilization: latestInfo?.utilization ?? latest.utilization,
+            total_supply: latestInfo?.total_supply ?? latest.total_supply
+        };
+    }).filter(x => x !== null);
+
+    window.tableData = tableData;
     applySortToTable();
 }
 
@@ -924,11 +994,15 @@ function applySortToTable() {
         return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
     });
 
-    // Update column headers
+    // Get APY measure label
+    const apyLabel = apyMeasure === '1d' ? '1d' : apyMeasure === '7d' ? '7d' : '30d';
+
+    // Update column headers with APY measure
+    const baseHeaders = ['Asset', `Supply (${apyLabel})`, `Borrow (${apyLabel})`, `Spread (${apyLabel})`, 'Utilization', 'TVL (₳)'];
     for (let i = 0; i < 6; i++) {
         const th = document.getElementById(`th-${i}`);
         if (th) {
-            let text = th.textContent.replace(/ [↑↓]/g, '');
+            let text = baseHeaders[i];
             if (i === currentSortColumn) {
                 text += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
             }

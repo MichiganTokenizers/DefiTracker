@@ -936,12 +936,12 @@ function updateCurrentAprs(data) {
         const apr30d = latest.apr;
         const volume24h = latest.volume_24h;
 
-        // Calculate 7-day average from recent apr_1d values
+        // Calculate 7-day average using the same method as the chart
+        // Use the last point from the moving average calculation on full data
         let apr7d = null;
-        const recentData = relevantData.slice(-7);
-        const valid7dValues = recentData.filter(d => d.apr_1d != null);
-        if (valid7dValues.length > 0) {
-            apr7d = valid7dValues.reduce((sum, d) => sum + d.apr_1d, 0) / valid7dValues.length;
+        const smoothed7d = calculateAprMovingAverage(assetData.data, 7);
+        if (smoothed7d.length > 0) {
+            apr7d = smoothed7d[smoothed7d.length - 1].apr_avg;
         }
 
         if (apr30d == null) return null;
