@@ -191,6 +191,46 @@
     .title-card {
         text-align: center;
     }
+    .title-summary {
+        font-size: 0.85rem;
+        color: #555;
+        line-height: 1.4;
+        text-align: left;
+    }
+    .title-section-label {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #0033ad;
+    }
+    .title-protocols-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .title-protocol-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+    .title-protocol-logo {
+        height: 28px;
+        width: auto;
+    }
+    .future-protocol-indicator {
+        background: rgba(0,0,0,0.05);
+        border-radius: 8px;
+        padding: 8px 16px;
+        border: 1px dashed rgba(0,0,0,0.2);
+    }
+    .future-protocol-plus {
+        font-size: 1.5rem;
+        color: rgba(0,0,0,0.3);
+        font-weight: 300;
+    }
+    .future-protocol-text {
+        font-size: 0.8rem;
+        color: rgba(0,0,0,0.4);
+    }
     .chart-title {
         margin: 0;
         font-size: 1.5rem;
@@ -414,17 +454,51 @@
     </div>
 </div>
 
+<!-- Title Cards -->
+<div class="row mb-3">
+    <!-- Left card: Cardano + Summary -->
+    <div class="col-md-6 mb-2 mb-md-0">
+        <div class="card p-3 card-styled title-card h-100 d-flex justify-content-center">
+            <div class="d-flex align-items-center">
+                <img src="/static/cardano-symbol.svg" alt="Cardano" class="cardano-logo me-2" width="32" height="32">
+                <span class="title-section-label me-3">Cardano</span>
+                <p class="title-summary mb-0">Provide liquidity to earn trading fees and farm rewards on Cardano's top DEXs.</p>
+            </div>
+        </div>
+    </div>
+    <!-- Right card: Protocols -->
+    <div class="col-md-6">
+        <div class="card p-3 card-styled title-card h-100">
+            <div class="d-flex align-items-center justify-content-start">
+                <div class="me-3">
+                    <span class="text-muted title-protocols-label">Protocols</span>
+                    <div class="d-flex align-items-center mt-1 gap-4">
+                        <div class="d-flex align-items-center">
+                            <img src="/static/minswap-logo.png" alt="Minswap" class="title-protocol-logo me-1">
+                            <span class="title-protocol-name">Minswap</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <img src="/static/sundaeswap-logo.ico" alt="SundaeSwap" class="title-protocol-logo me-1">
+                            <span class="title-protocol-name">SundaeSwap</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <img src="/static/wingriders-logo.svg" alt="WingRiders" class="title-protocol-logo me-1">
+                            <span class="title-protocol-name">WingRiders</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="future-protocol-indicator d-flex align-items-center">
+                    <span class="future-protocol-plus">+</span>
+                    <span class="future-protocol-text ms-2">Growth incoming</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <!-- Main content -->
     <div class="col-lg-8">
-        <!-- Title Card -->
-        <div class="card p-3 card-styled title-card mb-3">
-            <div class="text-center">
-                <h2 class="chart-title">Cardano Liquidity Pools & Farms</h2>
-                <p class="chart-subtitle mb-0">Compare LP yields across DEXs</p>
-            </div>
-        </div>
-        
         <!-- Chart Card with Filters -->
         <div class="card p-4 chart-card-dark card-top">
             <h5 class="chart-section-title">Multi Asset, One Measure</h5>
