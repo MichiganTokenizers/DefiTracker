@@ -23,13 +23,16 @@ MINSWAP_API_URL = "https://api-mainnet-prod.minswap.org"
 SUNDAESWAP_API_URL = "https://api.sundae.fi/graphql"
 SUNDAESWAP_YIELD_API_URL = "https://api.yield.sundaeswap.finance/graphql"
 
+# WingRiders GraphQL API
+WINGRIDERS_API_URL = "https://api.mainnet.wingriders.com/graphql"
+
 # Known LP token policy IDs for Cardano DEXes
 LP_POLICY_IDS = {
     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c": "minswap",
     "e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86": "sundaeswap",  # V1
     "e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b": "sundaeswap",  # V3
-    "026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a570": "wingriders",
-    "1d7f33bd23d85e1a25d87d86fac4f199c3197a2f7afeb662a0f34e1e": "wingriders",  # WR V2
+    "026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a570": "wingriders",  # V1
+    "6fdc63a1d71dc2c65502b79baae7fb543185702b12c3c5fb639ed737": "wingriders",  # V2
 }
 
 # SundaeSwap V3 LP policy ID (asset name contains pool ID)
@@ -296,6 +299,240 @@ class PortfolioService:
             logger.warning("Error calculating SundaeSwap LP value: %s", e)
             return {"ada_value": None, "token_a": {}, "token_b": {}}
 
+    def _get_wingriders_pool_metrics(self, policy_id: str, asset_name_hex: str) -> Optional[Dict]:
+        """
+        Fetch pool metrics from WingRiders GraphQL API by LP token asset.
+
+        Args:
+            policy_id: LP token policy ID
+            asset_name_hex: LP token asset name in hex
+
+        Returns:
+            Pool metrics dict with TVL, reserves, token info, APR, etc.
+        """
+        cache_key = f"wr_{policy_id}_{asset_name_hex}"
+        if cache_key in self._pool_metrics_cache:
+            return self._pool_metrics_cache[cache_key]
+
+        try:
+            # Query pool by LP asset
+            query = """
+            query GetPool($asset: AssetInput!) {
+              liquidityPoolById(poolAsset: $asset) {
+                ... on LiquidityPoolV1 {
+                  version
+                  tokenA { policyId assetName quantity }
+                  tokenB { policyId assetName quantity }
+                  tvlInAda
+                  feesAPR
+                  stakingAPR(timeframe: CURRENT_EPOCH)
+                  issuedShareToken { quantity }
+                }
+                ... on LiquidityPoolV2 {
+                  version
+                  tokenA { policyId assetName quantity }
+                  tokenB { policyId assetName quantity }
+                  tvlInAda
+                  feesAPR
+                  stakingAPR(timeframe: CURRENT_EPOCH)
+                  issuedShareToken { quantity }
+                }
+              }
+              tokensMetadata(assets: [{policyId: "%s", assetName: "%s"}]) {
+                ticker
+                asset { policyId assetName }
+              }
+            }
+            """
+
+            # First get the pool data
+            pool_query = """
+            query GetPool($asset: AssetInput!) {
+              liquidityPoolById(poolAsset: $asset) {
+                ... on LiquidityPoolV1 {
+                  version
+                  tokenA { policyId assetName quantity }
+                  tokenB { policyId assetName quantity }
+                  tvlInAda
+                  feesAPR
+                  stakingAPR(timeframe: CURRENT_EPOCH)
+                  issuedShareToken { quantity }
+                }
+                ... on LiquidityPoolV2 {
+                  version
+                  tokenA { policyId assetName quantity }
+                  tokenB { policyId assetName quantity }
+                  tvlInAda
+                  feesAPR
+                  stakingAPR(timeframe: CURRENT_EPOCH)
+                  issuedShareToken { quantity }
+                }
+              }
+            }
+            """
+
+            variables = {
+                "asset": {
+                    "policyId": policy_id,
+                    "assetName": asset_name_hex,
+                }
+            }
+
+            resp = self.session.post(
+                WINGRIDERS_API_URL,
+                json={"query": pool_query, "variables": variables},
+                timeout=self.timeout
+            )
+
+            if resp.status_code != 200:
+                logger.debug("WingRiders API error: %d", resp.status_code)
+                return None
+
+            data = resp.json()
+
+            if "errors" in data and data["errors"]:
+                logger.debug("WingRiders GraphQL errors: %s", data["errors"][:200])
+                return None
+
+            pool_data = data.get("data", {}).get("liquidityPoolById")
+
+            if not pool_data:
+                logger.debug("WingRiders pool not found for LP asset: %s...%s", policy_id[:10], asset_name_hex[:10])
+                return None
+
+            # Fetch token metadata to get tickers
+            token_a = pool_data.get("tokenA", {})
+            token_b = pool_data.get("tokenB", {})
+
+            # Build metadata query for both tokens
+            metadata_assets = []
+            if token_a.get("policyId"):
+                metadata_assets.append({"policyId": token_a["policyId"], "assetName": token_a.get("assetName", "")})
+            if token_b.get("policyId"):
+                metadata_assets.append({"policyId": token_b["policyId"], "assetName": token_b.get("assetName", "")})
+
+            ticker_map = {"": "ADA"}  # Empty policyId is ADA
+
+            if metadata_assets:
+                metadata_query = """
+                query GetMetadata($assets: [AssetInput!]!) {
+                  tokensMetadata(assets: $assets) {
+                    ticker
+                    asset { policyId assetName }
+                  }
+                }
+                """
+                meta_resp = self.session.post(
+                    WINGRIDERS_API_URL,
+                    json={"query": metadata_query, "variables": {"assets": metadata_assets}},
+                    timeout=self.timeout
+                )
+
+                if meta_resp.status_code == 200:
+                    meta_data = meta_resp.json()
+                    for m in meta_data.get("data", {}).get("tokensMetadata", []):
+                        asset = m.get("asset", {})
+                        key = f"{asset.get('policyId', '')}_{asset.get('assetName', '')}"
+                        ticker_map[key] = m.get("ticker", "?")
+
+            # Add ticker info to pool data
+            pool_data["_ticker_map"] = ticker_map
+
+            self._pool_metrics_cache[cache_key] = pool_data
+            return pool_data
+
+        except Exception as e:
+            logger.warning("Error fetching WingRiders pool metrics: %s", e)
+
+        return None
+
+    def _calculate_wingriders_lp_value(self, lp_amount: str, pool_data: Dict) -> Dict:
+        """
+        Calculate the ADA value of WingRiders LP tokens.
+
+        Args:
+            lp_amount: User's LP token amount (string, raw units)
+            pool_data: Pool data from WingRiders GraphQL API
+
+        Returns:
+            Dict with ada_value, token_a info, token_b info, pool_share, apr
+        """
+        try:
+            user_lp = int(lp_amount)
+
+            # Get total LP supply
+            issued_share = pool_data.get("issuedShareToken", {})
+            total_lp = int(issued_share.get("quantity", "0"))
+            if total_lp <= 0:
+                return {"ada_value": None, "token_a": {}, "token_b": {}}
+
+            # Calculate user's share
+            share = user_lp / total_lp
+
+            # Get TVL in lovelace (string that may be decimal)
+            tvl_raw = pool_data.get("tvlInAda")
+            if tvl_raw:
+                tvl_lovelace = float(tvl_raw)
+                tvl_ada = tvl_lovelace / 1_000_000
+            else:
+                tvl_ada = 0
+
+            user_value_ada = tvl_ada * share
+
+            # Get token info
+            token_a = pool_data.get("tokenA", {})
+            token_b = pool_data.get("tokenB", {})
+            ticker_map = pool_data.get("_ticker_map", {})
+
+            # Get tickers
+            def get_ticker(token):
+                if not token.get("policyId"):
+                    return "ADA"
+                key = f"{token.get('policyId', '')}_{token.get('assetName', '')}"
+                return ticker_map.get(key, "?")
+
+            ticker_a = get_ticker(token_a)
+            ticker_b = get_ticker(token_b)
+
+            # Get reserves
+            reserve_a = float(token_a.get("quantity", 0))
+            reserve_b = float(token_b.get("quantity", 0))
+
+            # Determine decimals (ADA is 6, most tokens are 6, some are 0)
+            # For simplicity, assume 6 decimals for ADA, and try to detect for others
+            decimals_a = 6 if not token_a.get("policyId") else 6
+            decimals_b = 6 if not token_b.get("policyId") else 6
+
+            reserve_a_human = reserve_a / (10 ** decimals_a)
+            reserve_b_human = reserve_b / (10 ** decimals_b)
+
+            # User's share of each asset
+            user_amount_a = reserve_a_human * share
+            user_amount_b = reserve_b_human * share
+
+            # Calculate total APR (fees + staking)
+            fees_apr = float(pool_data.get("feesAPR") or 0)
+            staking_apr = float(pool_data.get("stakingAPR") or 0)
+            total_apr = fees_apr + staking_apr
+
+            return {
+                "ada_value": round(user_value_ada, 2),
+                "pool_share_percent": share,
+                "token_a": {
+                    "symbol": ticker_a,
+                    "amount": round(user_amount_a, 6),
+                },
+                "token_b": {
+                    "symbol": ticker_b,
+                    "amount": round(user_amount_b, 6),
+                },
+                "apr": round(total_apr, 2) if total_apr > 0 else None,
+            }
+
+        except Exception as e:
+            logger.warning("Error calculating WingRiders LP value: %s", e)
+            return {"ada_value": None, "token_a": {}, "token_b": {}}
+
     def _calculate_lp_value(self, lp_amount: str, pool_metrics: Dict) -> Dict:
         """
         Calculate the ADA value of LP tokens based on pool metrics.
@@ -481,6 +718,26 @@ class PortfolioService:
                     asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
                     ticker_a = asset_a.get("ticker", "?")
                     ticker_b = asset_b.get("ticker", "?")
+                    if ticker_a and ticker_b:
+                        pool_name = f"{ticker_a}/{ticker_b}"
+
+            elif protocol == "wingriders":
+                pool_data = self._get_wingriders_pool_metrics(policy_id, asset_name_hex)
+                if pool_data:
+                    lp_value_info = self._calculate_wingriders_lp_value(quantity, pool_data)
+                    # Build pool name from token tickers
+                    token_a = pool_data.get("tokenA", {})
+                    token_b = pool_data.get("tokenB", {})
+                    ticker_map = pool_data.get("_ticker_map", {})
+
+                    def get_ticker(token):
+                        if not token.get("policyId"):
+                            return "ADA"
+                        key = f"{token.get('policyId', '')}_{token.get('assetName', '')}"
+                        return ticker_map.get(key, "?")
+
+                    ticker_a = get_ticker(token_a)
+                    ticker_b = get_ticker(token_b)
                     if ticker_a and ticker_b:
                         pool_name = f"{ticker_a}/{ticker_b}"
 
@@ -828,6 +1085,30 @@ class PortfolioService:
                         asset_b = pool_data.get("assetB", {})
                         ticker_a = asset_a.get("ticker", "?")
                         ticker_b = asset_b.get("ticker", "?")
+                        if ticker_a and ticker_b:
+                            pool_name = f"{ticker_a}/{ticker_b}"
+
+                elif lp_info["protocol"] == "wingriders":
+                    pool_data = self._get_wingriders_pool_metrics(
+                        lp_info["policy_id"], lp_info["asset_name_hex"]
+                    )
+                    if pool_data:
+                        lp_value_info = self._calculate_wingriders_lp_value(
+                            lp_info["amount"], pool_data
+                        )
+                        # Use pool name from API
+                        token_a = pool_data.get("tokenA", {})
+                        token_b = pool_data.get("tokenB", {})
+                        ticker_map = pool_data.get("_ticker_map", {})
+
+                        def get_ticker(token):
+                            if not token.get("policyId"):
+                                return "ADA"
+                            key = f"{token.get('policyId', '')}_{token.get('assetName', '')}"
+                            return ticker_map.get(key, "?")
+
+                        ticker_a = get_ticker(token_a)
+                        ticker_b = get_ticker(token_b)
                         if ticker_a and ticker_b:
                             pool_name = f"{ticker_a}/{ticker_b}"
 
