@@ -49,6 +49,91 @@ function bytesToHex(bytes) {
 }
 
 /**
+ * Bech32 encoding implementation for Cardano addresses
+ */
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32Polymod(values) {
+    const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+    let chk = 1;
+    for (const v of values) {
+        const b = chk >> 25;
+        chk = ((chk & 0x1ffffff) << 5) ^ v;
+        for (let i = 0; i < 5; i++) {
+            if ((b >> i) & 1) {
+                chk ^= GEN[i];
+            }
+        }
+    }
+    return chk;
+}
+
+function bech32HrpExpand(hrp) {
+    const ret = [];
+    for (let i = 0; i < hrp.length; i++) {
+        ret.push(hrp.charCodeAt(i) >> 5);
+    }
+    ret.push(0);
+    for (let i = 0; i < hrp.length; i++) {
+        ret.push(hrp.charCodeAt(i) & 31);
+    }
+    return ret;
+}
+
+function bech32CreateChecksum(hrp, data) {
+    const values = bech32HrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+    const polymod = bech32Polymod(values) ^ 1;
+    const ret = [];
+    for (let i = 0; i < 6; i++) {
+        ret.push((polymod >> (5 * (5 - i))) & 31);
+    }
+    return ret;
+}
+
+function convertBits(data, fromBits, toBits, pad) {
+    let acc = 0;
+    let bits = 0;
+    const ret = [];
+    const maxv = (1 << toBits) - 1;
+
+    for (const value of data) {
+        acc = (acc << fromBits) | value;
+        bits += fromBits;
+        while (bits >= toBits) {
+            bits -= toBits;
+            ret.push((acc >> bits) & maxv);
+        }
+    }
+
+    if (pad) {
+        if (bits > 0) {
+            ret.push((acc << (toBits - bits)) & maxv);
+        }
+    }
+
+    return ret;
+}
+
+function bech32Encode(hrp, data) {
+    const combined = data.concat(bech32CreateChecksum(hrp, data));
+    let ret = hrp + '1';
+    for (const d of combined) {
+        ret += BECH32_CHARSET[d];
+    }
+    return ret;
+}
+
+/**
+ * Convert hex address bytes to bech32 Cardano address
+ */
+function hexToBech32Address(hexAddress, networkId) {
+    const bytes = hexToBytes(hexAddress);
+    const prefix = networkId === 0 ? 'addr_test' : 'addr';
+    const data = convertBits(Array.from(bytes), 8, 5, true);
+    return bech32Encode(prefix, data);
+}
+
+/**
  * Connect to a Cardano wallet and authenticate
  */
 async function connectWallet() {
@@ -197,21 +282,17 @@ async function getAddressFromHex(api, hexAddress) {
         if (hexAddress.startsWith('addr1') || hexAddress.startsWith('addr_test1')) {
             return hexAddress;
         }
-        
-        // The hex from CIP-30 is the raw address bytes
-        // We'll use a simplified bech32-like identifier
-        // The server accepts addr1 + hex as a valid identifier
+
+        // Get network ID (0 = testnet, 1 = mainnet)
         const networkId = await api.getNetworkId();
-        const prefix = networkId === 0 ? 'addr_test1' : 'addr1';
-        
-        // Use the full hex as the identifier (this is unique per wallet)
-        // Real bech32 encoding would require a proper library
-        return `${prefix}${hexAddress}`;
-        
+
+        // Convert hex address bytes to proper bech32 encoding
+        return hexToBech32Address(hexAddress, networkId);
+
     } catch (e) {
-        console.warn('Could not get network ID:', e);
-        // Default to mainnet prefix with hex
-        return `addr1${hexAddress}`;
+        console.warn('Could not get network ID, defaulting to mainnet:', e);
+        // Default to mainnet
+        return hexToBech32Address(hexAddress, 1);
     }
 }
 

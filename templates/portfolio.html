@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}My Portfolio - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Styled cards - sand dune theme */
+    .card-styled {
+        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%) !important;
+        border-radius: 12px;
+    }
+    .card-styled h5 {
+        color: #1a1a1a;
+    }
+
+    /* Summary card */
+    .summary-card {
+        padding: 1.5rem;
+    }
+    .summary-card .total-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--sea-green);
+    }
+    .summary-card .wallet-address {
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    /* Position cards */
+    .position-card {
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .position-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .position-card .protocol-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .position-card .protocol-badge.minswap {
+        background: rgba(35, 166, 213, 0.15);
+        color: #23a6d5;
+    }
+    .position-card .protocol-badge.wingriders {
+        background: rgba(255, 180, 0, 0.15);
+        color: #cc9600;
+    }
+    .position-card .protocol-badge.sundaeswap {
+        background: rgba(147, 51, 234, 0.15);
+        color: #9333ea;
+    }
+    .position-card .protocol-badge.liqwid {
+        background: rgba(14, 135, 73, 0.15);
+        color: var(--sea-green);
+    }
+
+    /* APR/APY display */
+    .apr-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--sea-green);
+    }
+    .apr-label {
+        font-size: 0.75rem;
+        color: #666;
+    }
+
+    /* Position type badges */
+    .type-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    .type-badge.supply {
+        background: rgba(14, 135, 73, 0.15);
+        color: var(--sea-green);
+    }
+    .type-badge.borrow {
+        background: rgba(247, 75, 3, 0.15);
+        color: var(--crimson-carrot);
+    }
+
+    /* Farm badge */
+    .farm-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, rgba(255, 180, 0, 0.2), rgba(255, 120, 0, 0.2));
+        color: #cc7700;
+        margin-left: 4px;
+    }
+
+    /* Farm position card highlight */
+    .farm-position {
+        border-left: 3px solid #ffb400;
+    }
+
+    /* Farm section icon */
+    .farm-icon {
+        font-size: 1.2rem;
+        margin-right: 8px;
+    }
+
+    /* Token amounts */
+    .token-amount {
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+
+    /* Protocol logo */
+    .protocol-logo {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+    }
+
+    /* Section headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+    }
+    .section-header h5 {
+        margin: 0;
+        color: #1a1a1a;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+    }
+    .empty-state p {
+        margin-bottom: 0.5rem;
+    }
+    .empty-state small {
+        color: #999;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    /* Refresh button */
+    .refresh-btn {
+        background: transparent;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .refresh-btn:hover {
+        background: var(--sea-green);
+        color: white;
+        border-color: var(--sea-green);
+    }
+    .refresh-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Error alert */
+    .alert-error {
+        background: rgba(247, 75, 3, 0.1);
+        border: 1px solid rgba(247, 75, 3, 0.3);
+        color: #c43b00;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Error Alert (hidden by default) -->
+    <div id="errorAlert" class="alert-error d-none">
+        <strong>Error:</strong> <span id="errorMessage"></span>
+    </div>
+
+    <!-- Portfolio Summary Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4 card-styled summary-card">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <h4 class="mb-2">My Portfolio</h4>
+                        <p class="wallet-address mb-0">
+                            Connected: {{ current_user.wallet_address[:12] }}...{{ current_user.wallet_address[-8:] }}
+                        </p>
+                    </div>
+                    <div class="text-end">
+                        <div class="total-value" id="totalValue">--</div>
+                        <small class="text-muted">Total Portfolio Value</small>
+                        <div class="mt-2">
+                            <button class="refresh-btn" id="refreshBtn" onclick="refreshPositions()">
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yield Farming Section (Staked LP) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4 card-styled">
+                <div class="section-header">
+                    <span class="farm-icon">🌾</span>
+                    <h5>Yield Farming (Staked LP)</h5>
+                </div>
+                <div id="farmPositionsContainer">
+                    <div class="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading farm positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LP Positions Section (Wallet-held) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4 card-styled">
+                <div class="section-header">
+                    <img src="/static/minswap-logo.png" height="24" class="me-2 protocol-logo" alt="DEX">
+                    <h5>Liquidity Pool Positions (In Wallet)</h5>
+                </div>
+                <div id="lpPositionsContainer">
+                    <div class="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading LP positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lending Positions Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4 card-styled">
+                <div class="section-header">
+                    <img src="/static/liqwid-logo.png" height="24" class="me-2 protocol-logo" alt="Liqwid">
+                    <h5>Lending Positions (Liqwid)</h5>
+                </div>
+                <div id="lendingPositionsContainer">
+                    <div class="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading lending positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/portfolio.js"></script>
+{% endblock %}

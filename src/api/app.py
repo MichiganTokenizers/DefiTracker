@@ -1,8 +1,13 @@
 """Flask API application with charting UI"""
 import os
-from flask import Flask, jsonify, render_template, request
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+from flask import Flask, jsonify, render_template, request, redirect
 from flask_cors import CORS
-from flask_login import current_user
+from flask_login import current_user, login_required
 from datetime import datetime, timedelta
 from src.database.connection import DatabaseConnection
 from src.database.queries import DatabaseQueries, APYQueries
@@ -10,6 +15,7 @@ from src.database.user_queries import UserQueries
 from src.auth import login_manager
 from src.auth.routes import auth_bp, init_auth
 from src.auth.email import mail
+from src.api.portfolio_routes import portfolio_bp
 
 app = Flask(__name__, 
             template_folder='../../templates',
@@ -44,8 +50,9 @@ user_queries = UserQueries(db)
 # Initialize auth module with database
 init_auth(db)
 
-# Register auth blueprint
+# Register blueprints
 app.register_blueprint(auth_bp)
+app.register_blueprint(portfolio_bp)
 
 
 @login_manager.user_loader
@@ -716,19 +723,16 @@ def index():
 @app.route('/lps')
 def lps_page():
     """Redirect to Cardano LPs (primary chain)"""
-    from flask import redirect
     return redirect('/cardano/lps')
 
 @app.route('/earn')
 def earn_page():
     """Redirect to Cardano lending"""
-    from flask import redirect
     return redirect('/cardano/lending')
 
 @app.route('/borrow')
 def borrow_page():
     """Redirect to Cardano lending (borrow rates shown there)"""
-    from flask import redirect
     return redirect('/cardano/lending')
 
 @app.route('/cardano/lps')
@@ -756,6 +760,15 @@ def embed_widget(chain, protocol):
 def my_charts_page():
     """User's saved charts page"""
     return render_template('my_charts.html')
+
+
+@app.route('/portfolio')
+@login_required
+def portfolio_page():
+    """User's portfolio page - requires wallet connection"""
+    if not current_user.wallet_address:
+        return redirect('/cardano/lps?error=wallet_required')
+    return render_template('portfolio.html')
 
 @app.route('/reset-password/<token>')
 def reset_password_page(token):

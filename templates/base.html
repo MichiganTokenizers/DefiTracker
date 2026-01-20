@@ -377,6 +377,9 @@
                             </span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                            {% if current_user.wallet_address %}
+                            <li><a class="dropdown-item" href="/portfolio">My Portfolio</a></li>
+                            {% endif %}
                             <li><a class="dropdown-item" href="/my-charts">My Charts</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="#" onclick="logout(); return false;">Logout</a></li>
