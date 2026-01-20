@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 BLOCKFROST_API_URL = "https://cardano-mainnet.blockfrost.io/api/v0"
 BLOCKFROST_API_KEY = os.environ.get("BLOCKFROST_API_KEY", "")
 
+# Minswap API for pool data
+MINSWAP_API_URL = "https://api-mainnet-prod.minswap.org"
+
 # Known LP token policy IDs for Cardano DEXes
 LP_POLICY_IDS = {
     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c": "minswap",
@@ -59,9 +62,10 @@ class FarmPosition:
     farm_type: str  # 'yield_farming', 'staking', etc.
     token_a: Dict[str, any]  # {symbol, amount}
     token_b: Dict[str, any]  # {symbol, amount}
-    usd_value: Optional[float] = None
+    usd_value: Optional[float] = None  # Value in ADA
     current_apr: Optional[float] = None
     rewards_earned: Optional[float] = None
+    pool_share_percent: Optional[float] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -74,6 +78,7 @@ class FarmPosition:
             "usd_value": self.usd_value,
             "current_apr": self.current_apr,
             "rewards_earned": self.rewards_earned,
+            "pool_share_percent": self.pool_share_percent,
         }
 
 
@@ -110,6 +115,95 @@ class PortfolioService:
             "Content-Type": "application/json",
         })
         self.timeout = 15
+
+        # Cache for pool metrics data
+        self._pool_metrics_cache: Dict[str, Dict] = {}
+
+    def _get_minswap_pool_metrics(self, policy_id: str, asset_name: str) -> Optional[Dict]:
+        """
+        Fetch pool metrics from Minswap API.
+
+        Args:
+            policy_id: LP token policy ID
+            asset_name: LP token asset name (hex)
+
+        Returns:
+            Pool metrics dict with liquidity, reserves, APR, etc.
+        """
+        lp_asset = f"{policy_id}.{asset_name}"
+
+        # Check cache first
+        if lp_asset in self._pool_metrics_cache:
+            return self._pool_metrics_cache[lp_asset]
+
+        try:
+            url = f"{MINSWAP_API_URL}/v1/pools/{lp_asset}/metrics"
+            resp = self.session.get(url, timeout=self.timeout)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                self._pool_metrics_cache[lp_asset] = data
+                return data
+            else:
+                logger.debug("Minswap pool metrics not found for %s: %d", lp_asset[:30], resp.status_code)
+        except Exception as e:
+            logger.warning("Error fetching Minswap pool metrics: %s", e)
+
+        return None
+
+    def _calculate_lp_value(self, lp_amount: str, pool_metrics: Dict) -> Dict:
+        """
+        Calculate the ADA value of LP tokens based on pool metrics.
+
+        Args:
+            lp_amount: User's LP token amount (string, raw units)
+            pool_metrics: Pool metrics from Minswap API
+
+        Returns:
+            Dict with ada_value, token_a info, token_b info
+        """
+        try:
+            user_lp = int(lp_amount)
+            total_lp = pool_metrics.get("liquidity", 0)
+
+            if total_lp <= 0:
+                return {"ada_value": None, "token_a": {}, "token_b": {}}
+
+            # Calculate user's share of the pool
+            share = user_lp / total_lp
+
+            # Get pool reserves
+            reserve_a = pool_metrics.get("liquidity_a", 0)  # ADA amount
+            reserve_b = pool_metrics.get("liquidity_b", 0)  # Other token amount
+            total_value_ada = pool_metrics.get("liquidity_currency", 0)  # Total TVL in ADA
+
+            # Get token info
+            asset_a = pool_metrics.get("asset_a", {})
+            asset_b = pool_metrics.get("asset_b", {})
+            metadata_a = asset_a.get("metadata", {})
+            metadata_b = asset_b.get("metadata", {})
+
+            # User's share of each asset
+            user_ada = reserve_a * share
+            user_token_b = reserve_b * share
+            user_total_ada = total_value_ada * share
+
+            return {
+                "ada_value": round(user_total_ada, 2),
+                "pool_share_percent": share,
+                "token_a": {
+                    "symbol": metadata_a.get("ticker", "ADA"),
+                    "amount": round(user_ada, 6),
+                },
+                "token_b": {
+                    "symbol": metadata_b.get("ticker", "?"),
+                    "amount": round(user_token_b, 6),
+                },
+                "apr": pool_metrics.get("trading_fee_apr"),
+            }
+        except Exception as e:
+            logger.warning("Error calculating LP value: %s", e)
+            return {"ada_value": None, "token_a": {}, "token_b": {}}
 
     def get_all_positions(self, wallet_address: str) -> Dict:
         """
@@ -408,16 +502,34 @@ class PortfolioService:
                     lp_info["protocol"]
                 )
 
+                # Try to get pool metrics for value calculation (Minswap only for now)
+                lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
+                if lp_info["protocol"] == "minswap":
+                    pool_metrics = self._get_minswap_pool_metrics(
+                        lp_info["policy_id"],
+                        lp_info["asset_name_hex"]
+                    )
+                    if pool_metrics:
+                        lp_value_info = self._calculate_lp_value(lp_info["amount"], pool_metrics)
+                        # Use pool name from metrics if available
+                        asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
+                        asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
+                        ticker_a = asset_a.get("ticker", "?")
+                        ticker_b = asset_b.get("ticker", "?")
+                        if ticker_a and ticker_b:
+                            pool_name = f"{ticker_a}/{ticker_b}"
+
                 position = FarmPosition(
                     protocol=lp_info["protocol"],
                     pool=pool_name or f"{lp_info['protocol'].upper()} LP",
                     lp_amount=lp_info["amount"],
                     farm_type="yield_farming",
-                    token_a={"symbol": "?", "amount": 0},
-                    token_b={"symbol": "?", "amount": 0},
-                    usd_value=None,
-                    current_apr=None,
+                    token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
+                    token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
+                    usd_value=lp_value_info.get("ada_value"),  # ADA value for now
+                    current_apr=lp_value_info.get("apr"),
                     rewards_earned=None,
+                    pool_share_percent=lp_value_info.get("pool_share_percent"),
                 )
                 positions.append(position)
 

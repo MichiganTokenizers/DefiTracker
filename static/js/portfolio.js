@@ -1,6 +1,6 @@
 /**
  * Portfolio page functionality
- * Fetches and displays user's DeFi positions from connected wallet
+ * Fetches and displays user's DeFi positions organized by protocol
  */
 
 // Protocol logo mappings
@@ -34,21 +34,76 @@ async function loadPortfolioPositions() {
             throw new Error(data.message || data.error || 'Failed to load positions');
         }
 
-        renderLPPositions(data.lp_positions || [], data.warning);
-        renderFarmPositions(data.farm_positions || []);
-        renderLendingPositions(data.lending_positions || []);
+        // Organize positions by protocol
+        const positionsByProtocol = organizeByProtocol(
+            data.lp_positions || [],
+            data.farm_positions || [],
+            data.lending_positions || [],
+            data.warning
+        );
+
+        // Render each protocol section
+        renderProtocolSection('minswap', positionsByProtocol.minswap);
+        renderProtocolSection('wingriders', positionsByProtocol.wingriders);
+        renderProtocolSection('sundaeswap', positionsByProtocol.sundaeswap);
+        renderLiqwidSection(positionsByProtocol.liqwid);
+
         updateTotalValue(data.total_usd_value || 0);
 
     } catch (error) {
         console.error('Error loading portfolio:', error);
         showError(error.message || 'Failed to load portfolio positions');
-        renderLPPositions([]);
-        renderFarmPositions([]);
-        renderLendingPositions([]);
+        renderEmptyStates();
         updateTotalValue(0);
     } finally {
         setLoading(false);
     }
+}
+
+/**
+ * Organize positions by protocol
+ */
+function organizeByProtocol(lpPositions, farmPositions, lendingPositions, warning) {
+    const protocols = {
+        minswap: { lp: [], farm: [], warning: null },
+        wingriders: { lp: [], farm: [], warning: null },
+        sundaeswap: { lp: [], farm: [], warning: null },
+        liqwid: { supply: [], borrow: [], warning: null }
+    };
+
+    // Store warning for LP section
+    if (warning) {
+        protocols.minswap.warning = warning;
+        protocols.wingriders.warning = warning;
+        protocols.sundaeswap.warning = warning;
+    }
+
+    // Organize LP positions
+    lpPositions.forEach(pos => {
+        const protocol = (pos.protocol || '').toLowerCase();
+        if (protocols[protocol]) {
+            protocols[protocol].lp.push(pos);
+        }
+    });
+
+    // Organize farm positions
+    farmPositions.forEach(pos => {
+        const protocol = (pos.protocol || '').toLowerCase();
+        if (protocols[protocol]) {
+            protocols[protocol].farm.push(pos);
+        }
+    });
+
+    // Organize lending positions
+    lendingPositions.forEach(pos => {
+        if (pos.type === 'supply') {
+            protocols.liqwid.supply.push(pos);
+        } else if (pos.type === 'borrow') {
+            protocols.liqwid.borrow.push(pos);
+        }
+    });
+
+    return protocols;
 }
 
 /**
@@ -70,56 +125,63 @@ async function refreshPositions() {
 }
 
 /**
- * Render LP positions
+ * Render a DEX protocol section (Minswap, WingRiders, SundaeSwap)
  */
-function renderLPPositions(positions, warning) {
-    const container = document.getElementById('lpPositionsContainer');
+function renderProtocolSection(protocol, data) {
+    const containerId = `${protocol}Section`;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const hasLp = data.lp && data.lp.length > 0;
+    const hasFarm = data.farm && data.farm.length > 0;
+    const hasWarning = data.warning;
 
     // Show warning if API key not configured
-    if (warning) {
+    if (hasWarning && !hasLp && !hasFarm) {
         container.innerHTML = `
-            <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); color: #856404; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                <strong>Note:</strong> ${warning}
+            <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); color: #856404; border-radius: 8px; padding: 1rem;">
+                <strong>Note:</strong> ${data.warning}
             </div>
         `;
         return;
     }
 
-    if (!positions || positions.length === 0) {
+    if (!hasLp && !hasFarm) {
         container.innerHTML = `
             <div class="empty-state">
-                <p>No LP positions found</p>
-                <small>Provide liquidity on Minswap, WingRiders, or SundaeSwap to see your positions here.</small>
+                <p>No positions found</p>
+                <small>Provide liquidity or stake LP tokens on ${capitalizeFirst(protocol)} to see your positions here.</small>
             </div>
         `;
         return;
     }
-
-    // Group positions by protocol
-    const grouped = {};
-    positions.forEach(pos => {
-        const protocol = pos.protocol || 'unknown';
-        if (!grouped[protocol]) {
-            grouped[protocol] = [];
-        }
-        grouped[protocol].push(pos);
-    });
 
     let html = '';
 
-    // Render positions grouped by protocol
-    for (const [protocol, protocolPositions] of Object.entries(grouped)) {
-        html += `<div class="protocol-group mb-3">`;
-        html += `<h6 class="text-muted mb-2" style="font-size: 0.8rem; text-transform: uppercase;">
-            <img src="${getProtocolLogo(protocol)}" height="16" class="me-1" alt="${protocol}">
-            ${protocol}
-        </h6>`;
+    // Yield Farming subsection
+    if (hasFarm) {
+        html += `
+            <div class="subsection-header">
+                <span class="subsection-icon">🌾</span>
+                <h6>Yield Farming (Staked LP)</h6>
+            </div>
+        `;
+        data.farm.forEach(pos => {
+            html += renderFarmPositionCard(pos);
+        });
+    }
 
-        protocolPositions.forEach(pos => {
+    // LP Positions subsection
+    if (hasLp) {
+        html += `
+            <div class="subsection-header">
+                <span class="subsection-icon">💧</span>
+                <h6>Liquidity Pools (In Wallet)</h6>
+            </div>
+        `;
+        data.lp.forEach(pos => {
             html += renderLPPositionCard(pos);
         });
-
-        html += `</div>`;
     }
 
     container.innerHTML = html;
@@ -129,7 +191,7 @@ function renderLPPositions(positions, warning) {
  * Render a single LP position card
  */
 function renderLPPositionCard(pos) {
-    const usdValue = pos.usd_value ? `$${formatNumber(pos.usd_value)}` : '--';
+    const usdValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
@@ -145,7 +207,6 @@ function renderLPPositionCard(pos) {
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <strong>${pos.pool || 'Unknown Pool'}</strong>
-                    <span class="protocol-badge ${pos.protocol}">${pos.protocol}</span>
                 </div>
                 <div class="text-end">
                     <div class="h5 mb-0">${usdValue}</div>
@@ -173,78 +234,34 @@ function renderLPPositionCard(pos) {
 }
 
 /**
- * Render farm (staked LP) positions
- */
-function renderFarmPositions(positions) {
-    const container = document.getElementById('farmPositionsContainer');
-    if (!container) return;
-
-    if (!positions || positions.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <p>No staked positions found</p>
-                <small>Stake your LP tokens in yield farms to see them here.</small>
-            </div>
-        `;
-        return;
-    }
-
-    // Group positions by protocol
-    const grouped = {};
-    positions.forEach(pos => {
-        const protocol = pos.protocol || 'unknown';
-        if (!grouped[protocol]) {
-            grouped[protocol] = [];
-        }
-        grouped[protocol].push(pos);
-    });
-
-    let html = '';
-
-    // Render positions grouped by protocol
-    for (const [protocol, protocolPositions] of Object.entries(grouped)) {
-        html += `<div class="protocol-group mb-3">`;
-        html += `<h6 class="text-muted mb-2" style="font-size: 0.8rem; text-transform: uppercase;">
-            <img src="${getProtocolLogo(protocol)}" height="16" class="me-1" alt="${protocol}">
-            ${protocol}
-        </h6>`;
-
-        protocolPositions.forEach(pos => {
-            html += renderFarmPositionCard(pos);
-        });
-
-        html += `</div>`;
-    }
-
-    container.innerHTML = html;
-}
-
-/**
  * Render a single farm position card
  */
 function renderFarmPositionCard(pos) {
-    const usdValue = pos.usd_value ? `$${formatNumber(pos.usd_value)}` : '--';
+    // Value displayed in ADA (not USD)
+    const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
-    const rewards = pos.rewards_earned ? formatNumber(pos.rewards_earned) : '--';
 
     const tokenA = pos.token_a || {};
     const tokenB = pos.token_b || {};
     const tokenAAmount = tokenA.amount ? formatNumber(tokenA.amount) : '0';
     const tokenBAmount = tokenB.amount ? formatNumber(tokenB.amount) : '0';
+    const tokenASymbol = tokenA.symbol || '?';
+    const tokenBSymbol = tokenB.symbol || '?';
 
-    // Format LP amount (usually large numbers)
-    const lpAmount = pos.lp_amount ? formatLPAmount(pos.lp_amount) : '0';
+    // Pool share percentage
+    const poolShare = pos.pool_share_percent
+        ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
+        : '--';
 
     return `
         <div class="position-card farm-position">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <strong>${pos.pool || 'Unknown Pool'}</strong>
-                    <span class="protocol-badge ${pos.protocol}">${pos.protocol}</span>
                     <span class="farm-badge">staked</span>
                 </div>
                 <div class="text-end">
-                    <div class="h5 mb-0">${usdValue}</div>
+                    <div class="h5 mb-0">${adaValue}</div>
                 </div>
             </div>
             <div class="row mt-2">
@@ -253,12 +270,15 @@ function renderFarmPositionCard(pos) {
                     <div class="apr-value">${apr}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">LP Tokens</div>
-                    <div class="token-amount">${lpAmount}</div>
+                    <div class="apr-label">Pool Share</div>
+                    <div class="token-amount">${poolShare}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">Rewards</div>
-                    <div class="token-amount">${rewards}</div>
+                    <div class="apr-label">Your Tokens</div>
+                    <div class="token-amount">
+                        ${tokenAAmount} ${tokenASymbol}<br>
+                        ${tokenBAmount} ${tokenBSymbol}
+                    </div>
                 </div>
             </div>
         </div>
@@ -266,65 +286,49 @@ function renderFarmPositionCard(pos) {
 }
 
 /**
- * Format LP token amounts (usually very large numbers)
+ * Render Liqwid section with Supply and Borrow subsections
  */
-function formatLPAmount(amount) {
-    const n = parseFloat(amount);
-    if (isNaN(n)) return '0';
+function renderLiqwidSection(data) {
+    const container = document.getElementById('liqwidSection');
+    if (!container) return;
 
-    if (n >= 1e12) {
-        return (n / 1e12).toFixed(2) + 'T';
-    } else if (n >= 1e9) {
-        return (n / 1e9).toFixed(2) + 'B';
-    } else if (n >= 1e6) {
-        return (n / 1e6).toFixed(2) + 'M';
-    } else if (n >= 1e3) {
-        return (n / 1e3).toFixed(2) + 'K';
-    } else {
-        return n.toFixed(2);
-    }
-}
+    const hasSupply = data.supply && data.supply.length > 0;
+    const hasBorrow = data.borrow && data.borrow.length > 0;
 
-/**
- * Render lending positions
- */
-function renderLendingPositions(positions) {
-    const container = document.getElementById('lendingPositionsContainer');
-
-    if (!positions || positions.length === 0) {
+    if (!hasSupply && !hasBorrow) {
         container.innerHTML = `
             <div class="empty-state">
                 <p>No lending positions found</p>
-                <small>Supply or borrow on Liqwid to see your positions here.</small>
+                <small>Supply or borrow on Liqwid Finance to see your positions here.</small>
             </div>
         `;
         return;
     }
 
-    // Separate supply and borrow positions
-    const supplies = positions.filter(p => p.type === 'supply');
-    const borrows = positions.filter(p => p.type === 'borrow');
-
     let html = '';
 
-    // Render supply positions
-    if (supplies.length > 0) {
-        html += `<h6 class="text-success mb-2" style="font-size: 0.85rem;">
-            <span style="display: inline-block; width: 8px; height: 8px; background: var(--sea-green); border-radius: 50%; margin-right: 6px;"></span>
-            Supplying
-        </h6>`;
-        supplies.forEach(pos => {
+    // Supply subsection
+    if (hasSupply) {
+        html += `
+            <div class="subsection-header">
+                <span class="subsection-icon" style="color: var(--sea-green);">📈</span>
+                <h6>Supplying</h6>
+            </div>
+        `;
+        data.supply.forEach(pos => {
             html += renderLendingPositionCard(pos);
         });
     }
 
-    // Render borrow positions
-    if (borrows.length > 0) {
-        html += `<h6 class="text-danger mb-2 mt-3" style="font-size: 0.85rem;">
-            <span style="display: inline-block; width: 8px; height: 8px; background: var(--crimson-carrot); border-radius: 50%; margin-right: 6px;"></span>
-            Borrowing
-        </h6>`;
-        borrows.forEach(pos => {
+    // Borrow subsection
+    if (hasBorrow) {
+        html += `
+            <div class="subsection-header">
+                <span class="subsection-icon" style="color: var(--crimson-carrot);">📉</span>
+                <h6>Borrowing</h6>
+            </div>
+        `;
+        data.borrow.forEach(pos => {
             html += renderLendingPositionCard(pos);
         });
     }
@@ -350,7 +354,6 @@ function renderLendingPositionCard(pos) {
                 <div>
                     <strong>${pos.market || '?'}</strong>
                     <span class="type-badge ${typeBadgeClass}">${pos.type}</span>
-                    <span class="protocol-badge liqwid">liqwid</span>
                 </div>
                 <div class="text-end">
                     <div class="h6 mb-0">${amount} ${pos.market || ''}</div>
@@ -381,9 +384,9 @@ function updateTotalValue(value) {
     const el = document.getElementById('totalValue');
     if (el) {
         if (value && value > 0) {
-            el.textContent = `$${formatNumber(value)}`;
+            el.textContent = `${formatNumber(value)} ADA`;
         } else {
-            el.textContent = '$0.00';
+            el.textContent = '0 ADA';
         }
     }
 }
@@ -393,6 +396,13 @@ function updateTotalValue(value) {
  */
 function getProtocolLogo(protocol) {
     return PROTOCOL_LOGOS[protocol?.toLowerCase()] || '/static/cardano-symbol.svg';
+}
+
+/**
+ * Capitalize first letter
+ */
+function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**
@@ -420,12 +430,43 @@ function formatNumber(num) {
 }
 
 /**
+ * Render empty states for all protocol sections
+ */
+function renderEmptyStates() {
+    const protocols = ['minswap', 'wingriders', 'sundaeswap'];
+    protocols.forEach(protocol => {
+        const container = document.getElementById(`${protocol}Section`);
+        if (container) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>No positions found</p>
+                    <small>Unable to load positions at this time.</small>
+                </div>
+            `;
+        }
+    });
+
+    const liqwidContainer = document.getElementById('liqwidSection');
+    if (liqwidContainer) {
+        liqwidContainer.innerHTML = `
+            <div class="empty-state">
+                <p>No lending positions found</p>
+                <small>Unable to load positions at this time.</small>
+            </div>
+        `;
+    }
+}
+
+/**
  * Show/hide loading state
  */
 function setLoading(isLoading) {
-    const lpContainer = document.getElementById('lpPositionsContainer');
-    const farmContainer = document.getElementById('farmPositionsContainer');
-    const lendingContainer = document.getElementById('lendingPositionsContainer');
+    const containers = [
+        'minswapSection',
+        'wingridersSection',
+        'sundaeswapSection',
+        'liqwidSection'
+    ];
 
     if (isLoading) {
         const loadingHtml = `
@@ -436,9 +477,10 @@ function setLoading(isLoading) {
                 <p class="mt-2 text-muted">Loading positions...</p>
             </div>
         `;
-        if (lpContainer) lpContainer.innerHTML = loadingHtml;
-        if (farmContainer) farmContainer.innerHTML = loadingHtml;
-        if (lendingContainer) lendingContainer.innerHTML = loadingHtml;
+        containers.forEach(id => {
+            const container = document.getElementById(id);
+            if (container) container.innerHTML = loadingHtml;
+        });
     }
 }
 

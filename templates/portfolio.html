@@ -128,17 +128,45 @@
         object-fit: contain;
     }
 
-    /* Section headers */
-    .section-header {
+    /* Protocol section headers */
+    .protocol-header {
         display: flex;
         align-items: center;
         margin-bottom: 1rem;
         padding-bottom: 0.5rem;
         border-bottom: 2px solid rgba(0, 0, 0, 0.1);
     }
-    .section-header h5 {
+    .protocol-header h5 {
         margin: 0;
         color: #1a1a1a;
+    }
+
+    /* Subsection headers */
+    .subsection-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        margin-top: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .subsection-header:first-child {
+        margin-top: 0;
+    }
+    .subsection-header h6 {
+        margin: 0;
+        color: #444;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    .subsection-icon {
+        font-size: 1rem;
+        margin-right: 8px;
+    }
+
+    /* Protocol section card */
+    .protocol-section {
+        margin-bottom: 0;
     }
 
     /* Empty state */
@@ -224,60 +252,80 @@
         </div>
     </div>
 
-    <!-- Yield Farming Section (Staked LP) -->
+    <!-- Minswap Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card p-4 card-styled">
-                <div class="section-header">
-                    <span class="farm-icon">🌾</span>
-                    <h5>Yield Farming (Staked LP)</h5>
+                <div class="protocol-header">
+                    <img src="/static/minswap-logo.png" height="28" class="me-2 protocol-logo" alt="Minswap">
+                    <h5>Minswap</h5>
                 </div>
-                <div id="farmPositionsContainer">
+                <div id="minswapSection">
                     <div class="loading-spinner">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2 text-muted">Loading farm positions...</p>
+                        <p class="mt-2 text-muted">Loading Minswap positions...</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- LP Positions Section (Wallet-held) -->
+    <!-- WingRiders Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card p-4 card-styled">
-                <div class="section-header">
-                    <img src="/static/minswap-logo.png" height="24" class="me-2 protocol-logo" alt="DEX">
-                    <h5>Liquidity Pool Positions (In Wallet)</h5>
+                <div class="protocol-header">
+                    <img src="/static/wingriders-logo.svg" height="28" class="me-2 protocol-logo" alt="WingRiders">
+                    <h5>WingRiders</h5>
                 </div>
-                <div id="lpPositionsContainer">
+                <div id="wingridersSection">
                     <div class="loading-spinner">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2 text-muted">Loading LP positions...</p>
+                        <p class="mt-2 text-muted">Loading WingRiders positions...</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Lending Positions Section -->
+    <!-- SundaeSwap Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card p-4 card-styled">
-                <div class="section-header">
-                    <img src="/static/liqwid-logo.png" height="24" class="me-2 protocol-logo" alt="Liqwid">
-                    <h5>Lending Positions (Liqwid)</h5>
+                <div class="protocol-header">
+                    <img src="/static/sundaeswap-logo.ico" height="28" class="me-2 protocol-logo" alt="SundaeSwap">
+                    <h5>SundaeSwap</h5>
                 </div>
-                <div id="lendingPositionsContainer">
+                <div id="sundaeswapSection">
                     <div class="loading-spinner">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2 text-muted">Loading lending positions...</p>
+                        <p class="mt-2 text-muted">Loading SundaeSwap positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liqwid Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4 card-styled">
+                <div class="protocol-header">
+                    <img src="/static/liqwid-logo.png" height="28" class="me-2 protocol-logo" alt="Liqwid">
+                    <h5>Liqwid Finance</h5>
+                </div>
+                <div id="liqwidSection">
+                    <div class="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading Liqwid positions...</p>
                     </div>
                 </div>
             </div>
