@@ -35,58 +35,25 @@
             min-height: 100vh;
         }
 
-        /* Video Background */
-        .video-background {
+        /* Static Background (default for all pages) */
+        .page-background {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             z-index: -1;
-            overflow: hidden;
+            background: url('/static/YieldLife_background_leaf.png');
+            background-size: cover;
+            background-position: center;
         }
-        .video-background video {
-            min-width: 100%;
-            min-height: 100%;
-            width: auto;
-            height: auto;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            object-fit: cover;
-        }
-        .video-overlay {
+        .page-background-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             background: rgba(221, 214, 185, 0.12);
-        }
-
-        /* Fallback for reduced motion preference */
-        @media (prefers-reduced-motion: reduce) {
-            .video-background video {
-                display: none;
-            }
-            .video-background {
-                background: url('/static/YieldLife_background_leaf.png');
-                background-size: cover;
-                background-position: center;
-            }
-        }
-
-        /* Mobile: use static image to save bandwidth */
-        @media (max-width: 768px) {
-            .video-background video {
-                display: none;
-            }
-            .video-background {
-                background: url('/static/YieldLife_background_leaf.png');
-                background-size: cover;
-                background-position: center;
-            }
         }
         .navbar {
             background: linear-gradient(90deg, #79cf55 0%, #ddd6b9 20%, #ddd6b9 80%, #79cf55 100%) !important;
@@ -377,13 +344,12 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Video Background -->
-    <div class="video-background">
-        <video autoplay muted loop playsinline poster="/static/YieldLife_background_leaf.png">
-            <source src="/static/FlowerBloom.mp4" type="video/mp4">
-        </video>
-        <div class="video-overlay"></div>
+    <!-- Page Background -->
+    {% block page_background %}
+    <div class="page-background">
+        <div class="page-background-overlay"></div>
     </div>
+    {% endblock %}
 
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">

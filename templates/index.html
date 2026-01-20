@@ -2,8 +2,72 @@
 
 {% block title %}YieldLife - Bringing Blockchain Yield Data to Life{% endblock %}
 
+{% block page_background %}
+<!-- Video Background (home page only) -->
+<div class="video-background">
+    <video autoplay muted loop playsinline poster="/static/YieldLife_background_leaf.png">
+        <source src="/static/FlowerBloom.mp4" type="video/mp4">
+    </video>
+    <div class="video-overlay"></div>
+</div>
+{% endblock %}
+
 {% block extra_css %}
 <style>
+    /* Video Background (home page only) */
+    .video-background {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+    }
+    .video-background video {
+        min-width: 100%;
+        min-height: 100%;
+        width: auto;
+        height: auto;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        object-fit: cover;
+    }
+    .video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(221, 214, 185, 0.12);
+    }
+
+    /* Fallback for reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+        .video-background video {
+            display: none;
+        }
+        .video-background {
+            background: url('/static/YieldLife_background_leaf.png');
+            background-size: cover;
+            background-position: center;
+        }
+    }
+
+    /* Mobile: use static image to save bandwidth */
+    @media (max-width: 768px) {
+        .video-background video {
+            display: none;
+        }
+        .video-background {
+            background: url('/static/YieldLife_background_leaf.png');
+            background-size: cover;
+            background-position: center;
+        }
+    }
+
     /* Main Layout */
     .main-layout {
         padding: 0;
