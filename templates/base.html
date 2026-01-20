@@ -82,6 +82,19 @@
         .brand-life {
             color: var(--sea-green);
         }
+        .brand-tagline {
+            font-size: 0.55rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-left: 0.75rem;
+            letter-spacing: 0.2px;
+            opacity: 0.85;
+        }
+        @media (max-width: 768px) {
+            .brand-tagline {
+                display: none;
+            }
+        }
         .navbar-brand img {
             height: 48px;
             margin-right: 0px;
@@ -353,7 +366,7 @@
 
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/"><img src="/static/YieldLife_Logo_tp_500x500.png" alt="Logo"> <span class="brand-yield">Yield</span><span class="brand-life">Life</span></a>
+            <a class="navbar-brand" href="/"><img src="/static/YieldLife_Logo_tp_500x500.png" alt="Logo"> <span class="brand-yield">Yield</span><span class="brand-life">Life</span><span class="brand-tagline">Home of Cardano's simplest DeFi Analytics</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>

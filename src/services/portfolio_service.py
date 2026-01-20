@@ -19,13 +19,21 @@ BLOCKFROST_API_KEY = os.environ.get("BLOCKFROST_API_KEY", "")
 # Minswap API for pool data
 MINSWAP_API_URL = "https://api-mainnet-prod.minswap.org"
 
+# SundaeSwap GraphQL API
+SUNDAESWAP_API_URL = "https://api.sundae.fi/graphql"
+SUNDAESWAP_YIELD_API_URL = "https://api.yield.sundaeswap.finance/graphql"
+
 # Known LP token policy IDs for Cardano DEXes
 LP_POLICY_IDS = {
     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c": "minswap",
-    "e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86": "sundaeswap",
+    "e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86": "sundaeswap",  # V1
+    "e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b": "sundaeswap",  # V3
     "026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a570": "wingriders",
     "1d7f33bd23d85e1a25d87d86fac4f199c3197a2f7afeb662a0f34e1e": "wingriders",  # WR V2
 }
+
+# SundaeSwap V3 LP policy ID (asset name contains pool ID)
+SUNDAESWAP_V3_LP_POLICY = "e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b"
 
 
 @dataclass
@@ -150,6 +158,143 @@ class PortfolioService:
             logger.warning("Error fetching Minswap pool metrics: %s", e)
 
         return None
+
+    def _get_sundaeswap_pool_metrics(self, asset_name_hex: str) -> Optional[Dict]:
+        """
+        Fetch pool metrics from SundaeSwap GraphQL API.
+
+        For V3 LP tokens, the asset name contains the pool ID:
+        - First 4 bytes (8 hex chars): prefix "0014df10"
+        - Remaining bytes: pool ID
+
+        Args:
+            asset_name_hex: LP token asset name in hex
+
+        Returns:
+            Pool metrics dict with TVL, reserves, token info, etc.
+        """
+        # Extract pool ID from asset name
+        # V3 LP asset names start with "0014df10" followed by pool ID
+        if asset_name_hex.startswith("0014df10"):
+            pool_id = asset_name_hex[8:]  # Remove prefix to get pool ID
+        else:
+            pool_id = asset_name_hex
+
+        cache_key = f"sundae_{pool_id}"
+        if cache_key in self._pool_metrics_cache:
+            return self._pool_metrics_cache[cache_key]
+
+        try:
+            query = """
+            {
+              pools {
+                byId(id: "%s") {
+                  id
+                  version
+                  assetA { ticker name policyId decimals }
+                  assetB { ticker name policyId decimals }
+                  assetLP { id policyId assetNameHex }
+                  current {
+                    tvl { quantity }
+                    quantityA { quantity }
+                    quantityB { quantity }
+                    quantityLP { quantity }
+                  }
+                  bidFee
+                }
+              }
+            }
+            """ % pool_id
+
+            resp = self.session.post(
+                SUNDAESWAP_API_URL,
+                json={"query": query},
+                timeout=self.timeout
+            )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                pool_data = data.get("data", {}).get("pools", {}).get("byId")
+
+                if pool_data:
+                    self._pool_metrics_cache[cache_key] = pool_data
+                    return pool_data
+                else:
+                    logger.debug("SundaeSwap pool not found for ID: %s", pool_id[:20])
+            else:
+                logger.debug("SundaeSwap API error: %d", resp.status_code)
+
+        except Exception as e:
+            logger.warning("Error fetching SundaeSwap pool metrics: %s", e)
+
+        return None
+
+    def _calculate_sundaeswap_lp_value(self, lp_amount: str, pool_data: Dict) -> Dict:
+        """
+        Calculate the ADA value of SundaeSwap LP tokens.
+
+        Args:
+            lp_amount: User's LP token amount (string, raw units)
+            pool_data: Pool data from SundaeSwap GraphQL API
+
+        Returns:
+            Dict with ada_value, token_a info, token_b info, pool_share
+        """
+        try:
+            user_lp = int(lp_amount)
+            current = pool_data.get("current", {})
+
+            # Get total LP supply
+            total_lp = int(current.get("quantityLP", {}).get("quantity", "0"))
+            if total_lp <= 0:
+                return {"ada_value": None, "token_a": {}, "token_b": {}}
+
+            # Calculate user's share
+            share = user_lp / total_lp
+
+            # Get TVL and reserves (in lovelace/raw units)
+            tvl_lovelace = int(current.get("tvl", {}).get("quantity", "0"))
+            reserve_a = int(current.get("quantityA", {}).get("quantity", "0"))
+            reserve_b = int(current.get("quantityB", {}).get("quantity", "0"))
+
+            # Get token info
+            asset_a = pool_data.get("assetA", {})
+            asset_b = pool_data.get("assetB", {})
+
+            ticker_a = asset_a.get("ticker", "?")
+            ticker_b = asset_b.get("ticker", "?")
+            decimals_a = asset_a.get("decimals", 6)
+            decimals_b = asset_b.get("decimals", 6)
+
+            # Convert reserves to human-readable amounts
+            reserve_a_human = reserve_a / (10 ** decimals_a)
+            reserve_b_human = reserve_b / (10 ** decimals_b)
+
+            # User's share of each asset
+            user_amount_a = reserve_a_human * share
+            user_amount_b = reserve_b_human * share
+
+            # TVL in ADA (lovelace / 1M)
+            tvl_ada = tvl_lovelace / 1_000_000
+            user_value_ada = tvl_ada * share
+
+            return {
+                "ada_value": round(user_value_ada, 2),
+                "pool_share_percent": share,
+                "token_a": {
+                    "symbol": ticker_a,
+                    "amount": round(user_amount_a, 6),
+                },
+                "token_b": {
+                    "symbol": ticker_b,
+                    "amount": round(user_amount_b, 6),
+                },
+                "apr": None,  # Would need to fetch HRA from ticks data
+            }
+
+        except Exception as e:
+            logger.warning("Error calculating SundaeSwap LP value: %s", e)
+            return {"ada_value": None, "token_a": {}, "token_b": {}}
 
     def _calculate_lp_value(self, lp_amount: str, pool_metrics: Dict) -> Dict:
         """
@@ -311,24 +456,47 @@ class PortfolioService:
     ) -> Optional[LPPosition]:
         """Create an LP position from Blockfrost asset data."""
         try:
-            # Decode asset name from hex to get pool info
-            try:
-                asset_name = bytes.fromhex(asset_name_hex).decode('utf-8', errors='replace')
-            except Exception:
-                asset_name = asset_name_hex[:16] + "..."
+            pool_name = None
+            lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
 
-            # Try to get more details about this LP token from Blockfrost
-            pool_name = self._get_pool_name_from_asset(policy_id, asset_name_hex, protocol)
+            # Try to get pool metrics based on protocol
+            if protocol == "sundaeswap":
+                pool_data = self._get_sundaeswap_pool_metrics(asset_name_hex)
+                if pool_data:
+                    lp_value_info = self._calculate_sundaeswap_lp_value(quantity, pool_data)
+                    # Build pool name from asset tickers
+                    asset_a = pool_data.get("assetA", {})
+                    asset_b = pool_data.get("assetB", {})
+                    ticker_a = asset_a.get("ticker", "?")
+                    ticker_b = asset_b.get("ticker", "?")
+                    if ticker_a and ticker_b:
+                        pool_name = f"{ticker_a}/{ticker_b}"
+
+            elif protocol == "minswap":
+                pool_metrics = self._get_minswap_pool_metrics(policy_id, asset_name_hex)
+                if pool_metrics:
+                    lp_value_info = self._calculate_lp_value(quantity, pool_metrics)
+                    # Build pool name from asset metadata
+                    asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
+                    asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
+                    ticker_a = asset_a.get("ticker", "?")
+                    ticker_b = asset_b.get("ticker", "?")
+                    if ticker_a and ticker_b:
+                        pool_name = f"{ticker_a}/{ticker_b}"
+
+            # Fall back to Blockfrost metadata for pool name
+            if not pool_name:
+                pool_name = self._get_pool_name_from_asset(policy_id, asset_name_hex, protocol)
 
             return LPPosition(
                 protocol=protocol,
                 pool=pool_name or f"{protocol.upper()} LP",
                 lp_amount=quantity,
-                token_a={"symbol": "?", "amount": 0},  # Would need pool query to get breakdown
-                token_b={"symbol": "?", "amount": 0},
-                usd_value=None,  # Would need price feed
-                current_apr=None,
-                pool_share_percent=None,
+                token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
+                token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
+                usd_value=lp_value_info.get("ada_value"),
+                current_apr=lp_value_info.get("apr"),
+                pool_share_percent=lp_value_info.get("pool_share_percent"),
             )
         except Exception as e:
             logger.warning("Error creating LP position: %s", e)
@@ -379,8 +547,9 @@ class PortfolioService:
         """
         Fetch staked LP positions from yield farms.
 
-        Checks all addresses associated with the stake key, including script
-        addresses used by DEX yield farming contracts.
+        Checks:
+        1. SundaeSwap yield farming API for staked positions
+        2. Transaction analysis for other protocol farm contracts
 
         Args:
             wallet_address: Cardano wallet address
@@ -388,11 +557,139 @@ class PortfolioService:
         Returns:
             List of FarmPosition objects
         """
-        if not BLOCKFROST_API_KEY:
-            logger.warning("BLOCKFROST_API_KEY not configured. Cannot fetch farm positions.")
-            return []
+        positions = []
 
-        return self._fetch_staked_farm_positions(wallet_address)
+        # Fetch SundaeSwap yield farming positions (direct API)
+        sundae_positions = self._fetch_sundaeswap_yield_positions(wallet_address)
+        positions.extend(sundae_positions)
+
+        # Fetch other protocol farm positions via transaction analysis
+        if BLOCKFROST_API_KEY:
+            other_positions = self._fetch_staked_farm_positions(wallet_address)
+            positions.extend(other_positions)
+        else:
+            logger.warning("BLOCKFROST_API_KEY not configured. Cannot fetch other farm positions.")
+
+        return positions
+
+    def _fetch_sundaeswap_yield_positions(self, wallet_address: str) -> List[FarmPosition]:
+        """
+        Fetch staked LP positions from SundaeSwap yield farming API.
+
+        Args:
+            wallet_address: Cardano wallet address (bech32 format)
+
+        Returns:
+            List of FarmPosition objects for SundaeSwap staked LPs
+        """
+        positions = []
+
+        query = """
+        {
+          positions(beneficiary: "%s") {
+            txHash
+            index
+            spentTxHash
+            value { assetID amount }
+            delegation {
+              pool {
+                poolIdent
+                lpAsset
+                assetA
+                assetB
+              }
+              program { id label }
+            }
+          }
+        }
+        """ % wallet_address
+
+        try:
+            resp = self.session.post(
+                SUNDAESWAP_YIELD_API_URL,
+                json={"query": query},
+                timeout=self.timeout
+            )
+
+            if resp.status_code != 200:
+                logger.debug("SundaeSwap yield API error: %d", resp.status_code)
+                return positions
+
+            data = resp.json()
+
+            if "errors" in data:
+                logger.debug("SundaeSwap yield API GraphQL errors: %s", data["errors"])
+                return positions
+
+            api_positions = data.get("data", {}).get("positions", [])
+
+            # Filter to only active (unspent) positions
+            active_positions = [p for p in api_positions if not p.get("spentTxHash")]
+
+            for pos in active_positions:
+                # Find LP token in value array
+                lp_asset_id = None
+                lp_amount = None
+
+                for value in pos.get("value", []):
+                    asset_id = value.get("assetID", "")
+                    # Skip ADA
+                    if asset_id == "ada.lovelace":
+                        continue
+                    # Check if this is a SundaeSwap LP token
+                    if asset_id.startswith(SUNDAESWAP_V3_LP_POLICY):
+                        lp_asset_id = asset_id
+                        lp_amount = value.get("amount")
+                        break
+
+                if not lp_asset_id or not lp_amount:
+                    continue
+
+                # Extract asset name hex from asset ID (policy.assetname format)
+                parts = lp_asset_id.split(".")
+                if len(parts) != 2:
+                    continue
+
+                policy_id = parts[0]
+                asset_name_hex = parts[1]
+
+                # Get pool metrics for value calculation
+                pool_data = self._get_sundaeswap_pool_metrics(asset_name_hex)
+                lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
+                pool_name = "SundaeSwap LP"
+
+                if pool_data:
+                    lp_value_info = self._calculate_sundaeswap_lp_value(lp_amount, pool_data)
+                    # Build pool name from asset tickers
+                    asset_a = pool_data.get("assetA", {})
+                    asset_b = pool_data.get("assetB", {})
+                    ticker_a = asset_a.get("ticker", "?")
+                    ticker_b = asset_b.get("ticker", "?")
+                    if ticker_a and ticker_b:
+                        pool_name = f"{ticker_a}/{ticker_b}"
+
+                position = FarmPosition(
+                    protocol="sundaeswap",
+                    pool=pool_name,
+                    lp_amount=lp_amount,
+                    farm_type="yield_farming",
+                    token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
+                    token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
+                    usd_value=lp_value_info.get("ada_value"),
+                    current_apr=lp_value_info.get("apr"),
+                    rewards_earned=None,
+                    pool_share_percent=lp_value_info.get("pool_share_percent"),
+                )
+                positions.append(position)
+
+            logger.info("Found %d SundaeSwap yield farming positions", len(positions))
+
+        except requests.RequestException as e:
+            logger.warning("Error fetching SundaeSwap yield positions: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error fetching SundaeSwap yield positions: %s", e)
+
+        return positions
 
     def _fetch_staked_farm_positions(self, wallet_address: str) -> List[FarmPosition]:
         """
@@ -502,8 +799,9 @@ class PortfolioService:
                     lp_info["protocol"]
                 )
 
-                # Try to get pool metrics for value calculation (Minswap only for now)
+                # Try to get pool metrics for value calculation
                 lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
+
                 if lp_info["protocol"] == "minswap":
                     pool_metrics = self._get_minswap_pool_metrics(
                         lp_info["policy_id"],
@@ -514,6 +812,20 @@ class PortfolioService:
                         # Use pool name from metrics if available
                         asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
                         asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
+                        ticker_a = asset_a.get("ticker", "?")
+                        ticker_b = asset_b.get("ticker", "?")
+                        if ticker_a and ticker_b:
+                            pool_name = f"{ticker_a}/{ticker_b}"
+
+                elif lp_info["protocol"] == "sundaeswap":
+                    pool_data = self._get_sundaeswap_pool_metrics(lp_info["asset_name_hex"])
+                    if pool_data:
+                        lp_value_info = self._calculate_sundaeswap_lp_value(
+                            lp_info["amount"], pool_data
+                        )
+                        # Use pool name from API
+                        asset_a = pool_data.get("assetA", {})
+                        asset_b = pool_data.get("assetB", {})
                         ticker_a = asset_a.get("ticker", "?")
                         ticker_b = asset_b.get("ticker", "?")
                         if ticker_a and ticker_b:
