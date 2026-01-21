@@ -11,10 +11,37 @@ const PROTOCOL_LOGOS = {
     'liqwid': '/static/liqwid-logo.png'
 };
 
+// Current ADA price in USD (fetched on page load)
+let adaPriceUsd = null;
+
 // Load positions on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadPortfolioPositions();
 });
+
+/**
+ * Fetch current ADA price from CoinGecko
+ */
+async function fetchAdaPrice() {
+    try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=cardano&vs_currencies=usd');
+        if (response.ok) {
+            const data = await response.json();
+            adaPriceUsd = data.cardano?.usd || null;
+            console.log('ADA price:', adaPriceUsd);
+        }
+    } catch (e) {
+        console.warn('Could not fetch ADA price:', e);
+    }
+}
+
+/**
+ * Convert ADA value to USD string
+ */
+function adaToUsd(adaValue) {
+    if (!adaPriceUsd || !adaValue) return null;
+    return adaValue * adaPriceUsd;
+}
 
 /**
  * Fetch all portfolio positions from the API
@@ -24,6 +51,9 @@ async function loadPortfolioPositions() {
     setLoading(true);
 
     try {
+        // Fetch ADA price first (in parallel with positions would be better but keep simple)
+        await fetchAdaPrice();
+
         const response = await fetch('/api/portfolio/positions', {
             credentials: 'include'
         });
@@ -191,7 +221,9 @@ function renderProtocolSection(protocol, data) {
  * Render a single LP position card
  */
 function renderLPPositionCard(pos) {
-    const usdValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
+    const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
+    const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
+    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
     const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
@@ -209,7 +241,8 @@ function renderLPPositionCard(pos) {
                     <strong>${pos.pool || 'Unknown Pool'}</strong>
                 </div>
                 <div class="text-end">
-                    <div class="h5 mb-0">${usdValue}</div>
+                    <div class="h5 mb-0">${adaValue}</div>
+                    ${usdDisplay ? `<small class="text-muted">${usdDisplay}</small>` : ''}
                 </div>
             </div>
             <div class="row mt-2">
@@ -237,8 +270,10 @@ function renderLPPositionCard(pos) {
  * Render a single farm position card
  */
 function renderFarmPositionCard(pos) {
-    // Value displayed in ADA (not USD)
+    // Value displayed in ADA with USD conversion
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
+    const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
+    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
     const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
 
     const tokenA = pos.token_a || {};
@@ -262,6 +297,7 @@ function renderFarmPositionCard(pos) {
                 </div>
                 <div class="text-end">
                     <div class="h5 mb-0">${adaValue}</div>
+                    ${usdDisplay ? `<small class="text-muted">${usdDisplay}</small>` : ''}
                 </div>
             </div>
             <div class="row mt-2">
@@ -382,11 +418,24 @@ function renderLendingPositionCard(pos) {
  */
 function updateTotalValue(value) {
     const el = document.getElementById('totalValue');
+    const usdEl = document.getElementById('totalValueUsd');
+
     if (el) {
         if (value && value > 0) {
             el.textContent = `${formatNumber(value)} ADA`;
         } else {
             el.textContent = '0 ADA';
+        }
+    }
+
+    // Update USD value if element exists and we have ADA price
+    if (usdEl) {
+        const usdValue = value && adaPriceUsd ? value * adaPriceUsd : null;
+        if (usdValue) {
+            usdEl.textContent = `≈ $${formatNumber(usdValue)}`;
+            usdEl.style.display = 'block';
+        } else {
+            usdEl.style.display = 'none';
         }
     }
 }

@@ -26,6 +26,37 @@ SUNDAESWAP_YIELD_API_URL = "https://api.yield.sundaeswap.finance/graphql"
 # WingRiders GraphQL API
 WINGRIDERS_API_URL = "https://api.mainnet.wingriders.com/graphql"
 
+# Liqwid Finance GraphQL API
+LIQWID_API_URL = "https://v2.api.liqwid.finance/graphql"
+
+# Liqwid qToken (receipt token) policy IDs - used to detect supply positions
+# Map: policy_id -> market_id
+LIQWID_QTOKEN_POLICY_IDS = {
+    "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68": "Ada",
+    "d753e0d193680fe32710379d3a1ec48087ce94f3831505b922c2894b": "AGIX",
+    "f72166e9fac8297aeb553c19ffab14f51ae271c2cb26783ba289a3a5": "BTC",
+    "dd55119962ca550cdd4219999b9e6d25fc9128f96c7dcb5e485286eb": "COPI",
+    "8996bb07509defe0be6f0c39845a736b266c85a70d87ebfb66454a78": "DAI",
+    "6df63e2fdde8b2c3b3396265b0cc824aa4fb999396b1c154280f6b0c": "DJED",
+    "b122b2fc62557df9c3fd0b5c62a4b2c970a0d711560e0a8dd7b264f3": "ERG",
+    "5f42994532b04f9f5bd4141c69364c5b7d33c85036146ee321799702": "ETH",
+    "85fa65407b5321fa0e2ef9a3ec98e12a00c35871d7a620be3132003c": "EURC",
+    "f60b7232837203d335cd77494d25c1cc0b218b9a8f3459730c521d13": "IAG",
+    "d15c36d6dec655677acb3318294f116ce01d8d9def3cc54cdd78909b": "IUSD",
+    "3883e3e6a24e092d4c14e757fa8ef5c887853060def087d6cf5603f5": "LQ",
+    "a4430a085f45bca6399bec6bd7514eb8c2fce1ed75c7554739cfc32b": "MIN",
+    "c45fa8aefc662c003a32be67f6a4652d8ce56bd9e54d7696efd40c86": "NIGHT",
+    "6f7d8e31d9256ec27f35d25659dd053cfec098032a5669b2b56798d0": "POL",
+    "b8a327951d579d3537ea175078256bdf9f9899b5387b099d0b58f066": "PYUSD",
+    "e1ff3557106fe13042ba0f772af6a2e43903ccfaaf03295048882c93": "SHEN",
+    "4e8c49d610335d139ad7711e0f50315006e29b5221da531e365b4ef8": "SNEK",
+    "aa280c98c5b07fdfc8d7a93fb5ba84510b421388e4a18e16efa8eb5f": "USDA",
+    "aebcb6eaba17dea962008a9d693e39a3160b02b5b89b1c83e537c599": "USDC",
+    "9e00df0615de0a7b121a7f961d43e23165b8e81b64786c6eb708d370": "USDM",
+    "7a4d45e6b4e6835c4cea3968f291fab3704949cfd2f2dc1997c4eeec": "USDT",
+    "f2636c8280e49e7ed7a7b1151341130989631b45a08d1b320f016981": "WMT",
+}
+
 # Known LP token policy IDs for Cardano DEXes
 LP_POLICY_IDS = {
     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c": "minswap",
@@ -118,8 +149,6 @@ class PortfolioService:
     """Service for fetching and aggregating user DeFi positions."""
 
     def __init__(self):
-        self.liqwid_api = "https://v2.api.liqwid.finance/graphql"
-
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "defitracker/1.0",
@@ -805,8 +834,9 @@ class PortfolioService:
         Fetch staked LP positions from yield farms.
 
         Checks:
-        1. SundaeSwap yield farming API for staked positions
-        2. Transaction analysis for other protocol farm contracts
+        1. WingRiders farm positions via userShareLocks API
+        2. SundaeSwap yield farming API for staked positions
+        3. Transaction analysis for other protocol farm contracts
 
         Args:
             wallet_address: Cardano wallet address
@@ -815,6 +845,10 @@ class PortfolioService:
             List of FarmPosition objects
         """
         positions = []
+
+        # Fetch WingRiders farm positions (direct API)
+        wingriders_positions = self._fetch_wingriders_farm_positions(wallet_address)
+        positions.extend(wingriders_positions)
 
         # Fetch SundaeSwap yield farming positions (direct API)
         sundae_positions = self._fetch_sundaeswap_yield_positions(wallet_address)
@@ -828,6 +862,214 @@ class PortfolioService:
             logger.warning("BLOCKFROST_API_KEY not configured. Cannot fetch other farm positions.")
 
         return positions
+
+    def _fetch_wingriders_farm_positions(self, wallet_address: str) -> List[FarmPosition]:
+        """
+        Fetch staked LP positions from WingRiders farming via userShareLocks API.
+
+        WingRiders farming allows users to lock their LP tokens in farm contracts
+        for additional yield rewards. The userShareLocks query returns all locked
+        LP positions for a given payment key hash.
+
+        Args:
+            wallet_address: Cardano wallet address (bech32 format)
+
+        Returns:
+            List of FarmPosition objects for WingRiders staked LPs
+        """
+        positions = []
+
+        # Extract payment key hash from address
+        payment_key = self._extract_payment_key_hash(wallet_address)
+        if not payment_key:
+            logger.debug("Could not extract payment key for WingRiders farm lookup")
+            return positions
+
+        query = """
+        query GetUserShareLocks($input: UserShareLocksInput!) {
+          userShareLocks(input: $input) {
+            txHash
+            address
+            coins
+            outputIndex
+            version
+            tokenBundle {
+              policyId
+              assetName
+              quantity
+            }
+          }
+        }
+        """
+
+        try:
+            payload = {
+                "query": query,
+                "variables": {
+                    "input": {
+                        "ownerPubKeyHash": payment_key
+                    }
+                }
+            }
+
+            resp = self.session.post(
+                WINGRIDERS_API_URL,
+                json=payload,
+                timeout=self.timeout
+            )
+
+            if resp.status_code != 200:
+                logger.debug("WingRiders userShareLocks query failed: %d", resp.status_code)
+                return positions
+
+            data = resp.json()
+
+            if "errors" in data and data["errors"]:
+                logger.debug("WingRiders GraphQL errors: %s", data.get("errors"))
+                return positions
+
+            share_locks = data.get("data", {}).get("userShareLocks", [])
+
+            for lock in share_locks:
+                # Find LP token in token bundle
+                for token in lock.get("tokenBundle", []):
+                    policy_id = token.get("policyId", "")
+                    asset_name_hex = token.get("assetName", "")
+                    quantity = token.get("quantity", "0")
+
+                    # Check if this is a WingRiders LP token
+                    if policy_id in LP_POLICY_IDS and LP_POLICY_IDS[policy_id] == "wingriders":
+                        # Get pool data for this LP token
+                        pool_data = self._get_wingriders_pool_metrics(policy_id, asset_name_hex)
+                        lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None, "pool_share_percent": None}
+                        pool_name = "WingRiders LP"
+
+                        if pool_data:
+                            lp_value_info = self._calculate_wingriders_lp_value(quantity, pool_data)
+
+                            # Build pool name from token tickers
+                            token_a = pool_data.get("tokenA", {})
+                            token_b = pool_data.get("tokenB", {})
+                            ticker_map = pool_data.get("_ticker_map", {})
+
+                            def get_ticker(tok):
+                                if not tok.get("policyId"):
+                                    return "ADA"
+                                key = f"{tok.get('policyId', '')}_{tok.get('assetName', '')}"
+                                return ticker_map.get(key, "?")
+
+                            ticker_a = get_ticker(token_a)
+                            ticker_b = get_ticker(token_b)
+                            if ticker_a and ticker_b:
+                                pool_name = f"{ticker_a}/{ticker_b}"
+
+                            # Fetch farm APR (separate from pool APR)
+                            farm_apr = self._get_wingriders_farm_apr(policy_id, asset_name_hex)
+                            if farm_apr is not None:
+                                # Farm APR replaces base APR for staked positions
+                                lp_value_info["apr"] = farm_apr
+
+                        position = FarmPosition(
+                            protocol="wingriders",
+                            pool=pool_name,
+                            lp_amount=quantity,
+                            farm_type="yield_farming",
+                            token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
+                            token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
+                            usd_value=lp_value_info.get("ada_value"),
+                            current_apr=lp_value_info.get("apr"),
+                            pool_share_percent=lp_value_info.get("pool_share_percent"),
+                        )
+                        positions.append(position)
+                        logger.debug(
+                            "Found WingRiders farm position: %s, LP=%s, value=%s ADA",
+                            pool_name, quantity, lp_value_info.get("ada_value")
+                        )
+
+            logger.info("Found %d WingRiders farm positions", len(positions))
+
+        except requests.RequestException as e:
+            logger.warning("Error fetching WingRiders farm positions: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error fetching WingRiders farms: %s", e)
+
+        return positions
+
+    def _get_wingriders_farm_apr(self, policy_id: str, asset_name_hex: str) -> Optional[float]:
+        """
+        Fetch farm APR for a WingRiders LP token.
+
+        Returns the total APR including fees, staking, and farm rewards.
+        """
+        cache_key = f"wr_farm_apr_{policy_id}_{asset_name_hex}"
+        if cache_key in self._pool_metrics_cache:
+            return self._pool_metrics_cache[cache_key]
+
+        try:
+            # Query active farm by pool asset
+            query = """
+            query GetFarm($poolAsset: AssetInput!) {
+              activeFarmById(poolAsset: $poolAsset) {
+                poolId
+                yieldAPR(timeframe: CURRENT_EPOCH) {
+                  regular { apr }
+                  boosting { apr }
+                }
+                liquidityPool {
+                  ... on LiquidityPoolV1 {
+                    feesAPR
+                    stakingAPR(timeframe: CURRENT_EPOCH)
+                  }
+                  ... on LiquidityPoolV2 {
+                    feesAPR
+                    stakingAPR(timeframe: CURRENT_EPOCH)
+                  }
+                }
+              }
+            }
+            """
+
+            variables = {
+                "poolAsset": {
+                    "policyId": policy_id,
+                    "assetName": asset_name_hex,
+                }
+            }
+
+            resp = self.session.post(
+                WINGRIDERS_API_URL,
+                json={"query": query, "variables": variables},
+                timeout=self.timeout
+            )
+
+            if resp.status_code != 200:
+                return None
+
+            data = resp.json()
+            farm = data.get("data", {}).get("activeFarmById")
+
+            if not farm:
+                return None
+
+            # Calculate total APR
+            yield_apr = farm.get("yieldAPR") or {}
+            regular = yield_apr.get("regular") or {}
+            boosting = yield_apr.get("boosting") or {}
+            pool = farm.get("liquidityPool") or {}
+
+            fees_apr = float(pool.get("feesAPR") or 0)
+            staking_apr = float(pool.get("stakingAPR") or 0)
+            farm_apr = float(regular.get("apr") or 0)
+            boost_apr = float(boosting.get("apr") or 0)
+
+            total_apr = fees_apr + staking_apr + farm_apr + boost_apr
+
+            self._pool_metrics_cache[cache_key] = round(total_apr, 2)
+            return round(total_apr, 2)
+
+        except Exception as e:
+            logger.debug("Error fetching WingRiders farm APR: %s", e)
+            return None
 
     def _fetch_sundaeswap_yield_positions(self, wallet_address: str) -> List[FarmPosition]:
         """
@@ -1203,35 +1445,144 @@ class PortfolioService:
         return self._fetch_liqwid_positions(wallet_address)
 
     def _fetch_liqwid_positions(self, wallet_address: str) -> List[LendingPosition]:
-        """Fetch lending/borrowing positions from Liqwid Finance."""
+        """Fetch lending/borrowing positions from Liqwid Finance.
+
+        Supply positions are detected by scanning wallet for qTokens (receipt tokens).
+        Borrow positions are fetched via the Liqwid loans API using payment key.
+        """
         positions = []
 
+        # Fetch supply positions by detecting qTokens in wallet
+        supply_positions = self._fetch_liqwid_supply_positions(wallet_address)
+        positions.extend(supply_positions)
+
+        # Fetch borrow positions via Liqwid loans API
+        borrow_positions = self._fetch_liqwid_borrow_positions(wallet_address)
+        positions.extend(borrow_positions)
+
+        return positions
+
+    def _extract_payment_key_hash(self, wallet_address: str) -> Optional[str]:
+        """Extract payment key hash from Cardano bech32 address."""
+        try:
+            # Bech32 decoding
+            BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+
+            bech = wallet_address.lower()
+            pos = bech.rfind('1')
+            if pos < 1:
+                return None
+
+            data = [BECH32_CHARSET.find(c) for c in bech[pos + 1:]]
+
+            # Convert from 5-bit to 8-bit (remove checksum)
+            acc = 0
+            bits = 0
+            decoded = []
+            for value in data[:-6]:  # Remove 6 checksum chars
+                acc = (acc << 5) | value
+                bits += 5
+                while bits >= 8:
+                    bits -= 8
+                    decoded.append((acc >> bits) & 0xff)
+
+            # First byte is header, bytes 1-28 are payment key hash
+            if len(decoded) >= 29:
+                payment_key_hash = bytes(decoded[1:29]).hex()
+                return payment_key_hash
+
+        except Exception as e:
+            logger.debug("Error extracting payment key hash: %s", e)
+
+        return None
+
+    def _fetch_liqwid_supply_positions(self, wallet_address: str) -> List[LendingPosition]:
+        """Fetch supply positions by detecting qTokens in wallet via Blockfrost."""
+        positions = []
+
+        if not BLOCKFROST_API_KEY:
+            logger.debug("Blockfrost API key not configured, skipping Liqwid supply detection")
+            return positions
+
+        try:
+            # Get wallet assets from Blockfrost
+            headers = {"project_id": BLOCKFROST_API_KEY}
+            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}"
+            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+
+            if resp.status_code != 200:
+                logger.debug("Failed to fetch wallet address: %d", resp.status_code)
+                return positions
+
+            address_data = resp.json()
+
+            # Check each asset for qToken policy IDs
+            for asset in address_data.get("amount", []):
+                unit = asset.get("unit", "")
+                quantity = asset.get("quantity", "0")
+
+                if unit == "lovelace" or len(unit) < 56:
+                    continue
+
+                policy_id = unit[:56]
+
+                if policy_id in LIQWID_QTOKEN_POLICY_IDS:
+                    market_id = LIQWID_QTOKEN_POLICY_IDS[policy_id]
+
+                    # Fetch market data for exchange rate and APY
+                    market_data = self._get_liqwid_market_data(market_id)
+                    if market_data:
+                        position = self._create_liqwid_supply_position(
+                            market_id, market_data, quantity
+                        )
+                        if position:
+                            positions.append(position)
+                            logger.debug(
+                                "Found Liqwid supply: %s, qTokens=%s",
+                                market_data.get("symbol"), quantity
+                            )
+
+        except requests.RequestException as e:
+            logger.warning("Error fetching Liqwid supply positions: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error fetching Liqwid supplies: %s", e)
+
+        return positions
+
+    def _fetch_liqwid_borrow_positions(self, wallet_address: str) -> List[LendingPosition]:
+        """Fetch borrow positions via Liqwid loans API."""
+        positions = []
+
+        # Extract payment key hash from address
+        payment_key = self._extract_payment_key_hash(wallet_address)
+        if not payment_key:
+            logger.debug("Could not extract payment key from address")
+            return positions
+
         query = """
-        query UserPositions($address: String!) {
+        query GetLoans($paymentKeys: [String!]) {
             liqwid {
                 data {
-                    user(address: $address) {
-                        supplies {
-                            market {
-                                id
-                                symbol
-                                supplyAPY
-                            }
-                            qTokenBalance
-                            underlyingBalance
-                            valueUsd
-                        }
-                        borrows {
+                    loans(input: { paymentKeys: $paymentKeys }) {
+                        results {
+                            id
+                            amount
+                            adjustedAmount
+                            collateral
+                            healthFactor
+                            LTV
+                            APY
                             market {
                                 id
                                 symbol
                                 borrowAPY
                             }
-                            borrowBalance
-                            valueUsd
+                            asset {
+                                symbol
+                                decimals
+                                price
+                            }
                         }
-                        totalSupplyUsd
-                        totalBorrowUsd
                     }
                 }
             }
@@ -1241,105 +1592,174 @@ class PortfolioService:
         try:
             payload = {
                 "query": query,
-                "variables": {"address": wallet_address},
+                "variables": {"paymentKeys": [payment_key]},
             }
 
             resp = self.session.post(
-                self.liqwid_api,
+                LIQWID_API_URL,
                 json=payload,
                 timeout=self.timeout,
             )
 
             if resp.status_code != 200:
-                logger.debug("Liqwid positions query failed: %d", resp.status_code)
+                logger.debug("Liqwid loans query failed: %d", resp.status_code)
                 return positions
 
             data = resp.json()
 
             if "errors" in data:
-                logger.debug("Liqwid GraphQL errors: %s", data["errors"])
+                logger.debug("Liqwid GraphQL errors: %s", data.get("errors"))
                 return positions
 
-            user_data = (
+            loans = (
                 data.get("data", {})
                 .get("liqwid", {})
                 .get("data", {})
-                .get("user")
+                .get("loans", {})
+                .get("results", [])
             )
 
-            if not user_data:
-                logger.debug("No Liqwid user data for %s", wallet_address[:20])
-                return positions
-
-            # Parse supply positions
-            for supply in user_data.get("supplies", []):
-                position = self._parse_liqwid_supply(supply)
+            for loan in loans:
+                position = self._parse_liqwid_loan(loan)
                 if position:
                     positions.append(position)
 
-            # Parse borrow positions
-            for borrow in user_data.get("borrows", []):
-                position = self._parse_liqwid_borrow(borrow)
-                if position:
-                    positions.append(position)
+            logger.info("Found %d Liqwid borrow positions", len(positions))
 
         except requests.RequestException as e:
-            logger.warning("Error fetching Liqwid positions: %s", e)
+            logger.warning("Error fetching Liqwid borrow positions: %s", e)
         except Exception as e:
-            logger.error("Unexpected error parsing Liqwid data: %s", e)
+            logger.error("Unexpected error fetching Liqwid borrows: %s", e)
 
         return positions
 
-    def _parse_liqwid_supply(self, data: Dict) -> Optional[LendingPosition]:
-        """Parse a Liqwid supply position."""
+    def _get_liqwid_market_data(self, market_id: str) -> Optional[Dict]:
+        """Fetch market data from Liqwid API for a given market ID."""
+        cache_key = f"liqwid_market_{market_id}"
+        if cache_key in self._pool_metrics_cache:
+            return self._pool_metrics_cache[cache_key]
+
+        query = """
+        query GetMarket($id: String!) {
+            liqwid {
+                data {
+                    market(input: { id: $id }) {
+                        id
+                        symbol
+                        displayName
+                        exchangeRate
+                        supplyAPY
+                        borrowAPY
+                        asset {
+                            decimals
+                            price
+                        }
+                    }
+                }
+            }
+        }
+        """
+
         try:
-            market = data.get("market", {})
-            symbol = market.get("symbol", "?")
+            payload = {
+                "query": query,
+                "variables": {"id": market_id},
+            }
 
-            # API returns APY as decimal (0.0325 for 3.25%)
-            supply_apy = market.get("supplyAPY")
-            apy_percent = float(supply_apy) * 100 if supply_apy else None
+            resp = self.session.post(
+                LIQWID_API_URL,
+                json=payload,
+                timeout=self.timeout,
+            )
 
-            amount = float(data.get("underlyingBalance") or 0)
+            if resp.status_code == 200:
+                data = resp.json()
+                market = (
+                    data.get("data", {})
+                    .get("liqwid", {})
+                    .get("data", {})
+                    .get("market")
+                )
+                if market:
+                    self._pool_metrics_cache[cache_key] = market
+                    return market
 
-            if amount <= 0:
+        except Exception as e:
+            logger.debug("Error fetching Liqwid market %s: %s", market_id, e)
+
+        return None
+
+    def _create_liqwid_supply_position(
+        self, market_id: str, market_data: Dict, qtoken_amount: str
+    ) -> Optional[LendingPosition]:
+        """Create a LendingPosition from qToken balance and market data."""
+        try:
+            symbol = market_data.get("symbol", market_id)
+            exchange_rate = float(market_data.get("exchangeRate", 0))
+            supply_apy = float(market_data.get("supplyAPY", 0))
+
+            # qTokens have 6 decimals
+            qtoken_balance = int(qtoken_amount) / 1_000_000
+
+            # Underlying amount = qToken balance * exchange rate
+            # Exchange rate represents how much underlying you get per qToken
+            # (e.g., rate of 0.02 means 1 qToken = 0.02 underlying)
+            underlying_amount = qtoken_balance * exchange_rate
+
+            if underlying_amount <= 0:
                 return None
+
+            # Calculate USD value
+            asset_data = market_data.get("asset", {})
+            price = float(asset_data.get("price", 0))
+            usd_value = underlying_amount * price if price > 0 else None
+
+            # Convert APY to percentage
+            apy_percent = supply_apy * 100
 
             return LendingPosition(
                 protocol="liqwid",
                 market=symbol,
                 position_type="supply",
-                amount=amount,
-                usd_value=data.get("valueUsd"),
-                current_apy=apy_percent,
+                amount=round(underlying_amount, 6),
+                usd_value=round(usd_value, 2) if usd_value else None,
+                current_apy=round(apy_percent, 2) if apy_percent > 0 else None,
             )
+
         except Exception as e:
-            logger.warning("Error parsing Liqwid supply: %s", e)
+            logger.warning("Error creating Liqwid supply position: %s", e)
             return None
 
-    def _parse_liqwid_borrow(self, data: Dict) -> Optional[LendingPosition]:
-        """Parse a Liqwid borrow position."""
+    def _parse_liqwid_loan(self, loan: Dict) -> Optional[LendingPosition]:
+        """Parse a Liqwid loan (borrow position)."""
         try:
-            market = data.get("market", {})
-            symbol = market.get("symbol", "?")
+            market = loan.get("market", {})
+            asset = loan.get("asset", {})
 
-            # API returns APY as decimal
-            borrow_apy = market.get("borrowAPY")
-            apy_percent = float(borrow_apy) * 100 if borrow_apy else None
-
-            amount = float(data.get("borrowBalance") or 0)
+            symbol = market.get("symbol") or asset.get("symbol", "?")
+            amount = float(loan.get("amount", 0))
+            borrow_apy = float(loan.get("APY", 0))
 
             if amount <= 0:
                 return None
+
+            # Calculate USD value
+            price = float(asset.get("price", 0))
+            usd_value = amount * price if price > 0 else None
+
+            # APY from loan is already a decimal
+            apy_percent = borrow_apy * 100
 
             return LendingPosition(
                 protocol="liqwid",
                 market=symbol,
                 position_type="borrow",
-                amount=amount,
-                usd_value=data.get("valueUsd"),
-                current_apy=apy_percent,
+                amount=round(amount, 6),
+                usd_value=round(usd_value, 2) if usd_value else None,
+                current_apy=round(apy_percent, 2) if apy_percent > 0 else None,
             )
+
         except Exception as e:
-            logger.warning("Error parsing Liqwid borrow: %s", e)
+            logger.warning("Error parsing Liqwid loan: %s", e)
             return None
+

@@ -27,6 +27,10 @@
         font-size: 0.85rem;
         color: #666;
     }
+    .summary-card .total-value-usd {
+        font-size: 1.1rem;
+        color: #666;
+    }
 
     /* Position cards */
     .position-card {
@@ -240,6 +244,7 @@
                     </div>
                     <div class="text-end">
                         <div class="total-value" id="totalValue">--</div>
+                        <div id="totalValueUsd" class="total-value-usd" style="display: none;"></div>
                         <small class="text-muted">Total Portfolio Value</small>
                         <div class="mt-2">
                             <button class="refresh-btn" id="refreshBtn" onclick="refreshPositions()">
