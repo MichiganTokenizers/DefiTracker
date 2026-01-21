@@ -591,6 +591,12 @@
                             <option value="365">Last Year</option>
                         </select>
                     </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Select Asset</label>
+                        <select id="singleAssetSelect" class="form-select">
+                            <option value="">Loading assets...</option>
+                        </select>
+                    </div>
                     <div class="col-md-3">
                         <label class="form-label">Protocol</label>
                         <div class="multi-select-container" id="protocolFilterContainer">
@@ -608,12 +614,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Select Asset</label>
-                        <select id="singleAssetSelect" class="form-select">
-                            <option value="">Loading assets...</option>
-                        </select>
                     </div>
                     <div class="col-md-2 ms-auto d-flex align-items-end">
                         <button type="button" class="btn btn-login w-100" id="saveSingleAssetChartBtn" onclick="saveSingleAssetChart()">
@@ -652,7 +652,12 @@
     <!-- Pie charts sidebar - full height -->
     <div class="col-lg-4">
         <div class="card p-3 card-styled breakdown-sidebar">
-            <h5 class="mb-3" style="color: #1a1a1a;">Yield Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0" style="color: #1a1a1a;">Yield Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
+                <select id="breakdownDateFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;" onchange="renderBreakdownCharts()">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
             <div id="breakdownCharts">
                 <div class="breakdown-loading">
                     <span>Loading...</span>
@@ -1308,11 +1313,12 @@ function applySavedSingleAssetFilters() {
 loadAssets().then(async () => {
     // Try to load saved chart settings first
     const savedResult = await loadSavedChartSettings();
-    
+
     await loadChart();
-    // Render breakdown charts after history data is loaded
+    // Populate date filter and render breakdown charts after history data is loaded
+    populateBreakdownDateFilter();
     setTimeout(renderBreakdownCharts, 500);
-    
+
     // Initialize single asset chart
     initSingleAssetChart();
     
@@ -1347,7 +1353,7 @@ function getProtocolDisplayName(protocol) {
 
 function initSingleAssetChart() {
     const assetSelect = document.getElementById('singleAssetSelect');
-    
+
     // Populate asset dropdown from allAssets
     assetSelect.innerHTML = '<option value="">Select an asset...</option>';
     allAssets.forEach(asset => {
@@ -1356,48 +1362,22 @@ function initSingleAssetChart() {
         option.textContent = asset.symbol;
         assetSelect.appendChild(option);
     });
-    
-    // Build protocol options from allHistoryData
-    // For protocols with versions (WingRiders, SundaeSwap), create separate entries
-    const protocolVersions = new Set();
-    allHistoryData.forEach(d => {
-        if (versionedProtocols.includes(d.protocol) && d.version) {
-            protocolVersions.add(`${d.protocol}_${d.version.toLowerCase()}`);
-        } else {
-            protocolVersions.add(d.protocol);
-        }
-    });
-    allProtocolOptions = [...protocolVersions].sort();
-    
-    // Populate protocol multi-select options
-    const optionsContainer = document.getElementById('protocolOptions');
-    optionsContainer.innerHTML = '';
-    
-    allProtocolOptions.forEach(protocol => {
-        const div = document.createElement('div');
-        div.className = 'multi-select-option';
-        div.innerHTML = `
-            <input type="checkbox" id="protocol-${protocol}" value="${protocol}" 
-                   checked onchange="toggleProtocol('${protocol}')">
-            <label for="protocol-${protocol}">${getProtocolDisplayName(protocol)}</label>
-        `;
-        optionsContainer.appendChild(div);
-        selectedProtocols.add(protocol);
-    });
-    
-    updateProtocolLabel();
-    
+
     // Set default to first NIGHT asset if available
     const nightAsset = allAssets.find(a => a.symbol.includes('NIGHT'));
     if (nightAsset) {
         assetSelect.value = nightAsset.symbol;
+        updateProtocolOptionsForAsset(nightAsset.symbol);
         loadSingleAssetChart();
     }
-    
+
     // Event listeners
-    assetSelect.addEventListener('change', loadSingleAssetChart);
+    assetSelect.addEventListener('change', function() {
+        updateProtocolOptionsForAsset(this.value);
+        loadSingleAssetChart();
+    });
     document.getElementById('singleAssetTimeRange').addEventListener('change', loadSingleAssetChart);
-    
+
     // Protocol dropdown toggle
     document.getElementById('protocolFilterBtn').addEventListener('click', function(e) {
         e.stopPropagation();
@@ -1405,6 +1385,44 @@ function initSingleAssetChart() {
         // Close asset dropdown if open
         document.getElementById('assetDropdown').classList.remove('show');
     });
+}
+
+function updateProtocolOptionsForAsset(selectedAsset) {
+    // Build protocol options from allHistoryData filtered by selected asset
+    const protocolVersions = new Set();
+
+    if (selectedAsset) {
+        allHistoryData
+            .filter(d => d.symbol === selectedAsset)
+            .forEach(d => {
+                if (versionedProtocols.includes(d.protocol) && d.version) {
+                    protocolVersions.add(`${d.protocol}_${d.version.toLowerCase()}`);
+                } else {
+                    protocolVersions.add(d.protocol);
+                }
+            });
+    }
+
+    allProtocolOptions = [...protocolVersions].sort();
+    selectedProtocols.clear();
+
+    // Populate protocol multi-select options
+    const optionsContainer = document.getElementById('protocolOptions');
+    optionsContainer.innerHTML = '';
+
+    allProtocolOptions.forEach(protocol => {
+        const div = document.createElement('div');
+        div.className = 'multi-select-option';
+        div.innerHTML = `
+            <input type="checkbox" id="protocol-${protocol}" value="${protocol}"
+                   checked onchange="toggleProtocol('${protocol}')">
+            <label for="protocol-${protocol}">${getProtocolDisplayName(protocol)}</label>
+        `;
+        optionsContainer.appendChild(div);
+        selectedProtocols.add(protocol);
+    });
+
+    updateProtocolLabel();
 }
 
 function toggleProtocol(protocol) {
@@ -1834,6 +1852,36 @@ async function handleSaveChart(event) {
 // Breakdown pie charts
 const breakdownCharts = {};
 const breakdownProtocolData = {}; // Store per-protocol data for filtering
+let breakdownAvailableDates = []; // Store available dates for the breakdown filter
+
+function populateBreakdownDateFilter() {
+    // Collect all unique dates from allHistoryData
+    const dateSet = new Set();
+    allHistoryData.forEach(assetData => {
+        if (assetData.data && assetData.data.length > 0) {
+            assetData.data.forEach(d => {
+                if (d.timestamp) {
+                    // Extract just the date part (YYYY-MM-DD)
+                    const dateStr = d.timestamp.split('T')[0];
+                    dateSet.add(dateStr);
+                }
+            });
+        }
+    });
+
+    // Sort dates descending (most recent first)
+    breakdownAvailableDates = [...dateSet].sort((a, b) => b.localeCompare(a));
+
+    const dateSelect = document.getElementById('breakdownDateFilter');
+    if (!dateSelect || breakdownAvailableDates.length === 0) return;
+
+    dateSelect.innerHTML = breakdownAvailableDates.map((date, idx) => {
+        const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+        });
+        return `<option value="${date}"${idx === 0 ? ' selected' : ''}>${displayDate}</option>`;
+    }).join('');
+}
 
 // Protocol colors - consistent across all protocols
 const protocolBreakdownColors = {
@@ -1854,7 +1902,7 @@ const protocolBreakdownColors = {
 
 function renderBreakdownCharts() {
     const container = document.getElementById('breakdownCharts');
-    
+
     if (!allHistoryData || allHistoryData.length === 0) {
         container.innerHTML = `
             <div class="col-12">
@@ -1865,15 +1913,27 @@ function renderBreakdownCharts() {
         `;
         return;
     }
-    
+
+    // Get selected date from filter (or use latest)
+    const dateSelect = document.getElementById('breakdownDateFilter');
+    const selectedDate = dateSelect ? dateSelect.value : null;
+
     // Group data by protocol and calculate breakdown
     const protocolBreakdowns = {};
-    
+
     allHistoryData.forEach(assetData => {
         const protocol = assetData.protocol;
-        const latestData = assetData.data[assetData.data.length - 1];
-        
-        if (!latestData) return;
+
+        // Find data for selected date, or use latest if not found
+        let targetData = null;
+        if (selectedDate && assetData.data && assetData.data.length > 0) {
+            targetData = assetData.data.find(d => d.timestamp && d.timestamp.startsWith(selectedDate));
+        }
+        if (!targetData) {
+            targetData = assetData.data[assetData.data.length - 1];
+        }
+
+        if (!targetData) return;
         
         if (!protocolBreakdowns[protocol]) {
             protocolBreakdowns[protocol] = {
@@ -1885,15 +1945,15 @@ function renderBreakdownCharts() {
             };
         }
         
-        const tvl = latestData.tvl_usd || 0;
-        const apr = latestData.apr || 0;      // 30-day APR (total for SundaeSwap)
-        const apr1d = latestData.apr_1d || 0; // 1-day APR
-        const fees24h = latestData.fees_24h || 0;
-        
+        const tvl = targetData.tvl_usd || 0;
+        const apr = targetData.apr || 0;      // 30-day APR (total for SundaeSwap)
+        const apr1d = targetData.apr_1d || 0; // 1-day APR
+        const fees24h = targetData.fees_24h || 0;
+
         let feeApr = 0;
         let farmApr = 0;
         let totalApr = 0;
-        
+
         // Protocol-specific breakdown logic
         if (protocol === 'sundaeswap') {
             // SundaeSwap: apr_1d = HRA (fees only), apr = total (fees + SUNDAE farming)
@@ -1909,9 +1969,9 @@ function renderBreakdownCharts() {
             totalApr = apr1d > 0 ? apr1d : apr;
         } else if (protocol === 'wingriders') {
             // WingRiders: use stored breakdown if available, otherwise fallback
-            if (latestData.fee_apr != null) {
-                feeApr = latestData.fee_apr;
-                farmApr = latestData.farm_apr || 0;
+            if (targetData.fee_apr != null) {
+                feeApr = targetData.fee_apr;
+                farmApr = targetData.farm_apr || 0;
                 totalApr = apr; // Use stored total
             } else {
                 // Fallback for old data without breakdown
@@ -1932,12 +1992,12 @@ function renderBreakdownCharts() {
         }
         
         // Track staking APR separately for WingRiders
-        const stakingApr = (protocol === 'wingriders' && latestData.staking_apr != null) 
-            ? latestData.staking_apr 
+        const stakingApr = (protocol === 'wingriders' && targetData.staking_apr != null)
+            ? targetData.staking_apr
             : 0;
-        
+
         // Swap fee percentage from API (e.g., 0.30 for 0.30%)
-        const swapFeePercent = latestData.swap_fee_percent || null;
+        const swapFeePercent = targetData.swap_fee_percent || null;
         
         protocolBreakdowns[protocol].pools.push({
             symbol: assetData.symbol,
