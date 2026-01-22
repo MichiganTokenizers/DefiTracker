@@ -2,7 +2,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
-from psycopg2.extras import RealDictCursor
+from psycopg.rows import dict_row
 import logging
 
 from src.database.connection import DatabaseConnection
@@ -70,7 +70,7 @@ class DatabaseQueries:
         """Get all blockchains"""
         conn = self.db.get_connection()
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     "SELECT * FROM blockchains WHERE enabled = TRUE ORDER BY name"
                 )
@@ -133,19 +133,25 @@ class DatabaseQueries:
     # Asset Operations (legacy)
     # ============================================
     
-    def get_or_create_asset(self, symbol: str, name: Optional[str] = None, 
-                           contract_address: Optional[str] = None, 
+    def get_or_create_asset(self, symbol: str, name: Optional[str] = None,
+                           contract_address: Optional[str] = None,
                            decimals: int = 18) -> int:
         """Get asset ID, create if doesn't exist"""
         conn = self.db.get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute(
-                    """SELECT asset_id FROM assets 
-                       WHERE symbol = %s AND 
-                       (contract_address = %s OR (contract_address IS NULL AND %s IS NULL))""",
-                    (symbol, contract_address, contract_address)
-                )
+                if contract_address is None:
+                    cur.execute(
+                        """SELECT asset_id FROM assets
+                           WHERE symbol = %s AND contract_address IS NULL""",
+                        (symbol,)
+                    )
+                else:
+                    cur.execute(
+                        """SELECT asset_id FROM assets
+                           WHERE symbol = %s AND contract_address = %s""",
+                        (symbol, contract_address)
+                    )
                 result = cur.fetchone()
                 
                 if result:
@@ -228,9 +234,9 @@ class DatabaseQueries:
         """Get latest APR values with optional filters"""
         conn = self.db.get_connection()
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT 
+                    SELECT
                         b.name AS blockchain,
                         p.name AS protocol,
                         a.symbol AS asset,
@@ -241,10 +247,10 @@ class DatabaseQueries:
                     JOIN protocols p ON s.protocol_id = p.protocol_id
                     JOIN assets a ON s.asset_id = a.asset_id
                     WHERE s.timestamp = (
-                        SELECT MAX(timestamp) 
-                        FROM apr_snapshots 
-                        WHERE blockchain_id = s.blockchain_id 
-                          AND protocol_id = s.protocol_id 
+                        SELECT MAX(timestamp)
+                        FROM apr_snapshots
+                        WHERE blockchain_id = s.blockchain_id
+                          AND protocol_id = s.protocol_id
                           AND asset_id = s.asset_id
                     )
                 """
@@ -285,18 +291,24 @@ class APYQueries:
     # Asset operations
     # ============================================
     
-    def get_or_create_asset(self, symbol: str, contract_address: Optional[str] = None, 
+    def get_or_create_asset(self, symbol: str, contract_address: Optional[str] = None,
                             name: Optional[str] = None, decimals: int = 18) -> int:
         """Get asset_id or create new asset if not exists"""
         conn = self.db.get_connection()
         try:
             with conn.cursor() as cur:
                 # Try to find existing asset
-                cur.execute("""
-                    SELECT asset_id FROM assets 
-                    WHERE symbol = %s AND (contract_address = %s OR (contract_address IS NULL AND %s IS NULL))
-                """, (symbol, contract_address, contract_address))
-                
+                if contract_address is None:
+                    cur.execute("""
+                        SELECT asset_id FROM assets
+                        WHERE symbol = %s AND contract_address IS NULL
+                    """, (symbol,))
+                else:
+                    cur.execute("""
+                        SELECT asset_id FROM assets
+                        WHERE symbol = %s AND contract_address = %s
+                    """, (symbol, contract_address))
+
                 result = cur.fetchone()
                 if result:
                     return result[0]

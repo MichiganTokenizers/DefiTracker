@@ -1,6 +1,6 @@
 """Database setup and initialization"""
-import psycopg2
-from psycopg2 import sql
+import psycopg
+from psycopg import sql
 from pathlib import Path
 import yaml
 import logging
