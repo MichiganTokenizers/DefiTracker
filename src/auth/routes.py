@@ -328,6 +328,7 @@ def wallet_login():
     wallet_address = data.get('wallet_address', '').strip()
     signature = data.get('signature')  # May be string or object
     public_key = data.get('public_key', '')
+    wallet_type = data.get('wallet_type', '').strip() or None  # e.g., 'nami', 'eternl'
 
     if not wallet_address:
         return jsonify({'error': 'Wallet address is required'}), 400
@@ -358,11 +359,15 @@ def wallet_login():
 
     if not user:
         # Create new wallet user
-        user = user_queries.create_wallet_user(wallet_address)
+        user = user_queries.create_wallet_user(wallet_address, wallet_type=wallet_type)
         if not user:
             return jsonify({'error': 'Failed to create user'}), 500
         is_new = True
     else:
+        # Update wallet_type if provided and different
+        if wallet_type and user.wallet_type != wallet_type:
+            user_queries.update_wallet_type(user.user_id, wallet_type)
+            user.wallet_type = wallet_type
         is_new = False
 
     # Log in user

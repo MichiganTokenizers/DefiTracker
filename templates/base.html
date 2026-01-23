@@ -434,7 +434,27 @@
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
                             {% if current_user.wallet_address %}
                             <span class="user-avatar wallet-avatar">
+                                {% if current_user.wallet_type == 'nami' %}
+                                <img src="/static/wallet-nami-logo.png" alt="Nami">
+                                {% elif current_user.wallet_type == 'eternl' %}
+                                <img src="/static/wallet-eternl-logo.png" alt="Eternl">
+                                {% elif current_user.wallet_type == 'lace' %}
+                                <img src="/static/wallet-lace-logo.png" alt="Lace">
+                                {% elif current_user.wallet_type == 'yoroi' %}
+                                <img src="/static/wallet-yoroi-logo.png" alt="Yoroi">
+                                {% elif current_user.wallet_type == 'begin' %}
+                                <img src="/static/wallet-begin-logo.png" alt="Begin">
+                                {% elif current_user.wallet_type == 'typhoncip30' %}
+                                <img src="/static/wallet-typhon-logo.png" alt="Typhon">
+                                {% elif current_user.wallet_type == 'nufi' %}
+                                <img src="/static/wallet-nufi-logo.png" alt="NuFi">
+                                {% elif current_user.wallet_type == 'gerowallet' %}
+                                <img src="/static/wallet-gerowallet-logo.png" alt="GeroWallet">
+                                {% elif current_user.wallet_type == 'flint' %}
+                                <img src="/static/cardano-logo-blue.svg" alt="Flint">
+                                {% else %}
                                 <img src="/static/cardano-logo-blue.svg" alt="Cardano Wallet">
+                                {% endif %}
                             </span>
                             {% else %}
                             <span class="user-avatar">

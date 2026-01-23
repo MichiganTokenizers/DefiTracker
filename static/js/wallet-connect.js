@@ -277,7 +277,8 @@ async function connectWithWallet(selectedWallet) {
             body: JSON.stringify({
                 wallet_address: walletAddress,
                 signature: signature,
-                public_key: key
+                public_key: key,
+                wallet_type: selectedWallet.id
             })
         });
         
