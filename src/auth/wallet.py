@@ -97,48 +97,48 @@ def extract_stake_key_hash(address: str) -> Optional[str]:
 def validate_cardano_address(address: str) -> bool:
     """
     Validate that a string is a valid Cardano address identifier.
-    
+
     We accept both:
     - Standard bech32 addresses (addr1...)
     - Hex-based identifiers (addr1 + hex bytes from CIP-30)
-    
+
     Args:
         address: The address to validate
-        
+
     Returns:
         True if valid Cardano address, False otherwise
     """
     if not address:
         return False
-    
+
     # Cardano mainnet addresses start with 'addr1'
     # Testnet addresses start with 'addr_test1'
     valid_prefixes = ('addr1', 'addr_test1')
-    
+
     if not address.startswith(valid_prefixes):
         return False
-    
+
     # Basic length check
     # - Standard bech32: 58-108 characters
     # - Hex-based from CIP-30: can be longer (addr1 + 114 hex chars = ~120+)
     if len(address) < 50 or len(address) > 200:
         return False
-    
+
     # Check for valid characters (bech32 + hex)
     # bech32 uses: 0-9, a-z except b, i, o (we're lenient here)
     # hex uses: 0-9, a-f
     valid_chars = set('0123456789abcdefghjklmnpqrstuvwxyz_')
-    
+
     # Get the part after the prefix
     if address.startswith('addr_test1'):
         suffix = address[10:].lower()
     else:
         suffix = address[5:].lower()
-    
+
     address_chars = set(suffix)
-    
+
     if not address_chars.issubset(valid_chars):
         return False
-    
+
     return True
 

@@ -6,8 +6,8 @@ from flask_login import login_user, logout_user, login_required, current_user
 from src.database.connection import DatabaseConnection
 from src.database.user_queries import UserQueries, ChartQueries, User
 from src.auth.wallet import (
-    generate_nonce, 
-    create_sign_message, 
+    generate_nonce,
+    create_sign_message,
     verify_cardano_signature,
     validate_cardano_address
 )
@@ -284,28 +284,28 @@ def resend_verification():
 def wallet_challenge():
     """Get a challenge nonce for wallet authentication"""
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     wallet_address = data.get('wallet_address', '').strip()
-    
+
     if not wallet_address:
         return jsonify({'error': 'Wallet address is required'}), 400
-    
+
     if not validate_cardano_address(wallet_address):
         return jsonify({'error': 'Invalid Cardano address'}), 400
-    
+
     # Generate nonce
     nonce = generate_nonce()
-    
+
     # Store challenge
     if not user_queries.create_wallet_challenge(wallet_address, nonce):
         return jsonify({'error': 'Failed to create challenge'}), 500
-    
+
     # Create message to sign
     message = create_sign_message(nonce)
-    
+
     return jsonify({
         'nonce': nonce,
         'message': message
@@ -315,32 +315,32 @@ def wallet_challenge():
 @auth_bp.route('/wallet-login', methods=['POST'])
 def wallet_login():
     """Login or register with Cardano wallet
-    
+
     For MVP: We use a simplified flow where connecting the wallet and signing
     the challenge proves ownership. Full COSE signature verification can be
     added later for enhanced security.
     """
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     wallet_address = data.get('wallet_address', '').strip()
     signature = data.get('signature')  # May be string or object
     public_key = data.get('public_key', '')
-    
+
     if not wallet_address:
         return jsonify({'error': 'Wallet address is required'}), 400
-    
+
     if not validate_cardano_address(wallet_address):
         return jsonify({'error': 'Invalid Cardano address'}), 400
-    
+
     # Get and delete the challenge (one-time use)
     nonce = user_queries.get_and_delete_wallet_challenge(wallet_address)
-    
+
     if not nonce:
         return jsonify({'error': 'No valid challenge found. Please request a new challenge.'}), 400
-    
+
     # For MVP: Accept the signature as proof the user approved in their wallet
     # The fact that they could:
     # 1. Connect to the wallet (requires wallet owner approval)
@@ -349,13 +349,13 @@ def wallet_login():
     # Is sufficient proof of ownership for most use cases.
     #
     # Full COSE_Sign1 verification can be added later for high-security scenarios
-    
+
     if not signature:
         return jsonify({'error': 'Signature is required'}), 400
-    
+
     # Check if user exists
     user = user_queries.get_user_by_wallet(wallet_address)
-    
+
     if not user:
         # Create new wallet user
         user = user_queries.create_wallet_user(wallet_address)
@@ -364,10 +364,10 @@ def wallet_login():
         is_new = True
     else:
         is_new = False
-    
+
     # Log in user
     login_user(user)
-    
+
     return jsonify({
         'message': 'Login successful',
         'user': user.to_dict(),

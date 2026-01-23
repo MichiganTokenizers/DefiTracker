@@ -256,6 +256,47 @@
         .wallet-btn svg {
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
         }
+        .wallet-select-btn {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        .wallet-select-btn:hover {
+            background: rgba(14, 135, 73, 0.1);
+            border-color: var(--sea-green);
+            color: var(--text-primary);
+        }
+        .wallet-select-btn img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+        .supported-wallets {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .supported-wallets img {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+        .supported-wallets img:hover {
+            opacity: 1;
+        }
         .divider {
             display: flex;
             align-items: center;
@@ -288,6 +329,15 @@
             font-weight: 700;
             font-size: 0.9rem;
             box-shadow: 0 2px 8px rgba(14, 135, 73, 0.3);
+        }
+        .user-avatar.wallet-avatar {
+            background: white;
+            padding: 4px;
+        }
+        .user-avatar.wallet-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         .alert-auth {
             font-size: 0.875rem;
@@ -382,9 +432,15 @@
                     {% if current_user.is_authenticated %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
-                            <span class="user-avatar">
-                                {{ (current_user.display_name or current_user.email or current_user.wallet_address[:4])[0].upper() }}
+                            {% if current_user.wallet_address %}
+                            <span class="user-avatar wallet-avatar">
+                                <img src="/static/cardano-logo-blue.svg" alt="Cardano Wallet">
                             </span>
+                            {% else %}
+                            <span class="user-avatar">
+                                {{ (current_user.display_name or current_user.email or 'U')[0].upper() }}
+                            </span>
+                            {% endif %}
                             <span class="d-none d-md-inline">
                                 {{ current_user.display_name or current_user.email or ('...' + current_user.wallet_address[-8:] if current_user.wallet_address else 'User') }}
                             </span>
@@ -444,13 +500,23 @@
                     <div id="authAlert" class="alert alert-auth d-none" role="alert"></div>
                     
                     <!-- Wallet Login -->
-                    <button type="button" class="wallet-btn mb-3" id="walletLoginBtn" onclick="connectWallet()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                        </svg>
+                    <button type="button" class="wallet-btn mb-2" id="walletLoginBtn" onclick="connectWallet()">
+                        <img src="https://cryptologos.cc/logos/cardano-ada-logo.svg" alt="Cardano" width="24" height="24">
                         Connect Cardano Wallet
                     </button>
-                    
+
+                    <!-- Supported wallets -->
+                    <div class="supported-wallets mb-3">
+                        <img src="/static/wallet-nami-logo.png" alt="Nami" title="Nami">
+                        <img src="/static/wallet-eternl-logo.png" alt="Eternl" title="Eternl">
+                        <img src="/static/wallet-lace-logo.png" alt="Lace" title="Lace">
+                        <img src="/static/wallet-yoroi-logo.png" alt="Yoroi" title="Yoroi">
+                        <img src="/static/wallet-begin-logo.png" alt="Begin" title="Begin">
+                        <img src="/static/wallet-typhon-logo.png" alt="Typhon" title="Typhon">
+                        <img src="/static/wallet-nufi-logo.png" alt="NuFi" title="NuFi">
+                        <img src="/static/wallet-gerowallet-logo.png" alt="GeroWallet" title="GeroWallet">
+                    </div>
+
                     <div class="divider"><span>or use email</span></div>
                     
                     <!-- Tabs -->
@@ -507,6 +573,26 @@
         </div>
     </div>
     
+    <!-- Wallet Selection Modal -->
+    <div class="modal fade auth-modal" id="walletSelectModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Select Wallet</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Multiple Cardano wallets detected. Choose which one to connect:
+                    </p>
+                    <div id="walletSelectList" class="d-grid gap-2">
+                        <!-- Wallet buttons will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Newsletter Email Prompt Modal (for wallet users) -->
     <div class="modal fade auth-modal" id="newsletterModal" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">

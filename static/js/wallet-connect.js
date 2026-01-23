@@ -3,16 +3,17 @@
  * Supports Nami, Eternl, Flint, Lace, and other CIP-30 compatible wallets
  */
 
-// Supported wallets
+// Supported wallets with icons (fetched via scripts/fetch_protocol_icons.py --wallets)
 const SUPPORTED_WALLETS = [
-    { id: 'nami', name: 'Nami' },
-    { id: 'eternl', name: 'Eternl' },
-    { id: 'flint', name: 'Flint' },
-    { id: 'lace', name: 'Lace' },
-    { id: 'yoroi', name: 'Yoroi' },
-    { id: 'gerowallet', name: 'GeroWallet' },
-    { id: 'typhoncip30', name: 'Typhon' },
-    { id: 'nufi', name: 'NuFi' }
+    { id: 'nami', name: 'Nami', icon: '/static/wallet-nami-logo.png' },
+    { id: 'eternl', name: 'Eternl', icon: '/static/wallet-eternl-logo.png' },
+    { id: 'flint', name: 'Flint', icon: '/static/cardano-logo-blue.svg' },
+    { id: 'lace', name: 'Lace', icon: '/static/wallet-lace-logo.png' },
+    { id: 'yoroi', name: 'Yoroi', icon: '/static/wallet-yoroi-logo.png' },
+    { id: 'begin', name: 'Begin', icon: '/static/wallet-begin-logo.png' },
+    { id: 'gerowallet', name: 'GeroWallet', icon: '/static/wallet-gerowallet-logo.png' },
+    { id: 'typhoncip30', name: 'Typhon', icon: '/static/wallet-typhon-logo.png' },
+    { id: 'nufi', name: 'NuFi', icon: '/static/wallet-nufi-logo.png' }
 ];
 
 /**
@@ -134,42 +135,85 @@ function hexToBech32Address(hexAddress, networkId) {
 }
 
 /**
+ * Show wallet selection modal
+ */
+function showWalletSelectionModal(wallets) {
+    const listContainer = document.getElementById('walletSelectList');
+    listContainer.innerHTML = '';
+
+    // Create a button for each available wallet
+    wallets.forEach(wallet => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'wallet-select-btn';
+        btn.innerHTML = `
+            <img src="${wallet.icon}" alt="${wallet.name}" onerror="this.src='https://cryptologos.cc/logos/cardano-ada-logo.svg'">
+            <span>${wallet.name}</span>
+        `;
+        btn.onclick = () => {
+            // Hide the selection modal
+            const selectModal = bootstrap.Modal.getInstance(document.getElementById('walletSelectModal'));
+            if (selectModal) selectModal.hide();
+
+            // Connect with the selected wallet
+            connectWithWallet(wallet);
+        };
+        listContainer.appendChild(btn);
+    });
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('walletSelectModal'));
+    modal.show();
+}
+
+/**
  * Connect to a Cardano wallet and authenticate
  */
 async function connectWallet() {
     const btn = document.getElementById('walletLoginBtn');
     const originalText = btn.innerHTML;
-    
+
     try {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Connecting...';
-        
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Detecting wallets...';
+
         // Check if Cardano wallets are available
         const availableWallets = getAvailableWallets();
-        
+
         if (availableWallets.length === 0) {
             throw new Error('No Cardano wallet found. Please install Nami, Eternl, or another CIP-30 wallet.');
         }
-        
-        // If multiple wallets, let user choose (for now, just use the first one)
-        // In a production app, you'd show a wallet selection modal
-        let selectedWallet = availableWallets[0];
-        
-        // If there's more than one wallet, try to use the user's preferred one
+
+        // If multiple wallets, show selection modal
         if (availableWallets.length > 1) {
-            // Check for common preferences
-            const preferredOrder = ['eternl', 'nami', 'lace', 'flint'];
-            for (const pref of preferredOrder) {
-                const found = availableWallets.find(w => w.id === pref);
-                if (found) {
-                    selectedWallet = found;
-                    break;
-                }
-            }
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showWalletSelectionModal(availableWallets);
+            return;
         }
-        
+
+        // Single wallet - connect directly
+        await connectWithWallet(availableWallets[0]);
+
+    } catch (error) {
+        console.error('Wallet connection error:', error);
+        showAuthAlert(error.message || 'Failed to connect wallet');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Connect with a specific wallet
+ */
+async function connectWithWallet(selectedWallet) {
+    const btn = document.getElementById('walletLoginBtn');
+    const originalText = btn.innerHTML;
+
+    try {
+        btn.disabled = true;
         btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Connecting to ${selectedWallet.name}...`;
-        
+
         // Enable the wallet
         const api = await window.cardano[selectedWallet.id].enable();
         
@@ -335,6 +379,8 @@ function extractSignatureAndKey(signatureData) {
 // Export for use in other scripts if needed
 window.WalletConnect = {
     getAvailableWallets,
-    connectWallet
+    connectWallet,
+    connectWithWallet,
+    showWalletSelectionModal
 };
 

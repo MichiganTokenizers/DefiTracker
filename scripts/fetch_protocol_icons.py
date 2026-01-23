@@ -28,6 +28,19 @@ PROTOCOLS = {
     'blazeswap': 'https://blazeswap.xyz',
 }
 
+# Cardano wallet websites - maps wallet id to website URL
+WALLETS = {
+    'nami': 'https://namiwallet.io',
+    'eternl': 'https://eternl.io',
+    'flint': 'https://flint-wallet.com',
+    'lace': 'https://www.lace.io',
+    'yoroi': 'https://yoroi-wallet.com',
+    'begin': 'https://begin.is',
+    'gerowallet': 'https://gerowallet.io',
+    'typhon': 'https://typhonwallet.io',
+    'nufi': 'https://nu.fi',
+}
+
 # Request headers to appear as a browser
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -169,18 +182,24 @@ def fetch_icon_duckduckgo(domain, save_path):
     return try_download_icon(url, save_path)
 
 
-def fetch_protocol_icon(protocol_name, website_url):
+def fetch_icon(name, website_url, prefix=''):
     """
-    Fetch icon for a protocol using multiple methods.
+    Fetch icon for a protocol or wallet using multiple methods.
     Returns the path to the saved icon or None.
+
+    Args:
+        name: Protocol or wallet name
+        website_url: Website URL to fetch icon from
+        prefix: Optional prefix for filename (e.g., 'wallet-' for wallet icons)
     """
     print(f"\n{'='*50}")
-    print(f"Fetching icon for: {protocol_name}")
+    print(f"Fetching icon for: {name}")
     print(f"Website: {website_url}")
     print('='*50)
-    
+
     domain = urlparse(website_url).netloc
-    base_save_path = os.path.join(STATIC_DIR, f"{protocol_name}-logo")
+    filename = f"{prefix}{name}-logo" if prefix else f"{name}-logo"
+    base_save_path = os.path.join(STATIC_DIR, filename)
     
     # Method 1: Parse HTML for best icon (apple-touch-icon, etc.)
     print("\n  Method 1: Parsing HTML for high-quality icons...")
@@ -223,54 +242,139 @@ def fetch_protocol_icon(protocol_name, website_url):
     if result:
         return result
     
-    print(f"\n  ❌ Could not fetch icon for {protocol_name}")
+    print(f"\n  ❌ Could not fetch icon for {name}")
     return None
 
 
+def fetch_protocol_icon(protocol_name, website_url):
+    """Fetch icon for a protocol (wrapper for backwards compatibility)."""
+    return fetch_icon(protocol_name, website_url)
+
+
+def fetch_wallet_icon(wallet_name, website_url):
+    """Fetch icon for a wallet."""
+    return fetch_icon(wallet_name, website_url, prefix='wallet-')
+
+
 def main():
-    """Fetch icons for all protocols."""
+    """Fetch icons for all protocols and wallets."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Fetch protocol and wallet icons')
+    parser.add_argument('--protocols', action='store_true', help='Fetch protocol icons only')
+    parser.add_argument('--wallets', action='store_true', help='Fetch wallet icons only')
+    args = parser.parse_args()
+
+    # If neither flag is set, fetch both
+    fetch_protocols = args.protocols or (not args.protocols and not args.wallets)
+    fetch_wallets = args.wallets or (not args.protocols and not args.wallets)
+
     print("="*60)
-    print("DeFi Protocol Icon Fetcher")
+    print("DeFi Protocol & Wallet Icon Fetcher")
     print("="*60)
     print(f"\nStatic directory: {STATIC_DIR}")
-    
+
     if not os.path.exists(STATIC_DIR):
         print(f"Creating static directory: {STATIC_DIR}")
         os.makedirs(STATIC_DIR)
-    
-    results = {}
-    
-    for protocol, url in PROTOCOLS.items():
-        result = fetch_protocol_icon(protocol, url)
-        results[protocol] = result
-    
+
+    protocol_results = {}
+    wallet_results = {}
+
+    # Fetch protocol icons
+    if fetch_protocols:
+        print("\n" + "="*60)
+        print("FETCHING PROTOCOL ICONS")
+        print("="*60)
+        for protocol, url in PROTOCOLS.items():
+            result = fetch_protocol_icon(protocol, url)
+            protocol_results[protocol] = result
+
+    # Fetch wallet icons
+    if fetch_wallets:
+        print("\n" + "="*60)
+        print("FETCHING WALLET ICONS")
+        print("="*60)
+        for wallet, url in WALLETS.items():
+            result = fetch_wallet_icon(wallet, url)
+            wallet_results[wallet] = result
+
     # Summary
     print("\n" + "="*60)
     print("SUMMARY")
     print("="*60)
-    
-    success_count = 0
-    for protocol, path in results.items():
-        if path:
-            print(f"  ✅ {protocol}: {os.path.basename(path)}")
-            success_count += 1
-        else:
-            print(f"  ❌ {protocol}: FAILED")
-    
-    print(f"\nFetched {success_count}/{len(PROTOCOLS)} icons")
-    
+
+    total_success = 0
+    total_count = 0
+
+    if fetch_protocols and protocol_results:
+        print("\nProtocols:")
+        success_count = 0
+        for protocol, path in protocol_results.items():
+            if path:
+                print(f"  ✅ {protocol}: {os.path.basename(path)}")
+                success_count += 1
+            else:
+                print(f"  ❌ {protocol}: FAILED")
+        print(f"  Fetched {success_count}/{len(PROTOCOLS)} protocol icons")
+        total_success += success_count
+        total_count += len(PROTOCOLS)
+
+    if fetch_wallets and wallet_results:
+        print("\nWallets:")
+        success_count = 0
+        for wallet, path in wallet_results.items():
+            if path:
+                print(f"  ✅ {wallet}: {os.path.basename(path)}")
+                success_count += 1
+            else:
+                print(f"  ❌ {wallet}: FAILED")
+        print(f"  Fetched {success_count}/{len(WALLETS)} wallet icons")
+        total_success += success_count
+        total_count += len(WALLETS)
+
     # Print JS mapping for chain.html
-    print("\n" + "="*60)
-    print("JavaScript protocolLogos mapping for chain.html:")
-    print("="*60)
-    print("const protocolLogos = {")
-    for protocol, path in results.items():
-        if path:
-            filename = os.path.basename(path)
-            print(f"    '{protocol}': '/static/{filename}',")
-    print("};")
-    
-    return 0 if success_count == len(PROTOCOLS) else 1
+    if fetch_protocols and protocol_results:
+        print("\n" + "="*60)
+        print("JavaScript protocolLogos mapping for chain.html:")
+        print("="*60)
+        print("const protocolLogos = {")
+        for protocol, path in protocol_results.items():
+            if path:
+                filename = os.path.basename(path)
+                print(f"    '{protocol}': '/static/{filename}',")
+        print("};")
+
+    # Print JS mapping for wallet-connect.js
+    if fetch_wallets and wallet_results:
+        print("\n" + "="*60)
+        print("JavaScript SUPPORTED_WALLETS icons for wallet-connect.js:")
+        print("="*60)
+        print("const SUPPORTED_WALLETS = [")
+        wallet_ids = {
+            'nami': 'nami',
+            'eternl': 'eternl',
+            'flint': 'flint',
+            'lace': 'lace',
+            'yoroi': 'yoroi',
+            'begin': 'begin',
+            'gerowallet': 'gerowallet',
+            'typhon': 'typhoncip30',
+            'nufi': 'nufi',
+        }
+        for wallet, path in wallet_results.items():
+            if path:
+                filename = os.path.basename(path)
+                wallet_id = wallet_ids.get(wallet, wallet)
+                wallet_name = wallet.capitalize()
+                if wallet == 'gerowallet':
+                    wallet_name = 'GeroWallet'
+                elif wallet == 'nufi':
+                    wallet_name = 'NuFi'
+                print(f"    {{ id: '{wallet_id}', name: '{wallet_name}', icon: '/static/{filename}' }},")
+        print("];")
+
+    return 0 if total_success == total_count else 1
 
 
 if __name__ == '__main__':
