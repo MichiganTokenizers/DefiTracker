@@ -913,12 +913,13 @@ async function loadChart() {
                     y: d.apr_avg
                 }));
         } else {
-            // Use stored apr value (30-day)
-            processedData = assetData.data
-                .filter(d => d.apr != null)
+            // Calculate 30-day moving average from apr_1d data
+            const smoothedData = calculateAprMovingAverage(assetData.data, 30);
+            processedData = smoothedData
+                .filter(d => d.apr_avg != null)
                 .map(d => ({
                     x: new Date(d.timestamp),
-                    y: d.apr
+                    y: d.apr_avg
                 }));
         }
         
