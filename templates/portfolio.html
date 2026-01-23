@@ -16,19 +16,16 @@
         --liqwid-bg: rgba(14, 135, 73, 0.12);
     }
 
-    /* Protocol section cards */
+    /* Protocol section cards - sand dune gradient like home/lps pages */
     .protocol-card {
-        background: rgba(255, 255, 255, 0.92);
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
+        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
         border-radius: 16px;
-        border: 1px solid rgba(31, 32, 31, 0.08);
-        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.08);
+        border: 1px solid rgba(31, 32, 31, 0.06);
         overflow: hidden;
         transition: box-shadow 0.2s ease;
     }
     .protocol-card:hover {
-        box-shadow: 0 6px 28px rgba(31, 32, 31, 0.12);
+        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.08);
     }
 
     /* Protocol headers with colored accents */
