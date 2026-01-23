@@ -217,7 +217,7 @@ def api_get_apr_history(chain, protocol):
                     JOIN blockchains b ON s.blockchain_id = b.blockchain_id
                     WHERE b.name = %s 
                       AND p.name = %s
-                      AND s.timestamp >= NOW() - INTERVAL '%s days'
+                      AND s.timestamp >= NOW() - %s * INTERVAL '1 day'
                 """
                 params = [chain, protocol, days]
                 
@@ -335,7 +335,7 @@ def api_get_all_history_for_chain(chain):
                 JOIN protocols p ON s.protocol_id = p.protocol_id
                 JOIN blockchains b ON s.blockchain_id = b.blockchain_id
                 WHERE b.name = %s
-                  AND s.timestamp >= NOW() - INTERVAL '%s days'
+                  AND s.timestamp >= NOW() - %s * INTERVAL '1 day'
             """
             params = [chain, days]
             
@@ -437,7 +437,7 @@ def api_get_yields_by_type(yield_type):
                     JOIN protocols p ON s.protocol_id = p.protocol_id
                     JOIN blockchains b ON s.blockchain_id = b.blockchain_id
                     WHERE s.yield_type = %s
-                      AND s.timestamp >= NOW() - INTERVAL '%s days'
+                      AND s.timestamp >= NOW() - %s * INTERVAL '1 day'
                     ORDER BY s.timestamp ASC
                 """, (yield_type, days))
                 
