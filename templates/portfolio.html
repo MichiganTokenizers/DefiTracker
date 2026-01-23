@@ -61,30 +61,45 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* Protocol-specific header colors */
+    /* Protocol-specific header colors - distinct colored backgrounds */
     .protocol-card.minswap .protocol-header {
-        background: linear-gradient(90deg, var(--minswap-bg) 0%, transparent 100%);
+        background: linear-gradient(90deg, rgba(35, 166, 213, 0.25) 0%, rgba(35, 166, 213, 0.08) 50%, transparent 100%);
     }
     .protocol-card.minswap .protocol-header::before {
         background: linear-gradient(180deg, var(--minswap-color), #1a8ab8);
     }
+    .protocol-card.minswap .protocol-header h5 {
+        color: #1a7a9e;
+    }
+
     .protocol-card.wingriders .protocol-header {
-        background: linear-gradient(90deg, var(--wingriders-bg) 0%, transparent 100%);
+        background: linear-gradient(90deg, rgba(230, 167, 0, 0.25) 0%, rgba(230, 167, 0, 0.08) 50%, transparent 100%);
     }
     .protocol-card.wingriders .protocol-header::before {
         background: linear-gradient(180deg, var(--wingriders-color), #cc9500);
     }
+    .protocol-card.wingriders .protocol-header h5 {
+        color: #9a7200;
+    }
+
     .protocol-card.sundaeswap .protocol-header {
-        background: linear-gradient(90deg, var(--sundaeswap-bg) 0%, transparent 100%);
+        background: linear-gradient(90deg, rgba(147, 51, 234, 0.2) 0%, rgba(147, 51, 234, 0.06) 50%, transparent 100%);
     }
     .protocol-card.sundaeswap .protocol-header::before {
         background: linear-gradient(180deg, var(--sundaeswap-color), #7c28c4);
     }
+    .protocol-card.sundaeswap .protocol-header h5 {
+        color: #7028b8;
+    }
+
     .protocol-card.liqwid .protocol-header {
-        background: linear-gradient(90deg, var(--liqwid-bg) 0%, transparent 100%);
+        background: linear-gradient(90deg, rgba(14, 135, 73, 0.2) 0%, rgba(14, 135, 73, 0.06) 50%, transparent 100%);
     }
     .protocol-card.liqwid .protocol-header::before {
         background: linear-gradient(180deg, var(--sea-green), var(--moss-green));
+    }
+    .protocol-card.liqwid .protocol-header h5 {
+        color: var(--sea-green);
     }
 
     /* Protocol content area */
