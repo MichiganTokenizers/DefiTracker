@@ -788,4 +788,7 @@ def health():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', '1') == '1'
+    use_reloader = os.environ.get('FLASK_RELOADER', '0') == '1'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000, use_reloader=use_reloader)
