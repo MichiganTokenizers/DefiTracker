@@ -143,14 +143,14 @@ async function refreshPositions() {
     const btn = document.getElementById('refreshBtn');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Refreshing...';
+        btn.innerHTML = '↻ Refreshing...';
     }
 
     await loadPortfolioPositions();
 
     if (btn) {
         btn.disabled = false;
-        btn.textContent = 'Refresh';
+        btn.innerHTML = '↻ Refresh';
     }
 }
 
@@ -179,6 +179,7 @@ function renderProtocolSection(protocol, data) {
     if (!hasLp && !hasFarm) {
         container.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">💧</div>
                 <p>No positions found</p>
                 <small>Provide liquidity or stake LP tokens on ${capitalizeFirst(protocol)} to see your positions here.</small>
             </div>
@@ -236,26 +237,26 @@ function renderLPPositionCard(pos) {
 
     return `
         <div class="position-card">
-            <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
-                    <strong>${pos.pool || 'Unknown Pool'}</strong>
+                    <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
                 </div>
                 <div class="text-end">
-                    <div class="h5 mb-0">${adaValue}</div>
-                    ${usdDisplay ? `<small class="text-muted">${usdDisplay}</small>` : ''}
+                    <div class="value-display">${adaValue}</div>
+                    ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row g-3">
                 <div class="col-4">
-                    <div class="apr-label">APR</div>
+                    <div class="data-label">APR</div>
                     <div class="apr-value">${apr}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">Pool Share</div>
-                    <div class="token-amount">${poolShare}</div>
+                    <div class="data-label">Pool Share</div>
+                    <div class="data-value token-amount">${poolShare}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">Tokens</div>
+                    <div class="data-label">Your Tokens</div>
                     <div class="token-amount">
                         ${tokenAAmount} ${tokenA.symbol || '?'}<br>
                         ${tokenBAmount} ${tokenB.symbol || '?'}
@@ -290,27 +291,27 @@ function renderFarmPositionCard(pos) {
 
     return `
         <div class="position-card farm-position">
-            <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
-                    <strong>${pos.pool || 'Unknown Pool'}</strong>
-                    <span class="farm-badge">staked</span>
+                    <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
+                    <span class="farm-badge">Staked</span>
                 </div>
                 <div class="text-end">
-                    <div class="h5 mb-0">${adaValue}</div>
-                    ${usdDisplay ? `<small class="text-muted">${usdDisplay}</small>` : ''}
+                    <div class="value-display">${adaValue}</div>
+                    ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row g-3">
                 <div class="col-4">
-                    <div class="apr-label">APR</div>
+                    <div class="data-label">Farm APR</div>
                     <div class="apr-value">${apr}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">Pool Share</div>
-                    <div class="token-amount">${poolShare}</div>
+                    <div class="data-label">Pool Share</div>
+                    <div class="data-value token-amount">${poolShare}</div>
                 </div>
                 <div class="col-4">
-                    <div class="apr-label">Your Tokens</div>
+                    <div class="data-label">Your Tokens</div>
                     <div class="token-amount">
                         ${tokenAAmount} ${tokenASymbol}<br>
                         ${tokenBAmount} ${tokenBSymbol}
@@ -334,6 +335,7 @@ function renderLiqwidSection(data) {
     if (!hasSupply && !hasBorrow) {
         container.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">🏦</div>
                 <p>No lending positions found</p>
                 <small>Supply or borrow on Liqwid Finance to see your positions here.</small>
             </div>
@@ -377,7 +379,7 @@ function renderLiqwidSection(data) {
  */
 function renderLendingPositionCard(pos) {
     const isSupply = pos.type === 'supply';
-    const colorClass = isSupply ? 'text-success' : 'text-danger';
+    const colorClass = isSupply ? '' : 'text-danger';
     const typeBadgeClass = isSupply ? 'supply' : 'borrow';
 
     const usdValue = pos.usd_value ? `$${formatNumber(pos.usd_value)}` : '--';
@@ -386,26 +388,26 @@ function renderLendingPositionCard(pos) {
 
     return `
         <div class="position-card">
-            <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
-                    <strong>${pos.market || '?'}</strong>
-                    <span class="type-badge ${typeBadgeClass}">${pos.type}</span>
+                    <span class="pool-name">${pos.market || '?'}</span>
+                    <span class="type-badge ${typeBadgeClass}">${isSupply ? 'Supply' : 'Borrow'}</span>
                 </div>
                 <div class="text-end">
-                    <div class="h6 mb-0">${amount} ${pos.market || ''}</div>
-                    <small class="text-muted">${usdValue}</small>
+                    <div class="value-display">${amount} ${pos.market || ''}</div>
+                    <div class="value-usd">${usdValue}</div>
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row g-3">
                 <div class="col-6">
-                    <div class="apr-label">APY</div>
+                    <div class="data-label">${isSupply ? 'Earn APY' : 'Borrow APY'}</div>
                     <div class="apr-value ${colorClass}">${apy}</div>
                 </div>
                 <div class="col-6">
-                    <div class="apr-label">Protocol</div>
-                    <div>
-                        <img src="${getProtocolLogo('liqwid')}" height="16" class="me-1" alt="Liqwid">
-                        Liqwid
+                    <div class="data-label">Protocol</div>
+                    <div class="d-flex align-items-center">
+                        <img src="${getProtocolLogo('liqwid')}" height="18" class="me-2" alt="Liqwid" style="border-radius: 4px;">
+                        <span class="data-value">Liqwid</span>
                     </div>
                 </div>
             </div>
@@ -488,6 +490,7 @@ function renderEmptyStates() {
         if (container) {
             container.innerHTML = `
                 <div class="empty-state">
+                    <div class="empty-state-icon">💧</div>
                     <p>No positions found</p>
                     <small>Unable to load positions at this time.</small>
                 </div>
@@ -499,6 +502,7 @@ function renderEmptyStates() {
     if (liqwidContainer) {
         liqwidContainer.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">🏦</div>
                 <p>No lending positions found</p>
                 <small>Unable to load positions at this time.</small>
             </div>
@@ -520,10 +524,10 @@ function setLoading(isLoading) {
     if (isLoading) {
         const loadingHtml = `
             <div class="loading-spinner">
-                <div class="spinner-border text-primary" role="status">
+                <div class="spinner-border" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <p class="mt-2 text-muted">Loading positions...</p>
+                <p>Loading positions...</p>
             </div>
         `;
         containers.forEach(id => {

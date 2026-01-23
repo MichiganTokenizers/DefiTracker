@@ -1,9 +1,11 @@
 """Flask API application with charting UI"""
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (use absolute path to project root)
+project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(project_root / ".env")
 
 from flask import Flask, jsonify, render_template, request, redirect
 from flask_cors import CORS
