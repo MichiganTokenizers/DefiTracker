@@ -664,38 +664,16 @@ function calculateMovingAverage(dataPoints, window) {
     return result;
 }
 
-// Cache for 30-day data to avoid redundant API calls
-let cachedData = null;
-let cachedDays = 0;
-
 async function loadData() {
-    const days = parseInt(document.getElementById('timeRange').value);
+    const days = document.getElementById('timeRange').value;
 
-    // Determine if we need to fetch new data
-    // - Always fetch on first load
-    // - Fetch if requesting more days than cached
-    // - Otherwise filter cached data locally
-    if (!cachedData || days > cachedDays) {
-        // Fetch enough data: at least 30 days, or more if user selected 90
-        const fetchDays = days > 30 ? days : 30;
+    // Load historical data
+    const historyResponse = await fetch(`/api/liqwid/lending?days=${days}`);
+    allData = await historyResponse.json();
 
-        const historyResponse = await fetch(`/api/liqwid/lending?days=${fetchDays}`);
-        cachedData = await historyResponse.json();
-        cachedDays = fetchDays;
-    }
-
-    // Filter cached data to requested time range
-    const cutoffDate = new Date(Date.now() - (days * 24 * 60 * 60 * 1000));
-    allData = cachedData.map(asset => ({
-        symbol: asset.symbol,
-        data: asset.data.filter(d => new Date(d.timestamp) >= cutoffDate)
-    })).filter(asset => asset.data.length > 0);
-
-    // Load latest for table (only on first load, it doesn't change with time range)
-    if (!latestData || latestData.length === 0) {
-        const latestResponse = await fetch('/api/liqwid/lending/latest');
-        latestData = await latestResponse.json();
-    }
+    // Load latest for table
+    const latestResponse = await fetch('/api/liqwid/lending/latest');
+    latestData = await latestResponse.json();
 
     // Store assets list sorted by TVL (already sorted from API)
     allAssetsList = latestData.map(item => ({
@@ -706,10 +684,9 @@ async function loadData() {
     // Calculate global spread bounds from ALL assets (not just selected)
     updateGlobalSpreadBounds();
 
-    // Default to top 3 by TVL (only if no assets selected yet)
-    if (selectedAssets.size === 0) {
-        allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
-    }
+    // Default to top 3 by TVL
+    selectedAssets.clear();
+    allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
 
     // Initialize asset options
     updateAssetOptions();
