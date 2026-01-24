@@ -535,11 +535,11 @@
                     <div class="col-md-3">
                         <label class="form-label">APR Measure</label>
                         <div class="apr-toggle" role="group" id="aprToggle">
-                            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d">
+                            <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d" checked>
                             <label class="btn" for="apr1d" title="1-day actual APR">1d</label>
                             <input type="radio" class="btn-check" name="aprType" id="apr7d" value="7d">
                             <label class="btn" for="apr7d" title="7-day average APR">7d Avg</label>
-                            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d" checked>
+                            <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d">
                             <label class="btn" for="apr30d" title="30-day average APR">30d Avg</label>
                         </div>
                     </div>
@@ -676,7 +676,7 @@ let currentSortColumn = 1;
 let currentSortDirection = 'desc';
 let allAssets = [];
 let selectedAssets = new Set();
-let selectedAprType = '30d'; // '1d', '7d', or '30d'
+let selectedAprType = '1d'; // '1d', '7d', or '30d'
 
 // Calculate moving average for APR data
 function calculateAprMovingAverage(dataPoints, window) {
