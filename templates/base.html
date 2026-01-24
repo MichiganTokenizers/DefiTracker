@@ -462,7 +462,11 @@
                             </span>
                             {% endif %}
                             <span class="d-none d-md-inline">
-                                {{ current_user.display_name or current_user.email or ('...' + current_user.wallet_address[-8:] if current_user.wallet_address else 'User') }}
+                                {% if current_user.wallet_address %}
+                                {{ current_user.wallet_address[:8] }}...{{ current_user.wallet_address[-6:] }}
+                                {% else %}
+                                {{ current_user.display_name or current_user.email or 'User' }}
+                                {% endif %}
                             </span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
