@@ -517,11 +517,11 @@ def api_get_liqwid_lending():
     """Get Liqwid lending data with both supply and borrow rates
 
     Query params:
-        days: Number of days of history (default: 7)
+        days: Number of days of history (default: 30)
 
     Returns supply_apy, borrow_apy, and spread for each asset over time
     """
-    days = request.args.get('days', default=7, type=int)
+    days = request.args.get('days', default=30, type=int)
 
     conn = db.get_connection()
     try:
