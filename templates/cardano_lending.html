@@ -664,29 +664,55 @@ function calculateMovingAverage(dataPoints, window) {
     return result;
 }
 
+// Cache for historical data to avoid redundant API calls
+let cachedHistoryData = null;
+let cachedHistoryDays = 0;
+let isFirstLoad = true;
+
 async function loadData() {
-    const days = document.getElementById('timeRange').value;
+    const days = parseInt(document.getElementById('timeRange').value);
 
-    // Load historical data
-    const historyResponse = await fetch(`/api/liqwid/lending?days=${days}`);
-    allData = await historyResponse.json();
+    // Determine how much data to fetch
+    // Always fetch at least 30 days so we can filter locally for shorter ranges
+    const fetchDays = Math.max(days, 30);
 
-    // Load latest for table
-    const latestResponse = await fetch('/api/liqwid/lending/latest');
-    latestData = await latestResponse.json();
+    // Fetch new data if we don't have enough cached
+    if (!cachedHistoryData || fetchDays > cachedHistoryDays) {
+        const historyResponse = await fetch(`/api/liqwid/lending?days=${fetchDays}`);
+        cachedHistoryData = await historyResponse.json();
+        cachedHistoryDays = fetchDays;
+        console.log(`Fetched ${fetchDays} days of lending data, got ${cachedHistoryData.length} assets`);
+    }
 
-    // Store assets list sorted by TVL (already sorted from API)
-    allAssetsList = latestData.map(item => ({
-        symbol: item.symbol,
-        total_supply: item.total_supply
+    // Filter cached data to the requested time range
+    const cutoffMs = Date.now() - (days * 24 * 60 * 60 * 1000);
+    allData = cachedHistoryData.map(asset => ({
+        symbol: asset.symbol,
+        data: asset.data.filter(d => new Date(d.timestamp).getTime() >= cutoffMs)
     }));
+
+    console.log(`Filtered to ${days} days: ${allData.map(a => a.symbol + ':' + a.data.length).join(', ')}`);
+
+    // Load latest data only once (doesn't change with time range)
+    if (isFirstLoad) {
+        const latestResponse = await fetch('/api/liqwid/lending/latest');
+        latestData = await latestResponse.json();
+
+        // Store assets list sorted by TVL (already sorted from API)
+        allAssetsList = latestData.map(item => ({
+            symbol: item.symbol,
+            total_supply: item.total_supply
+        }));
+
+        // Default to top 3 by TVL only on first load
+        selectedAssets.clear();
+        allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
+
+        isFirstLoad = false;
+    }
 
     // Calculate global spread bounds from ALL assets (not just selected)
     updateGlobalSpreadBounds();
-
-    // Default to top 3 by TVL
-    selectedAssets.clear();
-    allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
 
     // Initialize asset options
     updateAssetOptions();
