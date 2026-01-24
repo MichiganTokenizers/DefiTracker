@@ -102,6 +102,21 @@
     .multi-select-dropdown.show {
         display: block;
     }
+    .multi-select-search {
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .multi-select-search input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid rgba(0,0,0,0.2);
+        border-radius: 4px;
+        font-size: 0.875rem;
+        outline: none;
+    }
+    .multi-select-search input:focus {
+        border-color: var(--sea-green);
+    }
     .multi-select-actions {
         display: flex;
         gap: 8px;
@@ -458,7 +473,7 @@
 <div class="row mb-3">
     <!-- Left card: Title + Summary -->
     <div class="col-md-6 mb-2 mb-md-0">
-        <div class="card p-3 card-styled title-card h-100 d-flex justify-content-center">
+        <div class="card p-3 card-styled title-card h-100 d-flex justify-content-center align-items-center text-center">
             <div>
                 <span class="title-section-label">Liquidity Pools & Farms</span>
                 <p class="title-summary mb-0 mt-1">Track performance metrics for standard liquidity pools where providers deposit equal value of both assets. Fees and rewards are distributed proportionally across all liquidity in the pool.</p>
@@ -521,6 +536,9 @@
                                 <span class="count-badge" id="assetCount">0</span>
                             </button>
                             <div class="multi-select-dropdown" id="assetDropdown">
+                                <div class="multi-select-search">
+                                    <input type="text" id="assetSearchInput" placeholder="Search assets..." oninput="filterAssetOptions()">
+                                </div>
                                 <div class="multi-select-actions">
                                     <button type="button" onclick="selectAllAssets()">Select All</button>
                                     <button type="button" onclick="deselectAllAssets()">Clear</button>
@@ -826,10 +844,31 @@ function getSelectedAssets() {
     return Array.from(selectedAssets);
 }
 
+function filterAssetOptions() {
+    const searchTerm = document.getElementById('assetSearchInput').value.toLowerCase();
+    const options = document.querySelectorAll('#assetOptions .multi-select-option');
+
+    options.forEach(option => {
+        const label = option.querySelector('label').textContent.toLowerCase();
+        if (label.includes(searchTerm)) {
+            option.style.display = 'flex';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+}
+
 // Dropdown toggle
 document.getElementById('assetFilterBtn').addEventListener('click', function(e) {
     e.stopPropagation();
-    document.getElementById('assetDropdown').classList.toggle('show');
+    const dropdown = document.getElementById('assetDropdown');
+    dropdown.classList.toggle('show');
+    // Reset search when opening
+    if (dropdown.classList.contains('show')) {
+        document.getElementById('assetSearchInput').value = '';
+        filterAssetOptions();
+        document.getElementById('assetSearchInput').focus();
+    }
     // Close protocol dropdown if open
     document.getElementById('protocolDropdown').classList.remove('show');
 });
