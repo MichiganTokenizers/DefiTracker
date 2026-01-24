@@ -98,7 +98,12 @@ class LiqwidAPYSnapshot:
     total_borrows: Optional[Decimal] = None
     utilization_rate: Optional[Decimal] = None
     available_liquidity: Optional[Decimal] = None
-    
+
+    # USD values (calculated at collection time)
+    total_supply_usd: Optional[Decimal] = None
+    total_borrows_usd: Optional[Decimal] = None
+    token_price_usd: Optional[Decimal] = None
+
     # Yield type (supply or borrow)
     yield_type: Optional[str] = 'supply'
     
@@ -121,6 +126,9 @@ class LiqwidAPYSnapshot:
             'total_borrows': float(self.total_borrows) if self.total_borrows else None,
             'utilization_rate': float(self.utilization_rate) if self.utilization_rate else None,
             'available_liquidity': float(self.available_liquidity) if self.available_liquidity else None,
+            'total_supply_usd': float(self.total_supply_usd) if self.total_supply_usd else None,
+            'total_borrows_usd': float(self.total_borrows_usd) if self.total_borrows_usd else None,
+            'token_price_usd': float(self.token_price_usd) if self.token_price_usd else None,
             'yield_type': self.yield_type,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }

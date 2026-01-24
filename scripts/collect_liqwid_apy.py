@@ -19,7 +19,9 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+import requests
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -84,18 +86,73 @@ def load_config():
         return yaml.safe_load(f)
 
 
+# CoinGecko token IDs for Liqwid assets
+COINGECKO_IDS = {
+    'ADA': 'cardano',
+    'DJED': 'djed',
+    'iUSD': 'indigo-protocol',
+    'USDA': 'usd-coin',  # Stablecoin ~ $1
+    'SHEN': 'shen',
+    'MIN': 'minswap',
+    'SNEK': 'snek',
+    'NIGHT': 'tokenfi',
+    'wanUSDC': 'usd-coin',  # Wrapped USDC ~ $1
+    'wanDAI': 'dai',
+    'wanBTC': 'bitcoin',
+    'wanETH': 'ethereum',
+    'LQ': 'liqwid-finance',
+    'IAG': 'iagon',
+}
+
+
+def fetch_token_prices() -> Dict[str, Decimal]:
+    """Fetch current USD prices for Liqwid tokens from CoinGecko."""
+    # Get unique CoinGecko IDs
+    ids = set(COINGECKO_IDS.values())
+    ids_str = ','.join(ids)
+
+    prices: Dict[str, Decimal] = {}
+
+    try:
+        response = requests.get(
+            f'https://api.coingecko.com/api/v3/simple/price?ids={ids_str}&vs_currencies=usd',
+            timeout=15,
+            headers={'User-Agent': 'defitracker/1.0'}
+        )
+        if response.ok:
+            data = response.json()
+            # Map back to our symbols
+            for symbol, cg_id in COINGECKO_IDS.items():
+                if cg_id in data and 'usd' in data[cg_id]:
+                    prices[symbol] = Decimal(str(data[cg_id]['usd']))
+                elif symbol in ['USDA', 'wanUSDC', 'wanDAI', 'iUSD']:
+                    # Stablecoins default to $1
+                    prices[symbol] = Decimal('1.0')
+
+            logger.info(f"Fetched prices for {len(prices)} tokens from CoinGecko")
+        else:
+            logger.warning(f"CoinGecko API returned {response.status_code}")
+    except Exception as e:
+        logger.warning(f"Could not fetch token prices: {e}")
+
+    return prices
+
+
 def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQueries) -> List[LiqwidAPYSnapshot]:
     """Collect APY data from Liqwid Finance protocol"""
     logger.info("Collecting Liqwid APY data...")
-    
+
     liqwid = cardano_adapter.get_protocol('liqwid')
     if not liqwid:
         logger.error("Liqwid adapter not found")
         return []
-    
+
+    # Fetch token prices for USD conversion
+    prices = fetch_token_prices()
+
     timestamp = datetime.utcnow()
     snapshots = []
-    
+
     # Get all supported markets
     markets = liqwid.get_supported_assets()
     logger.info(f"Collecting APY for {len(markets)} markets: {', '.join(markets)}")
@@ -158,6 +215,19 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
                 'borrow_apy'
             )
             
+            # Calculate USD values
+            total_supply = market_state.get('total_supply')
+            total_borrows = market_state.get('total_borrows')
+            token_price = prices.get(market_symbol)
+
+            total_supply_usd = None
+            total_borrows_usd = None
+            if token_price:
+                if total_supply:
+                    total_supply_usd = total_supply * token_price
+                if total_borrows:
+                    total_borrows_usd = total_borrows * token_price
+
             # Create snapshot
             snapshot = LiqwidAPYSnapshot(
                 asset_id=asset_id,
@@ -167,10 +237,13 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
                 lq_supply_apy=lq_supply_apy,
                 total_supply_apy=total_supply_apy,
                 borrow_apy=borrow_apy,
-                total_supply=market_state.get('total_supply'),
-                total_borrows=market_state.get('total_borrows'),
+                total_supply=total_supply,
+                total_borrows=total_borrows,
                 utilization_rate=market_state.get('utilization'),
                 available_liquidity=market_state.get('available_liquidity'),
+                total_supply_usd=total_supply_usd,
+                total_borrows_usd=total_borrows_usd,
+                token_price_usd=token_price,
                 yield_type='supply',  # Primary view is supply (earn) side
                 timestamp=timestamp
             )
@@ -185,18 +258,17 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
             total_str = f"{total_supply_apy:.4f}%" if total_supply_apy else "N/A"
             borrow_str = f"{borrow_apy:.4f}%" if borrow_apy else "N/A"
             utilization_str = f"{market_state.get('utilization', 0) * 100:.2f}%" if market_state.get('utilization') else "N/A"
-            
-            # Format volume data
-            total_supply_val = snapshot.total_supply
-            total_borrows_val = snapshot.total_borrows
-            supply_vol_str = f"{total_supply_val:,.2f}" if total_supply_val else "N/A"
-            borrow_vol_str = f"{total_borrows_val:,.2f}" if total_borrows_val else "N/A"
-            
+
+            # Format volume data with USD
+            supply_usd_str = f"${total_supply_usd:,.2f}" if total_supply_usd else "N/A"
+            borrow_usd_str = f"${total_borrows_usd:,.2f}" if total_borrows_usd else "N/A"
+            price_str = f"${token_price:.4f}" if token_price else "N/A"
+
             logger.info(
                 f"{market_symbol}: Supply APY={supply_str} {lq_str} (Total: {total_str}), "
                 f"Borrow APY={borrow_str}, "
                 f"Utilization={utilization_str}, "
-                f"Total Supply={supply_vol_str} tokens, Total Borrowed={borrow_vol_str} tokens"
+                f"TVL={supply_usd_str}, Borrowed={borrow_usd_str}, Price={price_str}"
             )
             
         except Exception as e:

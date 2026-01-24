@@ -438,8 +438,9 @@ class APYQueries:
                     INSERT INTO liqwid_apy_snapshots (
                         asset_id, market_id, supply_apy, lq_supply_apy, total_supply_apy,
                         borrow_apy, total_supply, total_borrows, utilization_rate,
-                        available_liquidity, yield_type, timestamp
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        available_liquidity, total_supply_usd, total_borrows_usd,
+                        token_price_usd, yield_type, timestamp
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING snapshot_id
                 """, (
                     snapshot.asset_id,
@@ -452,6 +453,9 @@ class APYQueries:
                     snapshot.total_borrows,
                     snapshot.utilization_rate,
                     snapshot.available_liquidity,
+                    snapshot.total_supply_usd,
+                    snapshot.total_borrows_usd,
+                    snapshot.token_price_usd,
                     snapshot.yield_type or 'supply',
                     snapshot.timestamp or datetime.utcnow()
                 ))

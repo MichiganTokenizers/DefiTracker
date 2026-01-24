@@ -519,7 +519,8 @@ def api_get_liqwid_lending():
     Query params:
         days: Number of days of history (default: 30)
 
-    Returns supply_apy, borrow_apy, and spread for each asset over time
+    Returns supply_apy, borrow_apy, spread, and USD values for each asset over time.
+    USD values are stored at collection time from CoinGecko prices.
     """
     days = request.args.get('days', default=30, type=int)
 
@@ -534,6 +535,9 @@ def api_get_liqwid_lending():
                     s.total_supply,
                     s.total_borrows,
                     s.utilization_rate,
+                    s.total_supply_usd,
+                    s.total_borrows_usd,
+                    s.token_price_usd,
                     s.timestamp
                 FROM liqwid_apy_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
@@ -550,7 +554,10 @@ def api_get_liqwid_lending():
                 total_supply = row[3]
                 total_borrows = row[4]
                 utilization = row[5]
-                timestamp = row[6]
+                total_supply_usd = row[6]
+                total_borrows_usd = row[7]
+                token_price_usd = row[8]
+                timestamp = row[9]
 
                 if symbol not in data:
                     data[symbol] = {
@@ -570,7 +577,10 @@ def api_get_liqwid_lending():
                     'spread': spread,
                     'total_supply': float(total_supply) if total_supply else None,
                     'total_borrows': float(total_borrows) if total_borrows else None,
-                    'utilization': float(utilization) if utilization else None
+                    'utilization': float(utilization) if utilization else None,
+                    'total_supply_usd': float(total_supply_usd) if total_supply_usd else None,
+                    'total_borrows_usd': float(total_borrows_usd) if total_borrows_usd else None,
+                    'token_price_usd': float(token_price_usd) if token_price_usd else None
                 })
 
         return jsonify(list(data.values()))
@@ -582,8 +592,9 @@ def api_get_liqwid_lending():
 def api_get_liqwid_lending_latest():
     """Get latest Liqwid lending data for all assets
 
-    Returns current supply_apy, borrow_apy, spread, and TVL for each asset
-    Sorted by total_supply (TVL) descending to identify top collateral
+    Returns current supply_apy, borrow_apy, spread, and TVL for each asset.
+    USD values are stored at collection time from CoinGecko prices.
+    Sorted by TVL (USD) descending to identify top collateral.
     """
     conn = db.get_connection()
     try:
@@ -596,6 +607,9 @@ def api_get_liqwid_lending_latest():
                     s.total_supply,
                     s.total_borrows,
                     s.utilization_rate,
+                    s.total_supply_usd,
+                    s.total_borrows_usd,
+                    s.token_price_usd,
                     s.timestamp
                 FROM liqwid_apy_snapshots s
                 JOIN assets a ON s.asset_id = a.asset_id
@@ -604,25 +618,36 @@ def api_get_liqwid_lending_latest():
 
             results = []
             for row in cur.fetchall():
+                symbol = row[0]
                 supply_apy = row[1]
                 borrow_apy = row[2]
+                total_supply = float(row[3]) if row[3] else 0
+                total_borrows = float(row[4]) if row[4] else None
+                utilization = float(row[5]) if row[5] else None
+                total_supply_usd = float(row[6]) if row[6] else None
+                total_borrows_usd = float(row[7]) if row[7] else None
+                token_price_usd = float(row[8]) if row[8] else None
+
                 spread = None
                 if supply_apy is not None and borrow_apy is not None:
                     spread = float(borrow_apy) - float(supply_apy)
 
                 results.append({
-                    'symbol': row[0],
+                    'symbol': symbol,
                     'supply_apy': float(supply_apy) if supply_apy else None,
                     'borrow_apy': float(borrow_apy) if borrow_apy else None,
                     'spread': spread,
-                    'total_supply': float(row[3]) if row[3] else None,
-                    'total_borrows': float(row[4]) if row[4] else None,
-                    'utilization': float(row[5]) if row[5] else None,
-                    'timestamp': row[6].isoformat()
+                    'total_supply': total_supply,
+                    'total_borrows': total_borrows,
+                    'utilization': utilization,
+                    'total_supply_usd': total_supply_usd,
+                    'total_borrows_usd': total_borrows_usd,
+                    'token_price_usd': token_price_usd,
+                    'timestamp': row[9].isoformat()
                 })
 
-        # Sort by total_supply (TVL) descending
-        results.sort(key=lambda x: x['total_supply'] if x['total_supply'] else 0, reverse=True)
+        # Sort by TVL (USD) descending
+        results.sort(key=lambda x: x['total_supply_usd'] if x['total_supply_usd'] else 0, reverse=True)
 
         return jsonify(results)
     finally:
