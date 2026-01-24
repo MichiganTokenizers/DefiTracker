@@ -347,8 +347,8 @@
                         <label class="form-label">Time Range</label>
                         <select id="timeRange" class="form-select">
                             <option value="1">Last 1 Day</option>
-                            <option value="7" selected>Last 7 Days</option>
-                            <option value="30">Last 30 Days</option>
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
                             <option value="90">Last 90 Days</option>
                         </select>
                     </div>
@@ -388,11 +388,11 @@
                     <div class="col-md-3">
                         <label class="form-label">APY Measure</label>
                         <div class="apr-toggle" role="group" id="apyToggle">
-                            <input type="radio" class="btn-check" name="apyType" id="apy1d" value="1d">
+                            <input type="radio" class="btn-check" name="apyType" id="apy1d" value="1d" checked>
                             <label class="btn" for="apy1d" title="1-day actual APY">1d</label>
                             <input type="radio" class="btn-check" name="apyType" id="apy7d" value="7d">
                             <label class="btn" for="apy7d" title="7-day average APY">7d Avg</label>
-                            <input type="radio" class="btn-check" name="apyType" id="apy30d" value="30d" checked>
+                            <input type="radio" class="btn-check" name="apyType" id="apy30d" value="30d">
                             <label class="btn" for="apy30d" title="30-day average APY">30d Avg</label>
                         </div>
                     </div>
@@ -471,8 +471,8 @@ let spreadMax = 10;
 // Selected filters
 let selectedAssets = new Set();
 let allAssetsList = [];
-let apyMeasure = '30d'; // '1d' for actual, '30d' for 30-day average
-let movingAverageDays = 30; // Derived from apyMeasure
+let apyMeasure = '1d'; // '1d' for actual, '7d' or '30d' for averages
+let movingAverageDays = 1; // Derived from apyMeasure
 
 // Color palette for assets
 const assetColors = {
