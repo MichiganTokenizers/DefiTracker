@@ -30,6 +30,7 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -98,6 +99,13 @@ def collect_and_store_sundaeswap():
             name="sundaeswap",
             api_url=protocol_config.get("graphql_url"),
         )
+
+        # Check if we already collected today (EST)
+        est = ZoneInfo("America/New_York")
+        today_est = datetime.now(est).date()
+        if queries.has_snapshots_for_date_est(protocol_id, today_est):
+            logger.info("Data already collected for sundaeswap on %s (EST), skipping", today_est)
+            return 0
 
         # Get all pools meeting TVL threshold
         pools = sundae_adapter.get_all_pools()

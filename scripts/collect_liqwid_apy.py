@@ -20,6 +20,7 @@ from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Dict
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -299,12 +300,19 @@ def main():
         # Initialize database
         db = DatabaseConnection()
         db_queries = APYQueries(db)
-        
+
+        # Check if we already collected today (EST)
+        est = ZoneInfo("America/New_York")
+        today_est = datetime.now(est).date()
+        if db_queries.has_liqwid_snapshots_for_date_est(today_est):
+            logger.info("Data already collected for liqwid on %s (EST), skipping", today_est)
+            return 0
+
         # Initialize Cardano adapter
         cardano_adapter = CardanoChainAdapter(cardano_config)
-        
+
         logger.info("Connected to Liqwid API")
-        
+
         # Collect APY data
         snapshots = collect_liqwid_apy(cardano_adapter, db_queries)
         

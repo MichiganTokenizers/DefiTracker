@@ -1,7 +1,8 @@
 """Database queries for APR/APY data"""
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
 import logging
 
@@ -228,6 +229,46 @@ class DatabaseQueries:
         finally:
             self.db.return_connection(conn)
     
+    def has_snapshots_for_date_est(self, protocol_id: int, date_est: date) -> bool:
+        """Check if any apr_snapshots exist for protocol on given EST date.
+
+        Converts EST date boundaries to UTC for query since timestamps are stored in UTC.
+        EST midnight = UTC 05:00 (or 04:00 during DST).
+
+        Args:
+            protocol_id: The protocol ID to check
+            date_est: The EST date to check for snapshots
+
+        Returns:
+            True if at least one snapshot exists for that date, False otherwise
+        """
+        est = ZoneInfo("America/New_York")
+
+        # Create datetime at start of day in EST, then convert to UTC
+        start_of_day_est = datetime(date_est.year, date_est.month, date_est.day, tzinfo=est)
+        end_of_day_est = start_of_day_est + timedelta(days=1)
+
+        # Convert to UTC for database query
+        start_utc = start_of_day_est.astimezone(ZoneInfo("UTC"))
+        end_utc = end_of_day_est.astimezone(ZoneInfo("UTC"))
+
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT EXISTS(
+                        SELECT 1 FROM apr_snapshots
+                        WHERE protocol_id = %s
+                          AND timestamp >= %s
+                          AND timestamp < %s
+                    )""",
+                    (protocol_id, start_utc, end_utc)
+                )
+                result = cur.fetchone()
+                return result[0] if result else False
+        finally:
+            self.db.return_connection(conn)
+
     def get_latest_aprs(self, blockchain_name: Optional[str] = None,
                        protocol_name: Optional[str] = None,
                        asset_symbol: Optional[str] = None) -> List[Dict]:
@@ -283,10 +324,47 @@ class DatabaseQueries:
 
 class APYQueries:
     """Query class for APY-related database operations"""
-    
+
     def __init__(self, db: DatabaseConnection):
         self.db = db
-    
+
+    def has_liqwid_snapshots_for_date_est(self, date_est: date) -> bool:
+        """Check if any liqwid_apy_snapshots exist for the given EST date.
+
+        Converts EST date boundaries to UTC for query since timestamps are stored in UTC.
+
+        Args:
+            date_est: The EST date to check for snapshots
+
+        Returns:
+            True if at least one snapshot exists for that date, False otherwise
+        """
+        est = ZoneInfo("America/New_York")
+
+        # Create datetime at start of day in EST, then convert to UTC
+        start_of_day_est = datetime(date_est.year, date_est.month, date_est.day, tzinfo=est)
+        end_of_day_est = start_of_day_est + timedelta(days=1)
+
+        # Convert to UTC for database query
+        start_utc = start_of_day_est.astimezone(ZoneInfo("UTC"))
+        end_utc = end_of_day_est.astimezone(ZoneInfo("UTC"))
+
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT EXISTS(
+                        SELECT 1 FROM liqwid_apy_snapshots
+                        WHERE timestamp >= %s
+                          AND timestamp < %s
+                    )""",
+                    (start_utc, end_utc)
+                )
+                result = cur.fetchone()
+                return result[0] if result else False
+        finally:
+            self.db.return_connection(conn)
+
     # ============================================
     # Asset operations
     # ============================================

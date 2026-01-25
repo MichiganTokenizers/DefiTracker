@@ -4,7 +4,7 @@
 # This service file runs the Flask web UI automatically on boot.
 #
 # Installation:
-#   sudo cp /home/pi/DefiTracker/systemd/defitracker.service /etc/systemd/system/
+#   sudo cp /home/danladuke/DefiTracker/systemd/defitracker.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable defitracker
 #   sudo systemctl start defitracker
@@ -26,27 +26,28 @@ Wants=postgresql.service
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/DefiTracker
+User=danladuke
+Group=danladuke
+WorkingDirectory=/home/danladuke/DefiTracker
 
 # Python virtual environment
-Environment="PATH=/home/pi/DefiTracker/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=/home/danladuke/DefiTracker/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="FLASK_APP=src.api.app:app"
 Environment="FLASK_ENV=production"
 
 # Run Flask on all interfaces, port 5000
-ExecStart=/home/pi/DefiTracker/venv/bin/python -m flask run --host=0.0.0.0 --port=5000
+ExecStart=/home/danladuke/DefiTracker/venv/bin/python -m flask run --host=0.0.0.0 --port=5000
 
 # Restart policy
 Restart=always
 RestartSec=10
 
-# Security hardening (optional but recommended)
+# Security hardening
 NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/pi/DefiTracker/logs
+# These require kernel namespace support (not available on Raspberry Pi):
+# ProtectSystem=strict
+# ProtectHome=read-only
+# ReadWritePaths=/home/danladuke/DefiTracker/logs
 
 # Resource limits (adjust based on your needs)
 MemoryMax=512M
