@@ -775,7 +775,7 @@ const pairColorMap = {};
 
 // Default assets
 const defaultAssets = [
-    'NIGHT-ADA', 'NIGHT-USDM', 'NIGHT-USDA'
+    'NIGHT-ADA', 'NIGHT-USDA'
 ];
 
 function isDefaultAsset(symbol) {
@@ -1471,16 +1471,19 @@ function updateProtocolOptionsForAsset(selectedAsset) {
         const baseProtocol = protocol.split('_')[0];
         const logo = protocolLogos[baseProtocol] || '/static/default-logo.png';
         const displayName = getProtocolDisplayName(protocol);
+        const isMinswap = baseProtocol === 'minswap';
 
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'proto-btn active';
+        btn.className = isMinswap ? 'proto-btn active' : 'proto-btn';
         btn.dataset.protocol = protocol;
         btn.title = displayName;
         btn.innerHTML = `<img src="${logo}" alt="${displayName}">`;
         btn.onclick = () => toggleProtocol(protocol);
         toggleContainer.appendChild(btn);
-        selectedProtocols.add(protocol);
+        if (isMinswap) {
+            selectedProtocols.add(protocol);
+        }
     });
 }
 
