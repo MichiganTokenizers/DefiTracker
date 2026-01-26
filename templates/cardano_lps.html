@@ -2147,10 +2147,13 @@ function renderBreakdownCharts() {
         
         // Build pool options for dropdown (sorted by total APR descending)
         const sortedPools = [...data.pools].sort((a, b) => b.totalApr - a.totalApr);
-        const poolOptions = sortedPools.map(p => 
+        const poolOptions = sortedPools.map(p =>
             `<option value="${p.symbol}">${p.symbol} (${p.totalApr.toFixed(1)}%)</option>`
         ).join('');
-        
+
+        // Calculate weighted average 1d yield for "All Pools" display
+        const weightedAvgYield = data.totalApr.toFixed(1);
+
         html += `
             <div class="breakdown-card-wrapper mb-3">
                 <div class="breakdown-card-header">
@@ -2160,7 +2163,7 @@ function renderBreakdownCharts() {
                 </div>
                 <div class="breakdown-filter">
                     <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
-                        <option value="all">All Pools (100% - 1d Yield)</option>
+                        <option value="all">All Pools (${weightedAvgYield}% Weight Avg 1d Yield)</option>
                         ${poolOptions}
                     </select>
                 </div>
