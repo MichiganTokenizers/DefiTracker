@@ -1034,6 +1034,17 @@ async function loadChart() {
                 },
                 tooltip: {
                     callbacks: {
+                        title: (tooltipItems) => {
+                            const date = new Date(tooltipItems[0].parsed.x);
+                            return date.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        },
                         label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
                     }
                 }
@@ -1638,6 +1649,17 @@ async function loadSingleAssetChart() {
                 },
                 tooltip: {
                     callbacks: {
+                        title: (tooltipItems) => {
+                            const date = new Date(tooltipItems[0].parsed.x);
+                            return date.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        },
                         label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`
                     }
                 }
