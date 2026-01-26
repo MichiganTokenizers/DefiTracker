@@ -2001,6 +2001,7 @@ function renderBreakdownCharts() {
         }
         
         const volume24h = targetData.volume_24h || 0;
+        const tvl = targetData.tvl_usd || 0;  // Used for fee APR calculation
         const apr = targetData.apr || 0;      // 30-day APR (total for SundaeSwap)
         const apr1d = targetData.apr_1d || 0; // 1-day APR
         const fees24h = targetData.fees_24h || 0;
