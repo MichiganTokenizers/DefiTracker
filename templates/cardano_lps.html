@@ -202,6 +202,51 @@
         border-radius: 0;
     }
 
+    /* Protocol toggle (multi-select with logos) */
+    .protocol-toggle {
+        display: flex;
+        gap: 0;
+    }
+    .protocol-toggle .proto-btn {
+        border: 1px solid var(--sea-green);
+        background: transparent;
+        padding: 0.4rem 0.6rem;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .protocol-toggle .proto-btn:hover {
+        background-color: rgba(14, 135, 73, 0.1);
+    }
+    .protocol-toggle .proto-btn.active {
+        background-color: var(--sea-green);
+        border-color: var(--sea-green);
+    }
+    .protocol-toggle .proto-btn img {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        opacity: 0.5;
+        transition: opacity 0.15s;
+    }
+    .protocol-toggle .proto-btn.active img {
+        opacity: 1;
+    }
+    .protocol-toggle .proto-btn:first-of-type {
+        border-radius: 6px 0 0 6px;
+    }
+    .protocol-toggle .proto-btn:last-of-type {
+        border-radius: 0 6px 6px 0;
+    }
+    .protocol-toggle .proto-btn:not(:first-of-type) {
+        border-left: none;
+    }
+    .protocol-toggle .proto-btn:only-child {
+        border-radius: 6px;
+    }
+
     /* Title card */
     .title-card {
         text-align: center;
@@ -612,22 +657,10 @@
                             <option value="">Loading assets...</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Protocol</label>
-                        <div class="multi-select-container" id="protocolFilterContainer">
-                            <button type="button" class="multi-select-btn" id="protocolFilterBtn">
-                                <span id="protocolFilterLabel">All Protocols</span>
-                                <span class="count-badge" id="protocolCount">0</span>
-                            </button>
-                            <div class="multi-select-dropdown" id="protocolDropdown">
-                                <div class="multi-select-actions">
-                                    <button type="button" onclick="selectAllProtocols()">Select All</button>
-                                    <button type="button" onclick="deselectAllProtocols()">Clear</button>
-                                </div>
-                                <div id="protocolOptions">
-                                    <!-- Populated by JS -->
-                                </div>
-                            </div>
+                    <div class="col-md-auto">
+                        <label class="form-label">Protocols</label>
+                        <div class="protocol-toggle" id="protocolToggle">
+                            <!-- Populated by JS -->
                         </div>
                     </div>
                     <div class="col-md-2 ms-auto d-flex align-items-end">
@@ -867,16 +900,11 @@ document.getElementById('assetFilterBtn').addEventListener('click', function(e) 
         filterAssetOptions();
         document.getElementById('assetSearchInput').focus();
     }
-    // Close protocol dropdown if open
-    document.getElementById('protocolDropdown').classList.remove('show');
 });
 
 document.addEventListener('click', function(e) {
     if (!document.getElementById('assetFilterContainer').contains(e.target)) {
         document.getElementById('assetDropdown').classList.remove('show');
-    }
-    if (!document.getElementById('protocolFilterContainer').contains(e.target)) {
-        document.getElementById('protocolDropdown').classList.remove('show');
     }
 });
 
@@ -1414,14 +1442,6 @@ function initSingleAssetChart() {
         loadSingleAssetChart();
     });
     document.getElementById('singleAssetTimeRange').addEventListener('change', loadSingleAssetChart);
-
-    // Protocol dropdown toggle
-    document.getElementById('protocolFilterBtn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        document.getElementById('protocolDropdown').classList.toggle('show');
-        // Close asset dropdown if open
-        document.getElementById('assetDropdown').classList.remove('show');
-    });
 }
 
 function updateProtocolOptionsForAsset(selectedAsset) {
@@ -1443,64 +1463,37 @@ function updateProtocolOptionsForAsset(selectedAsset) {
     allProtocolOptions = [...protocolVersions].sort();
     selectedProtocols.clear();
 
-    // Populate protocol multi-select options
-    const optionsContainer = document.getElementById('protocolOptions');
-    optionsContainer.innerHTML = '';
+    // Populate protocol toggle buttons
+    const toggleContainer = document.getElementById('protocolToggle');
+    toggleContainer.innerHTML = '';
 
     allProtocolOptions.forEach(protocol => {
-        const div = document.createElement('div');
-        div.className = 'multi-select-option';
-        div.innerHTML = `
-            <input type="checkbox" id="protocol-${protocol}" value="${protocol}"
-                   checked onchange="toggleProtocol('${protocol}')">
-            <label for="protocol-${protocol}">${getProtocolDisplayName(protocol)}</label>
-        `;
-        optionsContainer.appendChild(div);
+        const baseProtocol = protocol.split('_')[0];
+        const logo = protocolLogos[baseProtocol] || '/static/default-logo.png';
+        const displayName = getProtocolDisplayName(protocol);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'proto-btn active';
+        btn.dataset.protocol = protocol;
+        btn.title = displayName;
+        btn.innerHTML = `<img src="${logo}" alt="${displayName}">`;
+        btn.onclick = () => toggleProtocol(protocol);
+        toggleContainer.appendChild(btn);
         selectedProtocols.add(protocol);
     });
-
-    updateProtocolLabel();
 }
 
 function toggleProtocol(protocol) {
+    const btn = document.querySelector(`.proto-btn[data-protocol="${protocol}"]`);
     if (selectedProtocols.has(protocol)) {
         selectedProtocols.delete(protocol);
+        if (btn) btn.classList.remove('active');
     } else {
         selectedProtocols.add(protocol);
+        if (btn) btn.classList.add('active');
     }
-    updateProtocolLabel();
     loadSingleAssetChart();
-}
-
-function selectAllProtocols() {
-    allProtocolOptions.forEach(p => selectedProtocols.add(p));
-    document.querySelectorAll('#protocolOptions input').forEach(cb => cb.checked = true);
-    updateProtocolLabel();
-    loadSingleAssetChart();
-}
-
-function deselectAllProtocols() {
-    selectedProtocols.clear();
-    document.querySelectorAll('#protocolOptions input').forEach(cb => cb.checked = false);
-    updateProtocolLabel();
-    loadSingleAssetChart();
-}
-
-function updateProtocolLabel() {
-    const count = selectedProtocols.size;
-    const total = allProtocolOptions.length;
-    document.getElementById('protocolCount').textContent = count;
-    
-    if (count === 0) {
-        document.getElementById('protocolFilterLabel').textContent = 'None selected';
-    } else if (count === total) {
-        document.getElementById('protocolFilterLabel').textContent = 'All Protocols';
-    } else if (count <= 2) {
-        const names = [...selectedProtocols].map(p => getProtocolDisplayName(p)).join(', ');
-        document.getElementById('protocolFilterLabel').textContent = names;
-    } else {
-        document.getElementById('protocolFilterLabel').textContent = `${count} selected`;
-    }
 }
 
 async function loadSingleAssetChart() {
