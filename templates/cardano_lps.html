@@ -1994,13 +1994,13 @@ function renderBreakdownCharts() {
             protocolBreakdowns[protocol] = {
                 protocol: protocol,
                 pools: [],
-                totalTvl: 0,
+                totalVolume: 0,
                 totalFeeApr: 0,
                 totalFarmApr: 0
             };
         }
         
-        const tvl = targetData.tvl_usd || 0;
+        const volume24h = targetData.volume_24h || 0;
         const apr = targetData.apr || 0;      // 30-day APR (total for SundaeSwap)
         const apr1d = targetData.apr_1d || 0; // 1-day APR
         const fees24h = targetData.fees_24h || 0;
@@ -2056,7 +2056,7 @@ function renderBreakdownCharts() {
         
         protocolBreakdowns[protocol].pools.push({
             symbol: assetData.symbol,
-            tvl: tvl,
+            volume24h: volume24h,
             feeApr: feeApr,
             stakingApr: stakingApr,
             farmApr: farmApr,
@@ -2064,49 +2064,49 @@ function renderBreakdownCharts() {
             swapFeePercent: swapFeePercent
         });
         
-        protocolBreakdowns[protocol].totalTvl += tvl;
+        protocolBreakdowns[protocol].totalVolume += volume24h;
     });
     
-    // Calculate TVL-weighted averages for each protocol
+    // Calculate volume-weighted averages for each protocol
     const protocolData = Object.values(protocolBreakdowns).map(p => {
         let weightedFeeApr = 0;
         let weightedStakingApr = 0;
         let weightedFarmApr = 0;
-        
-        if (p.totalTvl > 0) {
+
+        if (p.totalVolume > 0) {
             p.pools.forEach(pool => {
-                const weight = pool.tvl / p.totalTvl;
+                const weight = pool.volume24h / p.totalVolume;
                 weightedFeeApr += pool.feeApr * weight;
                 weightedStakingApr += (pool.stakingApr || 0) * weight;
                 weightedFarmApr += pool.farmApr * weight;
             });
         } else if (p.pools.length > 0) {
-            // Simple average if no TVL data
+            // Simple average if no volume data
             weightedFeeApr = p.pools.reduce((sum, pool) => sum + pool.feeApr, 0) / p.pools.length;
             weightedStakingApr = p.pools.reduce((sum, pool) => sum + (pool.stakingApr || 0), 0) / p.pools.length;
             weightedFarmApr = p.pools.reduce((sum, pool) => sum + pool.farmApr, 0) / p.pools.length;
         }
-        
-        // Calculate TVL-weighted average swap fee for "All Pools" display
+
+        // Calculate volume-weighted average swap fee for "All Pools" display
         let weightedSwapFee = null;
         const poolsWithSwapFee = p.pools.filter(pool => pool.swapFeePercent != null);
         if (poolsWithSwapFee.length > 0) {
-            const totalTvlWithFee = poolsWithSwapFee.reduce((sum, pool) => sum + pool.tvl, 0);
-            if (totalTvlWithFee > 0) {
+            const totalVolumeWithFee = poolsWithSwapFee.reduce((sum, pool) => sum + pool.volume24h, 0);
+            if (totalVolumeWithFee > 0) {
                 weightedSwapFee = poolsWithSwapFee.reduce((sum, pool) => {
-                    const weight = pool.tvl / totalTvlWithFee;
+                    const weight = pool.volume24h / totalVolumeWithFee;
                     return sum + (pool.swapFeePercent * weight);
                 }, 0);
             } else {
-                // Simple average if no TVL data
+                // Simple average if no volume data
                 weightedSwapFee = poolsWithSwapFee.reduce((sum, pool) => sum + pool.swapFeePercent, 0) / poolsWithSwapFee.length;
             }
         }
-        
+
         return {
             protocol: p.protocol,
             poolCount: p.pools.length,
-            totalTvl: p.totalTvl,
+            totalVolume: p.totalVolume,
             pools: p.pools, // Include pools for dropdown filter
             feeApr: weightedFeeApr,
             stakingApr: weightedStakingApr,
@@ -2159,7 +2159,7 @@ function renderBreakdownCharts() {
                 </div>
                 <div class="breakdown-filter">
                     <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
-                        <option value="all">All Pools (TVL-weighted avg)</option>
+                        <option value="all">All Pools (24H Vol-weighted avg)</option>
                         ${poolOptions}
                     </select>
                 </div>
@@ -2196,7 +2196,7 @@ function updateBreakdownChart(index) {
     let displayData;
     
     if (selectedValue === 'all') {
-        // Use TVL-weighted averages
+        // Use volume-weighted averages
         displayData = {
             feeApr: data.feeApr,
             stakingApr: data.stakingApr,
