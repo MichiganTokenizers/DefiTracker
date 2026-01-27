@@ -681,12 +681,21 @@ class PortfolioService:
                     else:
                         # For SundaeSwap/WingRiders, search Minswap by token symbols
                         # (price ratios should be similar across DEXes due to arbitrage)
+                        logger.info(
+                            "Searching Minswap for historical price: %s/%s at %s",
+                            token_a_symbol, token_b_symbol, entry_date
+                        )
                         historical_ratio = self._get_historical_price_by_tokens(
                             token_a_symbol, token_b_symbol, entry_date
                         )
                         if historical_ratio:
                             logger.info(
-                                "Using Minswap historical price for %s %s position",
+                                "Using Minswap historical price for %s %s position: %.6f",
+                                protocol, pool_name, historical_ratio
+                            )
+                        else:
+                            logger.info(
+                                "No Minswap historical price found for %s %s",
                                 protocol, pool_name
                             )
 
