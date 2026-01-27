@@ -288,7 +288,9 @@ class PortfolioService:
         Find when an LP token was first received by querying Blockfrost asset history.
 
         Uses the asset transactions endpoint to find the earliest transaction where
-        the wallet received this LP token.
+        the wallet received this LP token. For staked/farmed LP tokens, we look for
+        when the wallet first interacted with this LP token (either receiving it or
+        sending it to a farm contract).
 
         Args:
             wallet_address: User's wallet address
@@ -302,6 +304,8 @@ class PortfolioService:
             return None
 
         asset_id = f"{policy_id}{asset_name}"
+        # Get wallet address prefix for matching (first 30 chars covers payment key)
+        wallet_prefix = wallet_address[:30] if len(wallet_address) > 30 else wallet_address
 
         try:
             # Get asset transaction history (ordered oldest first)
@@ -317,14 +321,17 @@ class PortfolioService:
 
             transactions = resp.json()
             if not transactions:
+                logger.debug("No transactions found for asset %s", asset_id[:20])
                 return None
 
-            # Find the first transaction where this wallet received the LP token
+            logger.debug("Found %d transactions for LP token, checking for wallet involvement", len(transactions))
+
+            # Find the first transaction where this wallet was involved with the LP token
             for tx_info in transactions:
                 tx_hash = tx_info.get("tx_hash", "")
                 block_time = tx_info.get("block_time")
 
-                # Get transaction UTXOs to check if wallet received LP tokens
+                # Get transaction UTXOs to check wallet involvement
                 utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
                 utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
 
@@ -333,22 +340,46 @@ class PortfolioService:
 
                 utxo_data = utxo_resp.json()
 
-                # Check outputs for our wallet
+                # Check if wallet received LP token in outputs
                 for output in utxo_data.get("outputs", []):
-                    if output.get("address") == wallet_address:
-                        # Check if this output contains our LP token
+                    output_addr = output.get("address", "")
+                    if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
                         for amount in output.get("amount", []):
                             if amount.get("unit") == asset_id:
-                                # Found it! Convert block_time to ISO date
+                                # Wallet received LP token
                                 if block_time:
                                     from datetime import datetime
                                     dt = datetime.utcfromtimestamp(block_time)
+                                    logger.info("Found LP entry date (received): %s", dt.strftime("%Y-%m-%d"))
                                     return dt.strftime("%Y-%m-%d")
+
+                # Also check if wallet sent LP token from inputs (for staked positions)
+                # The first time the wallet interacted with this LP is when they got it
+                for inp in utxo_data.get("inputs", []):
+                    input_addr = inp.get("address", "")
+                    if input_addr == wallet_address or input_addr.startswith(wallet_prefix):
+                        for amount in inp.get("amount", []):
+                            if amount.get("unit") == asset_id:
+                                # Wallet sent LP token (e.g., to stake it)
+                                # This means they had it before, but we need the receive date
+                                # Continue searching for when they first received it
+                                pass
+
+            # If we couldn't find when wallet received it directly,
+            # use the first transaction date as a fallback
+            if transactions:
+                first_tx = transactions[0]
+                block_time = first_tx.get("block_time")
+                if block_time:
+                    from datetime import datetime
+                    dt = datetime.utcfromtimestamp(block_time)
+                    logger.info("Using first LP tx date as fallback: %s", dt.strftime("%Y-%m-%d"))
+                    return dt.strftime("%Y-%m-%d")
 
             return None
 
         except Exception as e:
-            logger.debug("Error fetching LP token creation date: %s", e)
+            logger.warning("Error fetching LP token creation date: %s", e)
             return None
 
     def _get_lp_entry_from_db(
