@@ -326,12 +326,20 @@ function renderFarmPositionCard(pos) {
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
 
+    // Impermanent loss display (same as LP positions)
+    const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
+    const ilPercent = hasIL ? pos.il_percent : null;
+    const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
+    const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
+    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
+
     return `
         <div class="position-card farm-position">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
                     <span class="farm-badge">Staked</span>
+                    ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
                     <div class="value-display">${adaValue}</div>
@@ -339,15 +347,19 @@ function renderFarmPositionCard(pos) {
                 </div>
             </div>
             <div class="row g-3">
-                <div class="col-4">
+                <div class="col-3">
                     <div class="data-label">Farm APR</div>
                     <div class="apr-value">${apr}</div>
                 </div>
-                <div class="col-4">
+                <div class="col-3">
+                    <div class="data-label">IL</div>
+                    <div class="il-value ${ilClass}">${ilDisplay}</div>
+                </div>
+                <div class="col-3">
                     <div class="data-label">Pool Share</div>
                     <div class="data-value token-amount">${poolShare}</div>
                 </div>
-                <div class="col-4">
+                <div class="col-3">
                     <div class="data-label">Your Tokens</div>
                     <div class="token-amount">
                         ${tokenAAmount} ${tokenASymbol}<br>

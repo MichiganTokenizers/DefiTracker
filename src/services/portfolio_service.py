@@ -528,6 +528,125 @@ class PortfolioService:
             logger.debug("Error calculating IL from ratios: %s", e)
             return result
 
+    def _calculate_farm_position_il(
+        self,
+        wallet_address: str,
+        policy_id: str,
+        asset_name_hex: str,
+        protocol: str,
+        pool_name: str,
+        lp_value_info: Dict,
+    ) -> Dict[str, any]:
+        """
+        Calculate impermanent loss data for a farm position.
+
+        This method encapsulates the IL calculation logic to be reused by all
+        farm position fetching methods (WingRiders, SundaeSwap, Minswap).
+
+        Args:
+            wallet_address: User's wallet address
+            policy_id: LP token policy ID
+            asset_name_hex: LP token asset name (hex encoded)
+            protocol: Protocol name (minswap, sundaeswap, wingriders)
+            pool_name: Human-readable pool name (e.g., "NIGHT/ADA")
+            lp_value_info: Dict with token_a, token_b info for ratio calculation
+
+        Returns:
+            Dict with IL fields: entry_date, entry_price_ratio, current_price_ratio,
+                                 il_percent, il_usd
+        """
+        il_data = {
+            "entry_date": None,
+            "entry_price_ratio": None,
+            "current_price_ratio": None,
+            "il_percent": None,
+            "il_usd": None,
+        }
+
+        try:
+            # Get token symbols for validation
+            token_a_info = lp_value_info.get("token_a", {})
+            token_b_info = lp_value_info.get("token_b", {})
+            token_a_symbol = token_a_info.get("symbol", "?")
+            token_b_symbol = token_b_info.get("symbol", "?")
+
+            logger.info(
+                "Farm IL calculation for %s (%s): token_a=%s, token_b=%s",
+                pool_name, protocol, token_a_symbol, token_b_symbol
+            )
+
+            if token_a_symbol == "?" or token_b_symbol == "?":
+                logger.debug("Skipping IL calculation - missing token symbols")
+                return il_data
+
+            # Calculate current price ratio from reserves
+            current_ratio = self._calculate_current_price_ratio(lp_value_info)
+            if current_ratio:
+                il_data["current_price_ratio"] = round(current_ratio, 6)
+
+            # Check if we have stored entry data
+            stored_entry = self._get_lp_entry_from_db(
+                wallet_address, policy_id, asset_name_hex
+            )
+            logger.info(
+                "Farm DB lookup for %s: stored_entry=%s, current_ratio=%s",
+                pool_name, stored_entry, current_ratio
+            )
+
+            if stored_entry and stored_entry.get("entry_price_ratio"):
+                # Use stored entry data
+                il_data["entry_date"] = stored_entry["entry_date"]
+                il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
+
+                # Calculate IL from ratios
+                if current_ratio:
+                    il_result = self._calculate_il_from_ratios(
+                        stored_entry["entry_price_ratio"],
+                        current_ratio,
+                        lp_value_info.get("ada_value")
+                    )
+                    il_data.update(il_result)
+                    logger.info(
+                        "Calculated farm IL for %s: %.2f%% (entry: %s, ratio: %.4f -> %.4f)",
+                        pool_name, il_result.get("il_percent", 0),
+                        stored_entry["entry_date"],
+                        stored_entry["entry_price_ratio"], current_ratio
+                    )
+            else:
+                # First time seeing this position - get entry date and store
+                logger.info("No stored entry for farm %s, fetching creation date...", pool_name)
+                entry_date = self._get_lp_token_creation_date(
+                    wallet_address, policy_id, asset_name_hex
+                )
+                logger.info("Got entry_date=%s for farm %s", entry_date, pool_name)
+
+                if entry_date and current_ratio:
+                    # Store the current ratio as entry ratio
+                    self._store_lp_entry(
+                        wallet_address=wallet_address,
+                        policy_id=policy_id,
+                        asset_name=asset_name_hex,
+                        protocol=protocol,
+                        pool_name=pool_name,
+                        entry_date=entry_date,
+                        entry_price_ratio=current_ratio,
+                        token_a_symbol=token_a_symbol,
+                        token_b_symbol=token_b_symbol,
+                    )
+                    il_data["entry_date"] = entry_date
+                    il_data["entry_price_ratio"] = round(current_ratio, 6)
+                    # IL is 0% for newly stored positions
+                    il_data["il_percent"] = 0.0
+                    logger.info(
+                        "Stored new farm LP entry for %s: date=%s, ratio=%.4f",
+                        pool_name, entry_date, current_ratio
+                    )
+
+        except Exception as e:
+            logger.warning("Error calculating farm position IL for %s: %s", pool_name, e)
+
+        return il_data
+
     def _get_minswap_pool_metrics(self, policy_id: str, asset_name: str) -> Optional[Dict]:
         """
         Fetch pool metrics from Minswap API.
@@ -1424,6 +1543,12 @@ class PortfolioService:
                                 # Farm APR replaces base APR for staked positions
                                 lp_value_info["apr"] = farm_apr
 
+                        # Calculate IL for farm position
+                        il_data = self._calculate_farm_position_il(
+                            wallet_address, policy_id, asset_name_hex,
+                            "wingriders", pool_name, lp_value_info
+                        )
+
                         position = FarmPosition(
                             protocol="wingriders",
                             pool=pool_name,
@@ -1434,6 +1559,11 @@ class PortfolioService:
                             usd_value=lp_value_info.get("ada_value"),
                             current_apr=lp_value_info.get("apr"),
                             pool_share_percent=lp_value_info.get("pool_share_percent"),
+                            entry_date=il_data.get("entry_date"),
+                            entry_price_ratio=il_data.get("entry_price_ratio"),
+                            current_price_ratio=il_data.get("current_price_ratio"),
+                            il_percent=il_data.get("il_percent"),
+                            il_usd=il_data.get("il_usd"),
                         )
                         positions.append(position)
                         logger.debug(
@@ -1629,6 +1759,12 @@ class PortfolioService:
                     if farm_apr:
                         logger.debug("Found SundaeSwap APR from database: %s = %.2f%%", pool_name, farm_apr)
 
+                # Calculate IL for farm position
+                il_data = self._calculate_farm_position_il(
+                    wallet_address, policy_id, asset_name_hex,
+                    "sundaeswap", pool_name, lp_value_info
+                )
+
                 position = FarmPosition(
                     protocol="sundaeswap",
                     pool=pool_name,
@@ -1640,6 +1776,11 @@ class PortfolioService:
                     current_apr=farm_apr,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
+                    entry_date=il_data.get("entry_date"),
+                    entry_price_ratio=il_data.get("entry_price_ratio"),
+                    current_price_ratio=il_data.get("current_price_ratio"),
+                    il_percent=il_data.get("il_percent"),
+                    il_usd=il_data.get("il_usd"),
                 )
                 positions.append(position)
 
@@ -1824,9 +1965,16 @@ class PortfolioService:
                         logger.debug("Found %s farm APR from database: %s = %.2f%%",
                                      lp_info["protocol"], pool_name, farm_apr)
 
+                # Calculate IL for farm position
+                final_pool_name = pool_name or f"{lp_info['protocol'].upper()} LP"
+                il_data = self._calculate_farm_position_il(
+                    wallet_address, lp_info["policy_id"], lp_info["asset_name_hex"],
+                    lp_info["protocol"], final_pool_name, lp_value_info
+                )
+
                 position = FarmPosition(
                     protocol=lp_info["protocol"],
-                    pool=pool_name or f"{lp_info['protocol'].upper()} LP",
+                    pool=final_pool_name,
                     lp_amount=lp_info["amount"],
                     farm_type="yield_farming",
                     token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
@@ -1835,6 +1983,11 @@ class PortfolioService:
                     current_apr=farm_apr,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
+                    entry_date=il_data.get("entry_date"),
+                    entry_price_ratio=il_data.get("entry_price_ratio"),
+                    current_price_ratio=il_data.get("current_price_ratio"),
+                    il_percent=il_data.get("il_percent"),
+                    il_usd=il_data.get("il_usd"),
                 )
                 positions.append(position)
 
