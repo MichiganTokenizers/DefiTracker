@@ -1565,6 +1565,16 @@ async function loadSingleAssetChart() {
         'wingriders': '#16a34a'         // Green (fallback)
     };
 
+    // Protocol display order: Minswap, SundaeSwap, WingRiders
+    const protocolOrder = ['minswap', 'sundaeswap', 'wingriders'];
+    assetData.sort((a, b) => {
+        const orderA = protocolOrder.indexOf(a.protocol);
+        const orderB = protocolOrder.indexOf(b.protocol);
+        const posA = orderA === -1 ? 999 : orderA;
+        const posB = orderB === -1 ? 999 : orderB;
+        return posA - posB;
+    });
+
     // Build protocol version map with fixed colors
     const protocolVersionMap = {};
     assetData.forEach(protocolData => {

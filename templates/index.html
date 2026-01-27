@@ -228,6 +228,119 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
+    /* How It Works Section */
+    .how-it-works {
+        background: radial-gradient(ellipse 100% 80% at 50% 50%, var(--sand-dune) 50%, transparent 95%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin-top: 2rem;
+    }
+    .how-it-works h2 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .steps {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    .step {
+        text-align: center;
+        max-width: 220px;
+    }
+    .step-number {
+        width: 40px;
+        height: 40px;
+        background: var(--cardano-color);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin: 0 auto 0.75rem;
+    }
+    .step-text {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+
+    /* Newsletter Section */
+    .newsletter-section {
+        background: radial-gradient(ellipse 100% 80% at 50% 50%, var(--sand-dune) 50%, transparent 95%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin-top: 2rem;
+        text-align: center;
+    }
+    .newsletter-section h2 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+        margin-bottom: 0.5rem;
+    }
+    .newsletter-section p {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+    .newsletter-form {
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .newsletter-form input[type="email"] {
+        padding: 0.75rem 1rem;
+        border: 2px solid rgba(0, 51, 173, 0.2);
+        border-radius: 10px;
+        font-size: 0.95rem;
+        width: 280px;
+        max-width: 100%;
+        transition: border-color 0.2s ease;
+    }
+    .newsletter-form input[type="email"]:focus {
+        outline: none;
+        border-color: var(--cardano-color);
+    }
+    .newsletter-form button {
+        padding: 0.75rem 1.5rem;
+        background: var(--cardano-color);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .newsletter-form button:hover {
+        background: #002a8a;
+        transform: translateY(-2px);
+    }
+    .social-link {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    .social-link a {
+        color: var(--cardano-color);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .social-link a:hover {
+        text-decoration: underline;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
         .hero-card {
@@ -268,9 +381,9 @@
         <div class="col-lg-5 col-md-6">
             <div class="hero-card">
                 <img src="/static/YieldLife_Logo_transparent_withText.png" alt="YieldLife" class="hero-logo">
-                <h1 class="hero-tagline">Historical Defi Analysis</h1>
+                <h1 class="hero-tagline">Track Cardano DeFi Yields—Past and Present</h1>
                 <p class="hero-description">
-                    We collect and store historical yield data from DeFi protocols on Cardano, enabling you make present Defi decisions with full knowledge of the past. Sign up with email or Cardano wallet to save your favorite charts and enroll to recieve our monthly newsletter.
+                    Historical yield data from Cardano DeFi protocols—so you can make decisions with full knowledge of the past, not just a snapshot of today. Sign up to save charts and get monthly insights.
                 </p>
             </div>
         </div>
@@ -305,6 +418,44 @@
                         <span class="nav-link-desc">Monitor range specific pool positions</span>
                     </a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="how-it-works">
+                <h2>How It Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <p class="step-text">Browse yields across Cardano DEXs and lending markets</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <p class="step-text">View historical trends, not just current APY</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <p class="step-text">Save charts and track your favorite pools</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Newsletter Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="newsletter-section">
+                <h2>Stay in the Loop</h2>
+                <p>Weekly yield analysis, protocol deep-dives, and Cardano DeFi insights.</p>
+                <form class="newsletter-form" action="#" method="post">
+                    <input type="email" name="email" placeholder="Enter your email" required>
+                    <button type="submit">Subscribe</button>
+                </form>
+                <p class="social-link">Follow <a href="https://x.com/YieldLife" target="_blank" rel="noopener">@YieldLife on X</a> for real-time updates</p>
             </div>
         </div>
     </div>
