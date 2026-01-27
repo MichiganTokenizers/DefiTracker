@@ -10,6 +10,8 @@ from typing import Dict, List, Optional
 
 import requests
 
+from src.database.connection import DatabaseConnection
+
 logger = logging.getLogger(__name__)
 
 # Blockfrost API configuration (free tier: 50,000 requests/day)
@@ -158,6 +160,104 @@ class PortfolioService:
 
         # Cache for pool metrics data
         self._pool_metrics_cache: Dict[str, Dict] = {}
+
+        # Database connection for APR lookups
+        self._db = DatabaseConnection()
+
+    def _get_pool_apr_from_db(self, pool_name: str, protocol: str) -> Optional[float]:
+        """
+        Look up the latest APR for a pool from the database.
+
+        Args:
+            pool_name: Pool pair name (e.g., "NIGHT/ADA" or "ADA-NIGHT")
+            protocol: Protocol name (e.g., "sundaeswap", "minswap", "wingriders")
+
+        Returns:
+            APR as float percentage, or None if not found
+        """
+        # Normalize pool name: convert "/" to "-" for database lookup
+        # Database stores as "NIGHT-ADA", UI might have "NIGHT/ADA"
+        db_pool_name = pool_name.replace("/", "-")
+
+        # Also try with reversed order (ADA-NIGHT vs NIGHT-ADA)
+        parts = db_pool_name.split("-")
+        if len(parts) == 2:
+            reversed_pool_name = f"{parts[1]}-{parts[0]}"
+        else:
+            reversed_pool_name = db_pool_name
+
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                # Query for latest APR snapshot matching pool and protocol
+                cur.execute("""
+                    SELECT s.apr, s.farm_apr, s.fee_apr, s.staking_apr
+                    FROM apr_snapshots s
+                    JOIN assets a ON s.asset_id = a.asset_id
+                    JOIN protocols p ON s.protocol_id = p.protocol_id
+                    WHERE (LOWER(a.symbol) = LOWER(%s) OR LOWER(a.symbol) = LOWER(%s))
+                      AND LOWER(p.name) = LOWER(%s)
+                    ORDER BY s.timestamp DESC
+                    LIMIT 1
+                """, (db_pool_name, reversed_pool_name, protocol))
+
+                row = cur.fetchone()
+                if row:
+                    # Return total APR (sum of all components if available)
+                    base_apr = float(row[0]) if row[0] else 0
+                    farm_apr = float(row[1]) if row[1] else 0
+                    fee_apr = float(row[2]) if row[2] else 0
+                    staking_apr = float(row[3]) if row[3] else 0
+
+                    # If farm_apr is set, use it as total (already includes all components)
+                    if farm_apr > 0:
+                        return round(farm_apr, 2)
+                    # Otherwise use base APR
+                    return round(base_apr, 2) if base_apr > 0 else None
+
+                return None
+        except Exception as e:
+            logger.debug("Error looking up APR for %s/%s: %s", pool_name, protocol, e)
+            return None
+        finally:
+            self._db.return_connection(conn)
+
+    def _normalize_pool_name(self, ticker_a: str, ticker_b: str) -> str:
+        """
+        Normalize pool pair name to standard format: TOKEN/ADA or TOKEN/STABLECOIN.
+
+        Rules:
+        1. ADA should always be second (e.g., NIGHT/ADA not ADA/NIGHT)
+        2. For stablecoin pairs, use alphabetical order
+        3. Common stablecoins: USDA, USDC, USDT, DJED, IUSD, DAI, USDM
+
+        Args:
+            ticker_a: First token ticker
+            ticker_b: Second token ticker
+
+        Returns:
+            Normalized pool name in format "TOKEN/ADA" or "TOKEN/STABLECOIN"
+        """
+        stablecoins = {"USDA", "USDC", "USDT", "DJED", "IUSD", "DAI", "USDM", "EURC", "PYUSD"}
+
+        # If ticker_a is ADA and ticker_b is not, swap them
+        if ticker_a == "ADA" and ticker_b != "ADA":
+            return f"{ticker_b}/ADA"
+
+        # If ticker_b is ADA, keep as is
+        if ticker_b == "ADA":
+            return f"{ticker_a}/ADA"
+
+        # For stablecoin pairs (no ADA), put stablecoin second
+        if ticker_a in stablecoins and ticker_b not in stablecoins:
+            return f"{ticker_b}/{ticker_a}"
+        if ticker_b in stablecoins and ticker_a not in stablecoins:
+            return f"{ticker_a}/{ticker_b}"
+
+        # Both are stablecoins or neither - use alphabetical order
+        if ticker_a <= ticker_b:
+            return f"{ticker_a}/{ticker_b}"
+        return f"{ticker_b}/{ticker_a}"
 
     def _get_minswap_pool_metrics(self, policy_id: str, asset_name: str) -> Optional[Dict]:
         """
@@ -730,31 +830,31 @@ class PortfolioService:
                 pool_data = self._get_sundaeswap_pool_metrics(asset_name_hex)
                 if pool_data:
                     lp_value_info = self._calculate_sundaeswap_lp_value(quantity, pool_data)
-                    # Build pool name from asset tickers
+                    # Build pool name from asset tickers (normalized)
                     asset_a = pool_data.get("assetA", {})
                     asset_b = pool_data.get("assetB", {})
                     ticker_a = asset_a.get("ticker", "?")
                     ticker_b = asset_b.get("ticker", "?")
-                    if ticker_a and ticker_b:
-                        pool_name = f"{ticker_a}/{ticker_b}"
+                    if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                        pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
             elif protocol == "minswap":
                 pool_metrics = self._get_minswap_pool_metrics(policy_id, asset_name_hex)
                 if pool_metrics:
                     lp_value_info = self._calculate_lp_value(quantity, pool_metrics)
-                    # Build pool name from asset metadata
+                    # Build pool name from asset metadata (normalized)
                     asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
                     asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
                     ticker_a = asset_a.get("ticker", "?")
                     ticker_b = asset_b.get("ticker", "?")
-                    if ticker_a and ticker_b:
-                        pool_name = f"{ticker_a}/{ticker_b}"
+                    if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                        pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
             elif protocol == "wingriders":
                 pool_data = self._get_wingriders_pool_metrics(policy_id, asset_name_hex)
                 if pool_data:
                     lp_value_info = self._calculate_wingriders_lp_value(quantity, pool_data)
-                    # Build pool name from token tickers
+                    # Build pool name from token tickers (normalized)
                     token_a = pool_data.get("tokenA", {})
                     token_b = pool_data.get("tokenB", {})
                     ticker_map = pool_data.get("_ticker_map", {})
@@ -767,12 +867,19 @@ class PortfolioService:
 
                     ticker_a = get_ticker(token_a)
                     ticker_b = get_ticker(token_b)
-                    if ticker_a and ticker_b:
-                        pool_name = f"{ticker_a}/{ticker_b}"
+                    if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                        pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
             # Fall back to Blockfrost metadata for pool name
             if not pool_name:
                 pool_name = self._get_pool_name_from_asset(policy_id, asset_name_hex, protocol)
+
+            # Look up APR from database if not available from protocol API
+            position_apr = lp_value_info.get("apr")
+            if not position_apr and pool_name and pool_name != f"{protocol.upper()} LP":
+                position_apr = self._get_pool_apr_from_db(pool_name, protocol)
+                if position_apr:
+                    logger.debug("Found %s APR from database: %s = %.2f%%", protocol, pool_name, position_apr)
 
             return LPPosition(
                 protocol=protocol,
@@ -781,7 +888,7 @@ class PortfolioService:
                 token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
                 token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                 usd_value=lp_value_info.get("ada_value"),
-                current_apr=lp_value_info.get("apr"),
+                current_apr=position_apr,
                 pool_share_percent=lp_value_info.get("pool_share_percent"),
             )
         except Exception as e:
@@ -947,7 +1054,7 @@ class PortfolioService:
                         if pool_data:
                             lp_value_info = self._calculate_wingriders_lp_value(quantity, pool_data)
 
-                            # Build pool name from token tickers
+                            # Build pool name from token tickers (normalized)
                             token_a = pool_data.get("tokenA", {})
                             token_b = pool_data.get("tokenB", {})
                             ticker_map = pool_data.get("_ticker_map", {})
@@ -960,8 +1067,8 @@ class PortfolioService:
 
                             ticker_a = get_ticker(token_a)
                             ticker_b = get_ticker(token_b)
-                            if ticker_a and ticker_b:
-                                pool_name = f"{ticker_a}/{ticker_b}"
+                            if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                                pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
                             # Fetch farm APR (separate from pool APR)
                             farm_apr = self._get_wingriders_farm_apr(policy_id, asset_name_hex)
@@ -1159,13 +1266,20 @@ class PortfolioService:
 
                 if pool_data:
                     lp_value_info = self._calculate_sundaeswap_lp_value(lp_amount, pool_data)
-                    # Build pool name from asset tickers
+                    # Build pool name from asset tickers (normalized)
                     asset_a = pool_data.get("assetA", {})
                     asset_b = pool_data.get("assetB", {})
                     ticker_a = asset_a.get("ticker", "?")
                     ticker_b = asset_b.get("ticker", "?")
-                    if ticker_a and ticker_b:
-                        pool_name = f"{ticker_a}/{ticker_b}"
+                    if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                        pool_name = self._normalize_pool_name(ticker_a, ticker_b)
+
+                # Look up APR from database if not available from API
+                farm_apr = lp_value_info.get("apr")
+                if not farm_apr and pool_name != "SundaeSwap LP":
+                    farm_apr = self._get_pool_apr_from_db(pool_name, "sundaeswap")
+                    if farm_apr:
+                        logger.debug("Found SundaeSwap APR from database: %s = %.2f%%", pool_name, farm_apr)
 
                 position = FarmPosition(
                     protocol="sundaeswap",
@@ -1175,7 +1289,7 @@ class PortfolioService:
                     token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
                     token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                     usd_value=lp_value_info.get("ada_value"),
-                    current_apr=lp_value_info.get("apr"),
+                    current_apr=farm_apr,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
                 )
@@ -1308,13 +1422,13 @@ class PortfolioService:
                     )
                     if pool_metrics:
                         lp_value_info = self._calculate_lp_value(lp_info["amount"], pool_metrics)
-                        # Use pool name from metrics if available
+                        # Use pool name from metrics if available (normalized)
                         asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
                         asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
                         ticker_a = asset_a.get("ticker", "?")
                         ticker_b = asset_b.get("ticker", "?")
-                        if ticker_a and ticker_b:
-                            pool_name = f"{ticker_a}/{ticker_b}"
+                        if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                            pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
                 elif lp_info["protocol"] == "sundaeswap":
                     pool_data = self._get_sundaeswap_pool_metrics(lp_info["asset_name_hex"])
@@ -1322,13 +1436,13 @@ class PortfolioService:
                         lp_value_info = self._calculate_sundaeswap_lp_value(
                             lp_info["amount"], pool_data
                         )
-                        # Use pool name from API
+                        # Use pool name from API (normalized)
                         asset_a = pool_data.get("assetA", {})
                         asset_b = pool_data.get("assetB", {})
                         ticker_a = asset_a.get("ticker", "?")
                         ticker_b = asset_b.get("ticker", "?")
-                        if ticker_a and ticker_b:
-                            pool_name = f"{ticker_a}/{ticker_b}"
+                        if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                            pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
                 elif lp_info["protocol"] == "wingriders":
                     pool_data = self._get_wingriders_pool_metrics(
@@ -1338,7 +1452,7 @@ class PortfolioService:
                         lp_value_info = self._calculate_wingriders_lp_value(
                             lp_info["amount"], pool_data
                         )
-                        # Use pool name from API
+                        # Use pool name from API (normalized)
                         token_a = pool_data.get("tokenA", {})
                         token_b = pool_data.get("tokenB", {})
                         ticker_map = pool_data.get("_ticker_map", {})
@@ -1351,8 +1465,16 @@ class PortfolioService:
 
                         ticker_a = get_ticker(token_a)
                         ticker_b = get_ticker(token_b)
-                        if ticker_a and ticker_b:
-                            pool_name = f"{ticker_a}/{ticker_b}"
+                        if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                            pool_name = self._normalize_pool_name(ticker_a, ticker_b)
+
+                # Look up APR from database if not available from protocol API
+                farm_apr = lp_value_info.get("apr")
+                if not farm_apr and pool_name and pool_name != f"{lp_info['protocol'].upper()} LP":
+                    farm_apr = self._get_pool_apr_from_db(pool_name, lp_info["protocol"])
+                    if farm_apr:
+                        logger.debug("Found %s farm APR from database: %s = %.2f%%",
+                                     lp_info["protocol"], pool_name, farm_apr)
 
                 position = FarmPosition(
                     protocol=lp_info["protocol"],
@@ -1362,7 +1484,7 @@ class PortfolioService:
                     token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
                     token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                     usd_value=lp_value_info.get("ada_value"),  # ADA value for now
-                    current_apr=lp_value_info.get("apr"),
+                    current_apr=farm_apr,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
                 )
