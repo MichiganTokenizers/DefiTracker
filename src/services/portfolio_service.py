@@ -652,7 +652,17 @@ class PortfolioService:
                 logger.info("Got entry_date=%s for farm %s", entry_date, pool_name)
 
                 if entry_date and current_ratio:
-                    # Store the current ratio as entry ratio
+                    # Try to fetch historical price ratio at entry date
+                    historical_ratio = None
+                    if protocol == "minswap":
+                        historical_ratio = self._get_minswap_historical_price_ratio(
+                            policy_id, asset_name_hex, entry_date
+                        )
+
+                    # Use historical ratio if available, otherwise use current
+                    entry_ratio = historical_ratio if historical_ratio else current_ratio
+                    ratio_source = "historical" if historical_ratio else "current"
+
                     self._store_lp_entry(
                         wallet_address=wallet_address,
                         policy_id=policy_id,
@@ -660,18 +670,31 @@ class PortfolioService:
                         protocol=protocol,
                         pool_name=pool_name,
                         entry_date=entry_date,
-                        entry_price_ratio=current_ratio,
+                        entry_price_ratio=entry_ratio,
                         token_a_symbol=token_a_symbol,
                         token_b_symbol=token_b_symbol,
                     )
                     il_data["entry_date"] = entry_date
-                    il_data["entry_price_ratio"] = round(current_ratio, 6)
-                    # IL is 0% for newly stored positions
-                    il_data["il_percent"] = 0.0
-                    logger.info(
-                        "Stored new farm LP entry for %s: date=%s, ratio=%.4f",
-                        pool_name, entry_date, current_ratio
-                    )
+                    il_data["entry_price_ratio"] = round(entry_ratio, 6)
+
+                    # Calculate IL if we have historical data
+                    if historical_ratio:
+                        il_result = self._calculate_il_from_ratios(
+                            entry_ratio, current_ratio, lp_value_info.get("ada_value")
+                        )
+                        il_data.update(il_result)
+                        logger.info(
+                            "Stored farm LP entry for %s with %s ratio: date=%s, entry=%.4f, current=%.4f, IL=%.2f%%",
+                            pool_name, ratio_source, entry_date, entry_ratio, current_ratio,
+                            il_result.get("il_percent", 0)
+                        )
+                    else:
+                        # No historical data - IL starts at 0%
+                        il_data["il_percent"] = 0.0
+                        logger.info(
+                            "Stored new farm LP entry for %s (no historical data): date=%s, ratio=%.4f",
+                            pool_name, entry_date, entry_ratio
+                        )
 
         except Exception as e:
             logger.warning("Error calculating farm position IL for %s: %s", pool_name, e)
@@ -707,6 +730,67 @@ class PortfolioService:
                 logger.debug("Minswap pool metrics not found for %s: %d", lp_asset[:30], resp.status_code)
         except Exception as e:
             logger.warning("Error fetching Minswap pool metrics: %s", e)
+
+        return None
+
+    def _get_minswap_historical_price_ratio(
+        self, policy_id: str, asset_name: str, target_date: str
+    ) -> Optional[float]:
+        """
+        Fetch historical price ratio from Minswap candlestick API.
+
+        Uses the OHLCV candlestick endpoint to get the price ratio (token_b/token_a)
+        at a specific date.
+
+        Args:
+            policy_id: LP token policy ID
+            asset_name: LP token asset name (hex)
+            target_date: ISO date string (e.g., "2024-06-15")
+
+        Returns:
+            Price ratio (close price) at the target date, or None if not found
+        """
+        from datetime import datetime, timedelta
+
+        lp_asset = f"{policy_id}.{asset_name}"
+
+        try:
+            # Parse target date and create time range
+            dt = datetime.strptime(target_date, "%Y-%m-%d")
+            # Use start of day and end of day (UTC timestamps in milliseconds)
+            start_time = int(dt.timestamp() * 1000)
+            end_time = int((dt + timedelta(days=1)).timestamp() * 1000)
+
+            url = f"{MINSWAP_API_URL}/v1/pools/{lp_asset}/price/candlestick"
+            params = {
+                "start_time": start_time,
+                "end_time": end_time,
+                "interval": "1d",  # Daily candles
+                "limit": 1,
+            }
+
+            resp = self.session.get(url, params=params, timeout=self.timeout)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                # Data is list of candles: {open, high, low, close, volume, timestamp}
+                if data and len(data) > 0:
+                    candle = data[0]
+                    close_price = candle.get("close")
+                    if close_price:
+                        logger.info(
+                            "Got historical price ratio for %s at %s: %.6f",
+                            lp_asset[:30], target_date, float(close_price)
+                        )
+                        return float(close_price)
+                logger.debug("No candlestick data for %s at %s", lp_asset[:30], target_date)
+            else:
+                logger.debug(
+                    "Minswap candlestick API returned %d for %s",
+                    resp.status_code, lp_asset[:30]
+                )
+        except Exception as e:
+            logger.warning("Error fetching Minswap historical price: %s", e)
 
         return None
 
