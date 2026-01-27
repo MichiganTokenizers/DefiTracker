@@ -64,6 +64,17 @@ async function loadPortfolioPositions() {
             throw new Error(data.message || data.error || 'Failed to load positions');
         }
 
+        // Debug: Log raw LP positions data to check IL fields
+        console.log('LP Positions from API:', data.lp_positions);
+        if (data.lp_positions && data.lp_positions.length > 0) {
+            console.log('First LP position IL data:', {
+                il_percent: data.lp_positions[0].il_percent,
+                entry_date: data.lp_positions[0].entry_date,
+                entry_price_ratio: data.lp_positions[0].entry_price_ratio,
+                current_price_ratio: data.lp_positions[0].current_price_ratio
+            });
+        }
+
         // Organize positions by protocol
         const positionsByProtocol = organizeByProtocol(
             data.lp_positions || [],

@@ -1159,6 +1159,8 @@ class PortfolioService:
                 token_a_symbol = token_a_info.get("symbol", "?")
                 token_b_symbol = token_b_info.get("symbol", "?")
 
+                logger.info("IL calculation for %s: token_a=%s, token_b=%s", pool_name, token_a_symbol, token_b_symbol)
+
                 if token_a_symbol != "?" and token_b_symbol != "?":
                     # Calculate current price ratio from reserves
                     current_ratio = self._calculate_current_price_ratio(lp_value_info)
@@ -1169,6 +1171,7 @@ class PortfolioService:
                     stored_entry = self._get_lp_entry_from_db(
                         wallet_address, policy_id, asset_name_hex
                     )
+                    logger.info("DB lookup for %s: stored_entry=%s, current_ratio=%s", pool_name, stored_entry, current_ratio)
 
                     if stored_entry and stored_entry.get("entry_price_ratio"):
                         # Use stored entry data
@@ -1183,7 +1186,7 @@ class PortfolioService:
                                 lp_value_info.get("ada_value")
                             )
                             il_data.update(il_result)
-                            logger.debug(
+                            logger.info(
                                 "Calculated IL for %s: %.2f%% (entry: %s, ratio: %.4f -> %.4f)",
                                 pool_name, il_result.get("il_percent", 0),
                                 stored_entry["entry_date"],
@@ -1191,9 +1194,11 @@ class PortfolioService:
                             )
                     else:
                         # First time seeing this position - get entry date and store
+                        logger.info("No stored entry for %s, fetching creation date...", pool_name)
                         entry_date = self._get_lp_token_creation_date(
                             wallet_address, policy_id, asset_name_hex
                         )
+                        logger.info("Got entry_date=%s for %s", entry_date, pool_name)
 
                         if entry_date and current_ratio:
                             # Store the current ratio as entry ratio (best we can do)
@@ -1218,6 +1223,7 @@ class PortfolioService:
                                 pool_name, entry_date, current_ratio
                             )
 
+            logger.info("Final il_data for %s: %s", pool_name, il_data)
             return LPPosition(
                 protocol=protocol,
                 pool=pool_name or f"{protocol.upper()} LP",
