@@ -765,9 +765,9 @@ const protocolLineStyles = {
     'liqwid': { borderDash: [10, 5], pointStyle: 'star' }
 };
 
-// Color palette
+// Color palette - blue, orange, red first
 const pairColors = [
-    '#16a34a', '#2563eb', '#d97706', '#dc2626', '#7c3aed',
+    '#2563eb', '#d97706', '#dc2626', '#16a34a', '#7c3aed',
     '#db2777', '#0d9488', '#ea580c', '#6d28d9', '#0891b2',
     '#65a30d', '#e11d48', '#0f766e', '#c2410c', '#9333ea'
 ];
@@ -1000,7 +1000,19 @@ async function loadChart() {
             fill: false
         };
     }).filter(ds => ds.data.length > 0);
-    
+
+    // Sort datasets by asset (symbol) first, then by protocol
+    datasets.sort((a, b) => {
+        const symbolA = a.label.split(' (')[0];
+        const symbolB = b.label.split(' (')[0];
+        if (symbolA !== symbolB) {
+            return symbolA.localeCompare(symbolB);
+        }
+        const protocolA = a.label.split('(')[1]?.replace(')', '') || '';
+        const protocolB = b.label.split('(')[1]?.replace(')', '') || '';
+        return protocolA.localeCompare(protocolB);
+    });
+
     const aprTypeLabel = is1d ? '1-Day APR' : selectedAprType === '7d' ? '7-Day Avg APR' : '30-Day Avg APR';
 
     // Handle empty datasets gracefully
@@ -1543,29 +1555,27 @@ async function loadSingleAssetChart() {
     const datasets = [];
     const tableData = [];
     
-    // Protocol colors - assign unique color per protocol+version
-    const protocolColors = [
-        '#16a34a',   // Green
-        '#d97706',   // Orange
-        '#2563eb',   // Blue
-        '#0891b2',   // Cyan
-        '#dc2626',   // Red
-        '#9333ea'    // Purple
-    ];
-    
-    // Build a unique key for each protocol+version and assign a unique color
+    // Fixed protocol colors - consistent regardless of which protocols are toggled
+    const protocolColorMap = {
+        'minswap': '#2563eb',           // Blue
+        'wingriders_v2': '#d97706',     // Orange
+        'sundaeswap_v3': '#dc2626',     // Red
+        'wingriders_v1': '#0891b2',     // Cyan
+        'sundaeswap': '#9333ea',        // Purple (fallback)
+        'wingriders': '#16a34a'         // Green (fallback)
+    };
+
+    // Build protocol version map with fixed colors
     const protocolVersionMap = {};
-    let colorIndex = 0;
     assetData.forEach(protocolData => {
         const protocol = protocolData.protocol;
         const version = protocolData.version;
         const key = version ? `${protocol}_${version.toLowerCase()}` : protocol;
-        
+
         if (!protocolVersionMap[key]) {
             protocolVersionMap[key] = {
-                color: protocolColors[colorIndex % protocolColors.length]
+                color: protocolColorMap[key] || protocolColorMap[protocol] || '#666666'
             };
-            colorIndex++;
         }
     });
     
@@ -2163,7 +2173,7 @@ function renderBreakdownCharts() {
                 </div>
                 <div class="breakdown-filter">
                     <select id="breakdownFilter${index}" onchange="updateBreakdownChart(${index})">
-                        <option value="all">All Pools (${weightedAvgYield}% Weight Avg 1d Yield)</option>
+                        <option value="all">All Pools (${weightedAvgYield}% Avg 1d Yield)</option>
                         ${poolOptions}
                     </select>
                 </div>
