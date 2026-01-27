@@ -253,18 +253,150 @@
         text-align: center;
         max-width: 220px;
     }
-    .step-number {
-        width: 40px;
-        height: 40px;
-        background: var(--cardano-color);
-        color: white;
+    .step-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1rem;
+        position: relative;
+    }
+    /* Dirt patch base for all plants */
+    .dirt-patch {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 18px;
+        background: radial-gradient(ellipse at center, #5d4037 0%, #3e2723 100%);
         border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin: 0 auto 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    /* Step 1: Sprout emerging from dirt */
+    .plant-sprout .stem {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 20px;
+        background: linear-gradient(to top, #6b8e23, #9acd32);
+        border-radius: 2px;
+    }
+    .plant-sprout .leaf-left,
+    .plant-sprout .leaf-right {
+        position: absolute;
+        bottom: 28px;
+        width: 12px;
+        height: 8px;
+        background: #7cb342;
+        border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    }
+    .plant-sprout .leaf-left {
+        left: 50%;
+        transform: translateX(-18px) rotate(-30deg);
+    }
+    .plant-sprout .leaf-right {
+        left: 50%;
+        transform: translateX(6px) rotate(30deg);
+    }
+    /* Step 2: Young plant with more leaves */
+    .plant-young .stem {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 5px;
+        height: 35px;
+        background: linear-gradient(to top, #558b2f, #7cb342);
+        border-radius: 2px;
+    }
+    .plant-young .leaf {
+        position: absolute;
+        background: #8bc34a;
+        border-radius: 50% 0 50% 0;
+    }
+    .plant-young .leaf-1 {
+        bottom: 38px;
+        left: 50%;
+        transform: translateX(-20px) rotate(-45deg);
+        width: 18px;
+        height: 10px;
+    }
+    .plant-young .leaf-2 {
+        bottom: 38px;
+        left: 50%;
+        transform: translateX(2px) rotate(45deg);
+        width: 18px;
+        height: 10px;
+        border-radius: 0 50% 0 50%;
+    }
+    .plant-young .leaf-3 {
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-18px) rotate(-35deg);
+        width: 14px;
+        height: 8px;
+    }
+    .plant-young .leaf-4 {
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(4px) rotate(35deg);
+        width: 14px;
+        height: 8px;
+        border-radius: 0 50% 0 50%;
+    }
+    /* Step 3: Mature plant with full foliage */
+    .plant-mature .stem {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 50px;
+        background: linear-gradient(to top, #33691e, #558b2f);
+        border-radius: 3px;
+    }
+    .plant-mature .foliage {
+        position: absolute;
+        bottom: 45px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50px;
+        height: 35px;
+        background: radial-gradient(ellipse at center, #8bc34a 0%, #689f38 60%, #558b2f 100%);
+        border-radius: 50% 50% 45% 45%;
+        box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1);
+    }
+    .plant-mature .foliage::before {
+        content: '';
+        position: absolute;
+        top: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 30px;
+        height: 20px;
+        background: radial-gradient(ellipse at center, #9ccc65 0%, #7cb342 100%);
+        border-radius: 50%;
+    }
+    .plant-mature .leaf-side {
+        position: absolute;
+        background: #7cb342;
+        border-radius: 50% 0 50% 0;
+    }
+    .plant-mature .leaf-left {
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-35px) rotate(-50deg);
+        width: 22px;
+        height: 12px;
+    }
+    .plant-mature .leaf-right {
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(13px) rotate(50deg);
+        width: 22px;
+        height: 12px;
+        border-radius: 0 50% 0 50%;
     }
     .step-text {
         font-size: 0.95rem;
@@ -383,7 +515,7 @@
                 <img src="/static/YieldLife_Logo_transparent_withText.png" alt="YieldLife" class="hero-logo">
                 <h1 class="hero-tagline">Track Cardano DeFi Yields—Past and Present</h1>
                 <p class="hero-description">
-                    Historical yield data from Cardano DeFi protocols—so you can make decisions with full knowledge of the past, not just a snapshot of today. Sign up to save charts and get monthly insights.
+                    Historical yield data from Cardano DeFi protocols—so you can make decisions with full knowledge of the past, not just a snapshot of today. Sign up to save charts and get free updates.
                 </p>
             </div>
         </div>
@@ -429,15 +561,33 @@
                 <h2>How It Works</h2>
                 <div class="steps">
                     <div class="step">
-                        <div class="step-number">1</div>
+                        <div class="step-icon plant-sprout">
+                            <div class="dirt-patch"></div>
+                            <div class="stem"></div>
+                            <div class="leaf-left"></div>
+                            <div class="leaf-right"></div>
+                        </div>
                         <p class="step-text">Browse yields across Cardano DEXs and lending markets</p>
                     </div>
                     <div class="step">
-                        <div class="step-number">2</div>
+                        <div class="step-icon plant-young">
+                            <div class="dirt-patch"></div>
+                            <div class="stem"></div>
+                            <div class="leaf leaf-1"></div>
+                            <div class="leaf leaf-2"></div>
+                            <div class="leaf leaf-3"></div>
+                            <div class="leaf leaf-4"></div>
+                        </div>
                         <p class="step-text">View historical trends, not just current APY</p>
                     </div>
                     <div class="step">
-                        <div class="step-number">3</div>
+                        <div class="step-icon plant-mature">
+                            <div class="dirt-patch"></div>
+                            <div class="stem"></div>
+                            <div class="foliage"></div>
+                            <div class="leaf-side leaf-left"></div>
+                            <div class="leaf-side leaf-right"></div>
+                        </div>
                         <p class="step-text">Save charts and track your favorite pools</p>
                     </div>
                 </div>
