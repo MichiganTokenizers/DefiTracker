@@ -273,7 +273,7 @@ function renderLPPositionCard(pos) {
                     <div class="apr-value">${apr}</div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">IL</div>
+                    <div class="data-label">Impermanent Loss</div>
                     <div class="il-value ${ilClass}">${ilDisplay}</div>
                 </div>
                 <div class="col-3">
@@ -293,14 +293,14 @@ function renderLPPositionCard(pos) {
 }
 
 /**
- * Format entry date for display (e.g., "Jun 2024")
+ * Format entry date for display (e.g., "Dec 9, 2025")
  */
 function formatEntryDate(isoDate) {
     if (!isoDate) return null;
     try {
         const date = new Date(isoDate);
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${months[date.getMonth()]} ${date.getFullYear()}`;
+        return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
     } catch (e) {
         return null;
     }
@@ -354,7 +354,7 @@ function renderFarmPositionCard(pos) {
                     <div class="apr-value">${apr}</div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">IL</div>
+                    <div class="data-label">Impermanent Loss</div>
                     <div class="il-value ${ilClass}">${ilDisplay}</div>
                 </div>
                 <div class="col-3">

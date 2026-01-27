@@ -496,14 +496,32 @@ class PortfolioService:
             token_a = lp_value_info.get("token_a", {})
             token_b = lp_value_info.get("token_b", {})
 
-            amount_a = token_a.get("amount", 0)
-            amount_b = token_b.get("amount", 0)
+            amount_a = float(token_a.get("amount", 0) or 0)
+            amount_b = float(token_b.get("amount", 0) or 0)
+            symbol_a = token_a.get("symbol", "").upper()
+            symbol_b = token_b.get("symbol", "").upper()
 
-            if amount_a and amount_b and float(amount_a) > 0:
-                # Price ratio: how much Token B per Token A
-                return float(amount_b) / float(amount_a)
+            if amount_a <= 0 or amount_b <= 0:
+                return None
 
-            return None
+            # Normalize ratio to always be: ADA / OTHER_TOKEN
+            # This ensures consistency regardless of token order in the pool
+            if symbol_a == "ADA":
+                # token_a is ADA: ratio = ADA / token_b
+                ratio = amount_a / amount_b
+            elif symbol_b == "ADA":
+                # token_b is ADA: ratio = ADA / token_a
+                ratio = amount_b / amount_a
+            else:
+                # No ADA in pair (rare), use token_b / token_a
+                ratio = amount_b / amount_a
+
+            logger.debug(
+                "Price ratio for %s/%s: %.6f (normalized to ADA/OTHER)",
+                symbol_a, symbol_b, ratio
+            )
+            return ratio
+
         except Exception as e:
             logger.debug("Error calculating current price ratio: %s", e)
             return None
@@ -778,11 +796,39 @@ class PortfolioService:
                     candle = data[0]
                     close_price = candle.get("close")
                     if close_price:
-                        logger.info(
-                            "Got historical price ratio for %s at %s: %.6f",
-                            lp_asset[:30], target_date, float(close_price)
-                        )
-                        return float(close_price)
+                        price = float(close_price)
+
+                        # The candlestick price is typically asset_a price in terms of asset_b
+                        # We need to get pool info to know which is ADA and normalize
+                        pool_metrics = self._get_minswap_pool_metrics(policy_id, asset_name)
+                        if pool_metrics:
+                            asset_a = pool_metrics.get("asset_a", {}).get("metadata", {})
+                            asset_b = pool_metrics.get("asset_b", {}).get("metadata", {})
+                            symbol_a = asset_a.get("ticker", asset_a.get("symbol", "")).upper()
+                            symbol_b = asset_b.get("ticker", asset_b.get("symbol", "")).upper()
+
+                            # Minswap price is asset_a priced in asset_b
+                            # If asset_a is ADA: price is ADA/OTHER (already normalized)
+                            # If asset_b is ADA: price is OTHER/ADA, need to invert to get ADA/OTHER
+                            if symbol_b == "ADA" and symbol_a != "ADA":
+                                # Invert to normalize to ADA/OTHER
+                                price = 1.0 / price if price > 0 else price
+                                logger.info(
+                                    "Historical price for %s/%s at %s: %.6f (inverted to ADA/OTHER)",
+                                    symbol_a, symbol_b, target_date, price
+                                )
+                            else:
+                                logger.info(
+                                    "Historical price for %s/%s at %s: %.6f",
+                                    symbol_a, symbol_b, target_date, price
+                                )
+                        else:
+                            logger.info(
+                                "Got historical price for %s at %s: %.6f (no pool info for normalization)",
+                                lp_asset[:30], target_date, price
+                            )
+
+                        return price
                 logger.debug("No candlestick data for %s at %s", lp_asset[:30], target_date)
             else:
                 logger.debug(
