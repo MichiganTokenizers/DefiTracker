@@ -672,10 +672,23 @@ class PortfolioService:
                 if entry_date and current_ratio:
                     # Try to fetch historical price ratio at entry date
                     historical_ratio = None
+
                     if protocol == "minswap":
+                        # Direct lookup for Minswap positions
                         historical_ratio = self._get_minswap_historical_price_ratio(
                             policy_id, asset_name_hex, entry_date
                         )
+                    else:
+                        # For SundaeSwap/WingRiders, search Minswap by token symbols
+                        # (price ratios should be similar across DEXes due to arbitrage)
+                        historical_ratio = self._get_historical_price_by_tokens(
+                            token_a_symbol, token_b_symbol, entry_date
+                        )
+                        if historical_ratio:
+                            logger.info(
+                                "Using Minswap historical price for %s %s position",
+                                protocol, pool_name
+                            )
 
                     # Use historical ratio if available, otherwise use current
                     entry_ratio = historical_ratio if historical_ratio else current_ratio
@@ -837,6 +850,86 @@ class PortfolioService:
                 )
         except Exception as e:
             logger.warning("Error fetching Minswap historical price: %s", e)
+
+        return None
+
+    def _get_historical_price_by_tokens(
+        self, token_a_symbol: str, token_b_symbol: str, target_date: str
+    ) -> Optional[float]:
+        """
+        Fetch historical price ratio from Minswap by searching for the pool by token symbols.
+
+        This allows us to get historical prices for SundaeSwap/WingRiders positions
+        by looking up the equivalent pool on Minswap.
+
+        Args:
+            token_a_symbol: First token symbol (e.g., "ADA")
+            token_b_symbol: Second token symbol (e.g., "NIGHT")
+            target_date: ISO date string (e.g., "2024-06-15")
+
+        Returns:
+            Price ratio (ADA/OTHER) at the target date, or None if not found
+        """
+        # Determine which token is ADA and which is the other
+        if token_a_symbol.upper() == "ADA":
+            search_token = token_b_symbol
+        elif token_b_symbol.upper() == "ADA":
+            search_token = token_a_symbol
+        else:
+            # No ADA in pair, can't search effectively
+            logger.debug("No ADA in token pair %s/%s, skipping Minswap lookup", token_a_symbol, token_b_symbol)
+            return None
+
+        try:
+            # Search for pool on Minswap by token name
+            url = f"{MINSWAP_API_URL}/v1/pools/metrics"
+            payload = {
+                "term": search_token,
+                "page": 1,
+                "limit": 10,
+            }
+
+            resp = self.session.post(url, json=payload, timeout=self.timeout)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                pools = data.get("data", [])
+
+                # Find the ADA pair pool
+                for pool in pools:
+                    asset_a = pool.get("asset_a", {}).get("metadata", {})
+                    asset_b = pool.get("asset_b", {}).get("metadata", {})
+                    ticker_a = asset_a.get("ticker", "").upper()
+                    ticker_b = asset_b.get("ticker", "").upper()
+
+                    # Check if this is the ADA/TOKEN pair we're looking for
+                    is_ada_pair = (
+                        (ticker_a == "ADA" and ticker_b == search_token.upper()) or
+                        (ticker_b == "ADA" and ticker_a == search_token.upper())
+                    )
+
+                    if is_ada_pair:
+                        # Found the pool - get LP asset info
+                        lp_asset = pool.get("lp_asset", {})
+                        policy_id = lp_asset.get("currency_symbol", "")
+                        asset_name = lp_asset.get("token_name", "")
+
+                        if policy_id and asset_name:
+                            logger.info(
+                                "Found Minswap pool for %s/ADA: %s.%s",
+                                search_token, policy_id[:20], asset_name[:20]
+                            )
+                            # Now fetch historical price using the LP asset
+                            return self._get_minswap_historical_price_ratio(
+                                policy_id, asset_name, target_date
+                            )
+
+                logger.debug("No Minswap ADA/%s pool found in search results", search_token)
+            else:
+                logger.debug("Minswap pool search returned %d", resp.status_code)
+
+        except Exception as e:
+            logger.warning("Error searching Minswap for %s pool: %s", search_token, e)
 
         return None
 
