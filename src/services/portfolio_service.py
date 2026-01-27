@@ -351,132 +351,181 @@ class PortfolioService:
             logger.debug("Error fetching LP token creation date: %s", e)
             return None
 
-    def _get_historical_price(
-        self, token_symbol: str, target_date: str
-    ) -> Optional[float]:
+    def _get_lp_entry_from_db(
+        self, wallet_address: str, policy_id: str, asset_name: str
+    ) -> Optional[Dict]:
         """
-        Get the price of a token at a specific date from our price snapshots.
+        Get stored LP entry data from database.
 
         Args:
-            token_symbol: Token symbol (e.g., "NIGHT", "ADA")
-            target_date: ISO date string (e.g., "2024-06-15")
+            wallet_address: User's wallet address
+            policy_id: LP token policy ID
+            asset_name: LP token asset name (hex)
 
         Returns:
-            Price in USD at that date, or None if not found
+            Dict with entry_date, entry_price_ratio, etc. or None if not found
         """
         conn = self._db.get_connection()
         try:
             with conn.cursor() as cur:
-                # Find the closest price snapshot to the target date
                 cur.execute("""
-                    SELECT price_usd, timestamp
-                    FROM price_snapshots
-                    WHERE token_symbol = %s
-                      AND timestamp::date <= %s::date
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """, (token_symbol, target_date))
+                    SELECT entry_date, entry_price_ratio, entry_tx_hash,
+                           token_a_symbol, token_b_symbol, protocol, pool_name
+                    FROM user_lp_entries
+                    WHERE wallet_address = %s
+                      AND policy_id = %s
+                      AND asset_name = %s
+                """, (wallet_address, policy_id, asset_name))
 
                 row = cur.fetchone()
-                if row and row[0]:
-                    return float(row[0])
-
-                # If no price before that date, try to get earliest available
-                cur.execute("""
-                    SELECT price_usd, timestamp
-                    FROM price_snapshots
-                    WHERE token_symbol = %s
-                    ORDER BY timestamp ASC
-                    LIMIT 1
-                """, (token_symbol,))
-
-                row = cur.fetchone()
-                if row and row[0]:
-                    return float(row[0])
-
+                if row:
+                    return {
+                        "entry_date": row[0].isoformat() if row[0] else None,
+                        "entry_price_ratio": float(row[1]) if row[1] else None,
+                        "entry_tx_hash": row[2],
+                        "token_a_symbol": row[3],
+                        "token_b_symbol": row[4],
+                        "protocol": row[5],
+                        "pool_name": row[6],
+                    }
                 return None
 
         except Exception as e:
-            logger.debug("Error fetching historical price for %s: %s", token_symbol, e)
+            logger.debug("Error fetching LP entry from DB: %s", e)
             return None
         finally:
             self._db.return_connection(conn)
 
-    def _calculate_impermanent_loss(
-        self,
-        entry_price_a: float,
-        entry_price_b: float,
-        current_price_a: float,
-        current_price_b: float,
-        current_value_usd: Optional[float] = None
-    ) -> Dict[str, Optional[float]]:
+    def _store_lp_entry(
+        self, wallet_address: str, policy_id: str, asset_name: str,
+        protocol: str, pool_name: str, entry_date: str,
+        entry_price_ratio: float, token_a_symbol: str, token_b_symbol: str,
+        entry_tx_hash: Optional[str] = None
+    ) -> bool:
         """
-        Calculate impermanent loss based on price changes.
-
-        IL Formula:
-        IL = 2 * sqrt(price_ratio) / (1 + price_ratio) - 1
-
-        Where price_ratio = (current_price_a / current_price_b) / (entry_price_a / entry_price_b)
+        Store LP entry data in database for future IL calculations.
 
         Args:
-            entry_price_a: Token A price at entry (USD)
-            entry_price_b: Token B price at entry (USD)
-            current_price_a: Token A current price (USD)
-            current_price_b: Token B current price (USD)
-            current_value_usd: Current position value in USD
+            wallet_address: User's wallet address
+            policy_id: LP token policy ID
+            asset_name: LP token asset name (hex)
+            protocol: DEX protocol name
+            pool_name: Pool name (e.g., "ADA/NIGHT")
+            entry_date: ISO date string when position was created
+            entry_price_ratio: Token A / Token B price ratio at entry
+            token_a_symbol: Token A symbol
+            token_b_symbol: Token B symbol
+            entry_tx_hash: Transaction hash (optional)
 
         Returns:
-            Dict with il_percent, il_usd, entry_price_ratio, current_price_ratio
+            True if stored successfully
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_lp_entries (
+                        wallet_address, policy_id, asset_name, protocol,
+                        pool_name, entry_date, entry_price_ratio,
+                        token_a_symbol, token_b_symbol, entry_tx_hash
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (wallet_address, policy_id, asset_name)
+                    DO NOTHING
+                """, (
+                    wallet_address, policy_id, asset_name, protocol,
+                    pool_name, entry_date, entry_price_ratio,
+                    token_a_symbol, token_b_symbol, entry_tx_hash
+                ))
+                conn.commit()
+                return cur.rowcount > 0
+
+        except Exception as e:
+            logger.debug("Error storing LP entry: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            self._db.return_connection(conn)
+
+    def _calculate_current_price_ratio(self, lp_value_info: Dict) -> Optional[float]:
+        """
+        Calculate current price ratio from pool reserves.
+
+        For a pool with Token A and Token B, the price ratio is:
+        price_ratio = (Token B amount) / (Token A amount)
+
+        This represents how many Token B you get for 1 Token A.
+
+        Args:
+            lp_value_info: Dict containing token_a and token_b with amounts
+
+        Returns:
+            Current price ratio, or None if cannot be calculated
+        """
+        try:
+            token_a = lp_value_info.get("token_a", {})
+            token_b = lp_value_info.get("token_b", {})
+
+            amount_a = token_a.get("amount", 0)
+            amount_b = token_b.get("amount", 0)
+
+            if amount_a and amount_b and float(amount_a) > 0:
+                # Price ratio: how much Token B per Token A
+                return float(amount_b) / float(amount_a)
+
+            return None
+        except Exception as e:
+            logger.debug("Error calculating current price ratio: %s", e)
+            return None
+
+    def _calculate_il_from_ratios(
+        self, entry_ratio: float, current_ratio: float, current_value: Optional[float] = None
+    ) -> Dict[str, Optional[float]]:
+        """
+        Calculate impermanent loss from price ratios.
+
+        IL Formula: IL = 2 * sqrt(k) / (1 + k) - 1
+        Where k = current_ratio / entry_ratio
+
+        Args:
+            entry_ratio: Token B / Token A ratio at entry
+            current_ratio: Token B / Token A ratio now
+            current_value: Current position value (for IL USD calculation)
+
+        Returns:
+            Dict with il_percent, il_usd
         """
         import math
 
         result = {
             "il_percent": None,
             "il_usd": None,
-            "entry_price_ratio": None,
-            "current_price_ratio": None,
         }
 
-        # Validate inputs
-        if not all([entry_price_a, entry_price_b, current_price_a, current_price_b]):
-            return result
-        if entry_price_b == 0 or current_price_b == 0:
+        if not entry_ratio or not current_ratio or entry_ratio <= 0:
             return result
 
         try:
-            # Calculate price ratios (Token A in terms of Token B)
-            entry_ratio = entry_price_a / entry_price_b
-            current_ratio = current_price_a / current_price_b
-
             # Price change ratio
-            price_change_ratio = current_ratio / entry_ratio
+            k = current_ratio / entry_ratio
 
-            # IL formula: 2 * sqrt(k) / (1 + k) - 1
-            # Where k is the price change ratio
-            sqrt_k = math.sqrt(price_change_ratio)
-            il_percent = (2 * sqrt_k / (1 + price_change_ratio)) - 1
+            # IL formula
+            sqrt_k = math.sqrt(k)
+            il = (2 * sqrt_k / (1 + k)) - 1
 
-            # IL is negative when there's a loss
-            # Convert to percentage (e.g., -0.05 = -5% IL)
-            il_percent_display = round(il_percent * 100, 2)
+            # Convert to percentage
+            il_percent = round(il * 100, 2)
+            result["il_percent"] = il_percent
 
-            result["entry_price_ratio"] = round(entry_ratio, 6)
-            result["current_price_ratio"] = round(current_ratio, 6)
-            result["il_percent"] = il_percent_display
-
-            # Calculate USD impact if we have current value
-            if current_value_usd and il_percent != 0:
-                # IL USD = What you would have if you just held - current LP value
-                # Since IL% = (LP_value / HODL_value) - 1
-                # HODL_value = LP_value / (1 + IL%)
-                hodl_value = current_value_usd / (1 + il_percent)
-                il_usd = current_value_usd - hodl_value
+            # Calculate USD impact
+            if current_value and il != 0:
+                hodl_value = current_value / (1 + il)
+                il_usd = current_value - hodl_value
                 result["il_usd"] = round(il_usd, 2)
 
             return result
 
         except Exception as e:
-            logger.debug("Error calculating IL: %s", e)
+            logger.debug("Error calculating IL from ratios: %s", e)
             return result
 
     def _get_minswap_pool_metrics(self, policy_id: str, asset_name: str) -> Optional[Dict]:
@@ -1103,7 +1152,7 @@ class PortfolioService:
                 if position_apr:
                     logger.debug("Found %s APR from database: %s = %.2f%%", protocol, pool_name, position_apr)
 
-            # Calculate impermanent loss if we have wallet address and token info
+            # Calculate impermanent loss using reserve-based price ratios
             if wallet_address:
                 token_a_info = lp_value_info.get("token_a") or {}
                 token_b_info = lp_value_info.get("token_b") or {}
@@ -1111,37 +1160,62 @@ class PortfolioService:
                 token_b_symbol = token_b_info.get("symbol", "?")
 
                 if token_a_symbol != "?" and token_b_symbol != "?":
-                    # Get LP token creation date
-                    entry_date = self._get_lp_token_creation_date(
+                    # Calculate current price ratio from reserves
+                    current_ratio = self._calculate_current_price_ratio(lp_value_info)
+                    if current_ratio:
+                        il_data["current_price_ratio"] = round(current_ratio, 6)
+
+                    # Check if we have stored entry data
+                    stored_entry = self._get_lp_entry_from_db(
                         wallet_address, policy_id, asset_name_hex
                     )
 
-                    if entry_date:
-                        il_data["entry_date"] = entry_date
+                    if stored_entry and stored_entry.get("entry_price_ratio"):
+                        # Use stored entry data
+                        il_data["entry_date"] = stored_entry["entry_date"]
+                        il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
 
-                        # Get historical prices at entry
-                        entry_price_a = self._get_historical_price(token_a_symbol, entry_date)
-                        entry_price_b = self._get_historical_price(token_b_symbol, entry_date)
-
-                        # Get current prices
-                        current_price_a = self._get_historical_price(
-                            token_a_symbol, "9999-12-31"  # Far future to get latest
-                        )
-                        current_price_b = self._get_historical_price(
-                            token_b_symbol, "9999-12-31"
-                        )
-
-                        # Calculate IL
-                        if entry_price_a and entry_price_b and current_price_a and current_price_b:
-                            il_result = self._calculate_impermanent_loss(
-                                entry_price_a, entry_price_b,
-                                current_price_a, current_price_b,
+                        # Calculate IL from ratios
+                        if current_ratio:
+                            il_result = self._calculate_il_from_ratios(
+                                stored_entry["entry_price_ratio"],
+                                current_ratio,
                                 lp_value_info.get("ada_value")
                             )
                             il_data.update(il_result)
                             logger.debug(
-                                "Calculated IL for %s: %.2f%% (entry: %s)",
-                                pool_name, il_result.get("il_percent", 0), entry_date
+                                "Calculated IL for %s: %.2f%% (entry: %s, ratio: %.4f -> %.4f)",
+                                pool_name, il_result.get("il_percent", 0),
+                                stored_entry["entry_date"],
+                                stored_entry["entry_price_ratio"], current_ratio
+                            )
+                    else:
+                        # First time seeing this position - get entry date and store
+                        entry_date = self._get_lp_token_creation_date(
+                            wallet_address, policy_id, asset_name_hex
+                        )
+
+                        if entry_date and current_ratio:
+                            # Store the current ratio as entry ratio (best we can do)
+                            # This will be accurate for new positions
+                            self._store_lp_entry(
+                                wallet_address=wallet_address,
+                                policy_id=policy_id,
+                                asset_name=asset_name_hex,
+                                protocol=protocol,
+                                pool_name=pool_name or f"{protocol.upper()} LP",
+                                entry_date=entry_date,
+                                entry_price_ratio=current_ratio,
+                                token_a_symbol=token_a_symbol,
+                                token_b_symbol=token_b_symbol,
+                            )
+                            il_data["entry_date"] = entry_date
+                            il_data["entry_price_ratio"] = round(current_ratio, 6)
+                            # IL is 0% for newly stored positions
+                            il_data["il_percent"] = 0.0
+                            logger.info(
+                                "Stored new LP entry for %s: date=%s, ratio=%.4f",
+                                pool_name, entry_date, current_ratio
                             )
 
             return LPPosition(
