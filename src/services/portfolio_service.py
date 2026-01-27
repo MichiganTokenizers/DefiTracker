@@ -83,6 +83,12 @@ class LPPosition:
     usd_value: Optional[float] = None
     current_apr: Optional[float] = None
     pool_share_percent: Optional[float] = None
+    # Impermanent loss fields
+    entry_date: Optional[str] = None  # ISO date when position was created
+    entry_price_ratio: Optional[float] = None  # Token A price / Token B price at entry
+    current_price_ratio: Optional[float] = None  # Current price ratio
+    il_percent: Optional[float] = None  # Impermanent loss as percentage (negative = loss)
+    il_usd: Optional[float] = None  # IL in USD terms
 
     def to_dict(self) -> Dict:
         return {
@@ -94,6 +100,11 @@ class LPPosition:
             "usd_value": self.usd_value,
             "current_apr": self.current_apr,
             "pool_share_percent": self.pool_share_percent,
+            "entry_date": self.entry_date,
+            "entry_price_ratio": self.entry_price_ratio,
+            "current_price_ratio": self.current_price_ratio,
+            "il_percent": self.il_percent,
+            "il_usd": self.il_usd,
         }
 
 
@@ -110,6 +121,12 @@ class FarmPosition:
     current_apr: Optional[float] = None
     rewards_earned: Optional[float] = None
     pool_share_percent: Optional[float] = None
+    # Impermanent loss fields
+    entry_date: Optional[str] = None
+    entry_price_ratio: Optional[float] = None
+    current_price_ratio: Optional[float] = None
+    il_percent: Optional[float] = None
+    il_usd: Optional[float] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -123,6 +140,11 @@ class FarmPosition:
             "current_apr": self.current_apr,
             "rewards_earned": self.rewards_earned,
             "pool_share_percent": self.pool_share_percent,
+            "entry_date": self.entry_date,
+            "entry_price_ratio": self.entry_price_ratio,
+            "current_price_ratio": self.current_price_ratio,
+            "il_percent": self.il_percent,
+            "il_usd": self.il_usd,
         }
 
 
@@ -258,6 +280,204 @@ class PortfolioService:
         if ticker_a <= ticker_b:
             return f"{ticker_a}/{ticker_b}"
         return f"{ticker_b}/{ticker_a}"
+
+    def _get_lp_token_creation_date(
+        self, wallet_address: str, policy_id: str, asset_name: str
+    ) -> Optional[str]:
+        """
+        Find when an LP token was first received by querying Blockfrost asset history.
+
+        Uses the asset transactions endpoint to find the earliest transaction where
+        the wallet received this LP token.
+
+        Args:
+            wallet_address: User's wallet address
+            policy_id: LP token policy ID
+            asset_name: LP token asset name (hex)
+
+        Returns:
+            ISO date string of first receipt, or None if not found
+        """
+        if not BLOCKFROST_API_KEY:
+            return None
+
+        asset_id = f"{policy_id}{asset_name}"
+
+        try:
+            # Get asset transaction history (ordered oldest first)
+            url = f"{BLOCKFROST_API_URL}/assets/{asset_id}/transactions"
+            headers = {"project_id": BLOCKFROST_API_KEY}
+            params = {"order": "asc", "count": 100}
+
+            resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+
+            if resp.status_code != 200:
+                logger.debug("Could not fetch asset transactions: %d", resp.status_code)
+                return None
+
+            transactions = resp.json()
+            if not transactions:
+                return None
+
+            # Find the first transaction where this wallet received the LP token
+            for tx_info in transactions:
+                tx_hash = tx_info.get("tx_hash", "")
+                block_time = tx_info.get("block_time")
+
+                # Get transaction UTXOs to check if wallet received LP tokens
+                utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
+                utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
+
+                if utxo_resp.status_code != 200:
+                    continue
+
+                utxo_data = utxo_resp.json()
+
+                # Check outputs for our wallet
+                for output in utxo_data.get("outputs", []):
+                    if output.get("address") == wallet_address:
+                        # Check if this output contains our LP token
+                        for amount in output.get("amount", []):
+                            if amount.get("unit") == asset_id:
+                                # Found it! Convert block_time to ISO date
+                                if block_time:
+                                    from datetime import datetime
+                                    dt = datetime.utcfromtimestamp(block_time)
+                                    return dt.strftime("%Y-%m-%d")
+
+            return None
+
+        except Exception as e:
+            logger.debug("Error fetching LP token creation date: %s", e)
+            return None
+
+    def _get_historical_price(
+        self, token_symbol: str, target_date: str
+    ) -> Optional[float]:
+        """
+        Get the price of a token at a specific date from our price snapshots.
+
+        Args:
+            token_symbol: Token symbol (e.g., "NIGHT", "ADA")
+            target_date: ISO date string (e.g., "2024-06-15")
+
+        Returns:
+            Price in USD at that date, or None if not found
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                # Find the closest price snapshot to the target date
+                cur.execute("""
+                    SELECT price_usd, timestamp
+                    FROM price_snapshots
+                    WHERE token_symbol = %s
+                      AND timestamp::date <= %s::date
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """, (token_symbol, target_date))
+
+                row = cur.fetchone()
+                if row and row[0]:
+                    return float(row[0])
+
+                # If no price before that date, try to get earliest available
+                cur.execute("""
+                    SELECT price_usd, timestamp
+                    FROM price_snapshots
+                    WHERE token_symbol = %s
+                    ORDER BY timestamp ASC
+                    LIMIT 1
+                """, (token_symbol,))
+
+                row = cur.fetchone()
+                if row and row[0]:
+                    return float(row[0])
+
+                return None
+
+        except Exception as e:
+            logger.debug("Error fetching historical price for %s: %s", token_symbol, e)
+            return None
+        finally:
+            self._db.return_connection(conn)
+
+    def _calculate_impermanent_loss(
+        self,
+        entry_price_a: float,
+        entry_price_b: float,
+        current_price_a: float,
+        current_price_b: float,
+        current_value_usd: Optional[float] = None
+    ) -> Dict[str, Optional[float]]:
+        """
+        Calculate impermanent loss based on price changes.
+
+        IL Formula:
+        IL = 2 * sqrt(price_ratio) / (1 + price_ratio) - 1
+
+        Where price_ratio = (current_price_a / current_price_b) / (entry_price_a / entry_price_b)
+
+        Args:
+            entry_price_a: Token A price at entry (USD)
+            entry_price_b: Token B price at entry (USD)
+            current_price_a: Token A current price (USD)
+            current_price_b: Token B current price (USD)
+            current_value_usd: Current position value in USD
+
+        Returns:
+            Dict with il_percent, il_usd, entry_price_ratio, current_price_ratio
+        """
+        import math
+
+        result = {
+            "il_percent": None,
+            "il_usd": None,
+            "entry_price_ratio": None,
+            "current_price_ratio": None,
+        }
+
+        # Validate inputs
+        if not all([entry_price_a, entry_price_b, current_price_a, current_price_b]):
+            return result
+        if entry_price_b == 0 or current_price_b == 0:
+            return result
+
+        try:
+            # Calculate price ratios (Token A in terms of Token B)
+            entry_ratio = entry_price_a / entry_price_b
+            current_ratio = current_price_a / current_price_b
+
+            # Price change ratio
+            price_change_ratio = current_ratio / entry_ratio
+
+            # IL formula: 2 * sqrt(k) / (1 + k) - 1
+            # Where k is the price change ratio
+            sqrt_k = math.sqrt(price_change_ratio)
+            il_percent = (2 * sqrt_k / (1 + price_change_ratio)) - 1
+
+            # IL is negative when there's a loss
+            # Convert to percentage (e.g., -0.05 = -5% IL)
+            il_percent_display = round(il_percent * 100, 2)
+
+            result["entry_price_ratio"] = round(entry_ratio, 6)
+            result["current_price_ratio"] = round(current_ratio, 6)
+            result["il_percent"] = il_percent_display
+
+            # Calculate USD impact if we have current value
+            if current_value_usd and il_percent != 0:
+                # IL USD = What you would have if you just held - current LP value
+                # Since IL% = (LP_value / HODL_value) - 1
+                # HODL_value = LP_value / (1 + IL%)
+                hodl_value = current_value_usd / (1 + il_percent)
+                il_usd = current_value_usd - hodl_value
+                result["il_usd"] = round(il_usd, 2)
+
+            return result
+
+        except Exception as e:
+            logger.debug("Error calculating IL: %s", e)
+            return result
 
     def _get_minswap_pool_metrics(self, policy_id: str, asset_name: str) -> Optional[Dict]:
         """
@@ -803,7 +1023,7 @@ class PortfolioService:
                     if policy_id in LP_POLICY_IDS:
                         protocol = LP_POLICY_IDS[policy_id]
                         position = self._create_lp_position_from_asset(
-                            policy_id, asset_name_hex, quantity, protocol
+                            policy_id, asset_name_hex, quantity, protocol, wallet_address
                         )
                         if position:
                             positions.append(position)
@@ -818,12 +1038,14 @@ class PortfolioService:
         return positions
 
     def _create_lp_position_from_asset(
-        self, policy_id: str, asset_name_hex: str, quantity: str, protocol: str
+        self, policy_id: str, asset_name_hex: str, quantity: str, protocol: str,
+        wallet_address: Optional[str] = None
     ) -> Optional[LPPosition]:
         """Create an LP position from Blockfrost asset data."""
         try:
             pool_name = None
             lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
+            il_data = {}
 
             # Try to get pool metrics based on protocol
             if protocol == "sundaeswap":
@@ -881,6 +1103,47 @@ class PortfolioService:
                 if position_apr:
                     logger.debug("Found %s APR from database: %s = %.2f%%", protocol, pool_name, position_apr)
 
+            # Calculate impermanent loss if we have wallet address and token info
+            if wallet_address:
+                token_a_info = lp_value_info.get("token_a") or {}
+                token_b_info = lp_value_info.get("token_b") or {}
+                token_a_symbol = token_a_info.get("symbol", "?")
+                token_b_symbol = token_b_info.get("symbol", "?")
+
+                if token_a_symbol != "?" and token_b_symbol != "?":
+                    # Get LP token creation date
+                    entry_date = self._get_lp_token_creation_date(
+                        wallet_address, policy_id, asset_name_hex
+                    )
+
+                    if entry_date:
+                        il_data["entry_date"] = entry_date
+
+                        # Get historical prices at entry
+                        entry_price_a = self._get_historical_price(token_a_symbol, entry_date)
+                        entry_price_b = self._get_historical_price(token_b_symbol, entry_date)
+
+                        # Get current prices
+                        current_price_a = self._get_historical_price(
+                            token_a_symbol, "9999-12-31"  # Far future to get latest
+                        )
+                        current_price_b = self._get_historical_price(
+                            token_b_symbol, "9999-12-31"
+                        )
+
+                        # Calculate IL
+                        if entry_price_a and entry_price_b and current_price_a and current_price_b:
+                            il_result = self._calculate_impermanent_loss(
+                                entry_price_a, entry_price_b,
+                                current_price_a, current_price_b,
+                                lp_value_info.get("ada_value")
+                            )
+                            il_data.update(il_result)
+                            logger.debug(
+                                "Calculated IL for %s: %.2f%% (entry: %s)",
+                                pool_name, il_result.get("il_percent", 0), entry_date
+                            )
+
             return LPPosition(
                 protocol=protocol,
                 pool=pool_name or f"{protocol.upper()} LP",
@@ -890,6 +1153,11 @@ class PortfolioService:
                 usd_value=lp_value_info.get("ada_value"),
                 current_apr=position_apr,
                 pool_share_percent=lp_value_info.get("pool_share_percent"),
+                entry_date=il_data.get("entry_date"),
+                entry_price_ratio=il_data.get("entry_price_ratio"),
+                current_price_ratio=il_data.get("current_price_ratio"),
+                il_percent=il_data.get("il_percent"),
+                il_usd=il_data.get("il_usd"),
             )
         except Exception as e:
             logger.warning("Error creating LP position: %s", e)
