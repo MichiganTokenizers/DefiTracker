@@ -245,27 +245,23 @@ function renderProtocolSection(protocol, data) {
 
     let html = '';
 
-    // Yield Farming subsection
+    // Single combined section for all LP positions
+    html += `
+        <div class="subsection-header">
+            <span class="subsection-icon">💧</span>
+            <h6>Liquidity Pool Positions</h6>
+        </div>
+    `;
+
+    // Render farming positions first (with "Farming" pill)
     if (hasFarm) {
-        html += `
-            <div class="subsection-header">
-                <span class="subsection-icon">🌾</span>
-                <h6>Yield Farming (Staked LP)</h6>
-            </div>
-        `;
         data.farm.forEach(pos => {
             html += renderFarmPositionCard(pos);
         });
     }
 
-    // LP Positions subsection
+    // Then render non-farming LP positions
     if (hasLp) {
-        html += `
-            <div class="subsection-header">
-                <span class="subsection-icon">💧</span>
-                <h6>Liquidity Pools (In Wallet)</h6>
-            </div>
-        `;
         data.lp.forEach(pos => {
             html += renderLPPositionCard(pos);
         });
@@ -321,7 +317,7 @@ function renderLPPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass} il-tooltip" title="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
@@ -391,7 +387,7 @@ function renderFarmPositionCard(pos) {
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
-                    <span class="farm-badge">Staked</span>
+                    <span class="farm-badge">Farming</span>
                     ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
@@ -406,7 +402,7 @@ function renderFarmPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass} il-tooltip" title="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
