@@ -44,6 +44,19 @@ function adaToUsd(adaValue) {
 }
 
 /**
+ * Calculate price ratio change as a percentage string
+ * @param {number} entryRatio - Price ratio at entry
+ * @param {number} currentRatio - Current price ratio
+ * @returns {string|null} - Formatted string like "+4.2%" or "-8.5%", or null if can't calculate
+ */
+function calculatePriceRatioDelta(entryRatio, currentRatio) {
+    if (!entryRatio || !currentRatio || entryRatio <= 0) return null;
+    const delta = ((currentRatio - entryRatio) / entryRatio) * 100;
+    const sign = delta >= 0 ? '+' : '';
+    return `${sign}${delta.toFixed(1)}%`;
+}
+
+/**
  * Fetch all portfolio positions from the API
  */
 async function loadPortfolioPositions() {
@@ -248,12 +261,15 @@ function renderLPPositionCard(pos) {
     const tokenAAmount = tokenA.amount ? formatNumber(tokenA.amount) : '0';
     const tokenBAmount = tokenB.amount ? formatNumber(tokenB.amount) : '0';
 
-    // Impermanent loss display
+    // Impermanent loss display with price ratio delta
     const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
     const ilPercent = hasIL ? pos.il_percent : null;
     const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
+
+    // Calculate price ratio change percentage
+    const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
 
     return `
         <div class="position-card">
@@ -274,7 +290,7 @@ function renderLPPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass}">${ilDisplay}</div>
+                    <div class="il-value ${ilClass}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
@@ -328,12 +344,15 @@ function renderFarmPositionCard(pos) {
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
 
-    // Impermanent loss display (same as LP positions)
+    // Impermanent loss display with price ratio delta (same as LP positions)
     const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
     const ilPercent = hasIL ? pos.il_percent : null;
     const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
+
+    // Calculate price ratio change percentage
+    const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
 
     return `
         <div class="position-card farm-position">
@@ -355,7 +374,7 @@ function renderFarmPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass}">${ilDisplay}</div>
+                    <div class="il-value ${ilClass}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
