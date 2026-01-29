@@ -364,7 +364,8 @@ function renderLPPositionCard(pos) {
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    const currentApr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
+    // Use 1d APR if available, fall back to current_apr
+    const apr1d = pos.apr_1d ? `${formatNumber(pos.apr_1d)}%` : (pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--');
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
@@ -409,8 +410,8 @@ function renderLPPositionCard(pos) {
             </div>
             <div class="row g-3">
                 <div class="col-3">
-                    <div class="data-label">Current APR</div>
-                    <div class="apr-value">${currentApr}</div>
+                    <div class="data-label">1d APR</div>
+                    <div class="apr-value">${apr1d}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Avg APR (${daysHeld}d)</div>
@@ -461,7 +462,8 @@ function renderFarmPositionCard(pos) {
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    const currentApr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
+    // Use 1d APR if available, fall back to current_apr
+    const apr1d = pos.apr_1d ? `${formatNumber(pos.apr_1d)}%` : (pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--');
 
     const tokenA = pos.token_a || {};
     const tokenB = pos.token_b || {};
@@ -511,8 +513,8 @@ function renderFarmPositionCard(pos) {
             </div>
             <div class="row g-3">
                 <div class="col-3">
-                    <div class="data-label">Farm APR</div>
-                    <div class="apr-value">${currentApr}</div>
+                    <div class="data-label">1d APR</div>
+                    <div class="apr-value">${apr1d}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Avg APR (${daysHeld}d)</div>

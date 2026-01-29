@@ -82,6 +82,7 @@ class LPPosition:
     token_b: Dict[str, any]  # {symbol, amount}
     usd_value: Optional[float] = None
     current_apr: Optional[float] = None
+    apr_1d: Optional[float] = None  # 1-day APR (calculated from 24h fees)
     pool_share_percent: Optional[float] = None
     # Impermanent loss fields
     entry_date: Optional[str] = None  # ISO date when position was created
@@ -105,6 +106,7 @@ class LPPosition:
             "token_b": self.token_b,
             "usd_value": self.usd_value,
             "current_apr": self.current_apr,
+            "apr_1d": self.apr_1d,
             "pool_share_percent": self.pool_share_percent,
             "entry_date": self.entry_date,
             "entry_price_ratio": self.entry_price_ratio,
@@ -130,6 +132,7 @@ class FarmPosition:
     token_b: Dict[str, any]  # {symbol, amount}
     usd_value: Optional[float] = None  # Value in ADA
     current_apr: Optional[float] = None
+    apr_1d: Optional[float] = None  # 1-day APR (calculated from 24h fees)
     rewards_earned: Optional[float] = None
     pool_share_percent: Optional[float] = None
     # Impermanent loss fields
@@ -155,6 +158,7 @@ class FarmPosition:
             "token_b": self.token_b,
             "usd_value": self.usd_value,
             "current_apr": self.current_apr,
+            "apr_1d": self.apr_1d,
             "rewards_earned": self.rewards_earned,
             "pool_share_percent": self.pool_share_percent,
             "entry_date": self.entry_date,
@@ -208,7 +212,7 @@ class PortfolioService:
         # Database connection for APR lookups
         self._db = DatabaseConnection()
 
-    def _get_pool_apr_from_db(self, pool_name: str, protocol: str) -> Optional[float]:
+    def _get_pool_apr_from_db(self, pool_name: str, protocol: str) -> Optional[Dict]:
         """
         Look up the latest APR for a pool from the database.
 
@@ -217,7 +221,7 @@ class PortfolioService:
             protocol: Protocol name (e.g., "sundaeswap", "minswap", "wingriders")
 
         Returns:
-            APR as float percentage, or None if not found
+            Dict with 'apr' (total APR) and 'apr_1d' (1-day APR), or None if not found
         """
         # Normalize pool name: convert "/" to "-" for database lookup
         # Database stores as "NIGHT-ADA", UI might have "NIGHT/ADA"
@@ -235,7 +239,7 @@ class PortfolioService:
             with conn.cursor() as cur:
                 # Query for latest APR snapshot matching pool and protocol
                 cur.execute("""
-                    SELECT s.apr, s.farm_apr, s.fee_apr, s.staking_apr
+                    SELECT s.apr, s.farm_apr, s.fee_apr, s.staking_apr, s.apr_1d
                     FROM apr_snapshots s
                     JOIN assets a ON s.asset_id = a.asset_id
                     JOIN protocols p ON s.protocol_id = p.protocol_id
@@ -252,12 +256,20 @@ class PortfolioService:
                     farm_apr = float(row[1]) if row[1] else 0
                     fee_apr = float(row[2]) if row[2] else 0
                     staking_apr = float(row[3]) if row[3] else 0
+                    apr_1d = float(row[4]) if row[4] else None
 
                     # If farm_apr is set, use it as total (already includes all components)
                     if farm_apr > 0:
-                        return round(farm_apr, 2)
-                    # Otherwise use base APR
-                    return round(base_apr, 2) if base_apr > 0 else None
+                        total_apr = round(farm_apr, 2)
+                    elif base_apr > 0:
+                        total_apr = round(base_apr, 2)
+                    else:
+                        total_apr = None
+
+                    return {
+                        "apr": total_apr,
+                        "apr_1d": round(apr_1d, 2) if apr_1d else None
+                    }
 
                 return None
         except Exception as e:
@@ -1685,10 +1697,15 @@ class PortfolioService:
 
             # Look up APR from database if not available from protocol API
             position_apr = lp_value_info.get("apr")
+            position_apr_1d = None
             if not position_apr and pool_name and pool_name != f"{protocol.upper()} LP":
-                position_apr = self._get_pool_apr_from_db(pool_name, protocol)
-                if position_apr:
-                    logger.debug("Found %s APR from database: %s = %.2f%%", protocol, pool_name, position_apr)
+                apr_data = self._get_pool_apr_from_db(pool_name, protocol)
+                if apr_data:
+                    position_apr = apr_data.get("apr")
+                    position_apr_1d = apr_data.get("apr_1d")
+                    if position_apr:
+                        logger.debug("Found %s APR from database: %s = %.2f%% (1d: %s)",
+                                    protocol, pool_name, position_apr, position_apr_1d)
 
             # Calculate impermanent loss using reserve-based price ratios
             if wallet_address:
@@ -1788,6 +1805,7 @@ class PortfolioService:
                 token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                 usd_value=lp_value_info.get("ada_value"),
                 current_apr=position_apr,
+                apr_1d=position_apr_1d,
                 pool_share_percent=lp_value_info.get("pool_share_percent"),
                 entry_date=il_data.get("entry_date"),
                 entry_price_ratio=il_data.get("entry_price_ratio"),
@@ -1985,6 +2003,13 @@ class PortfolioService:
                                 # Farm APR replaces base APR for staked positions
                                 lp_value_info["apr"] = farm_apr
 
+                        # Get 1d APR from database
+                        farm_apr_1d = None
+                        if pool_name and pool_name != "WingRiders LP":
+                            apr_data = self._get_pool_apr_from_db(pool_name, "wingriders")
+                            if apr_data:
+                                farm_apr_1d = apr_data.get("apr_1d")
+
                         # Calculate IL for farm position
                         il_data = self._calculate_farm_position_il(
                             wallet_address, policy_id, asset_name_hex,
@@ -2007,6 +2032,7 @@ class PortfolioService:
                             token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                             usd_value=lp_value_info.get("ada_value"),
                             current_apr=lp_value_info.get("apr"),
+                            apr_1d=farm_apr_1d,
                             pool_share_percent=lp_value_info.get("pool_share_percent"),
                             entry_date=il_data.get("entry_date"),
                             entry_price_ratio=il_data.get("entry_price_ratio"),
@@ -2208,10 +2234,15 @@ class PortfolioService:
 
                 # Look up APR from database if not available from API
                 farm_apr = lp_value_info.get("apr")
+                farm_apr_1d = None
                 if not farm_apr and pool_name != "SundaeSwap LP":
-                    farm_apr = self._get_pool_apr_from_db(pool_name, "sundaeswap")
-                    if farm_apr:
-                        logger.debug("Found SundaeSwap APR from database: %s = %.2f%%", pool_name, farm_apr)
+                    apr_data = self._get_pool_apr_from_db(pool_name, "sundaeswap")
+                    if apr_data:
+                        farm_apr = apr_data.get("apr")
+                        farm_apr_1d = apr_data.get("apr_1d")
+                        if farm_apr:
+                            logger.debug("Found SundaeSwap APR from database: %s = %.2f%% (1d: %s)",
+                                        pool_name, farm_apr, farm_apr_1d)
 
                 # Calculate IL for farm position
                 il_data = self._calculate_farm_position_il(
@@ -2235,6 +2266,7 @@ class PortfolioService:
                     token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                     usd_value=lp_value_info.get("ada_value"),
                     current_apr=farm_apr,
+                    apr_1d=farm_apr_1d,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
                     entry_date=il_data.get("entry_date"),
@@ -2425,11 +2457,15 @@ class PortfolioService:
 
                 # Look up APR from database if not available from protocol API
                 farm_apr = lp_value_info.get("apr")
+                farm_apr_1d = None
                 if not farm_apr and pool_name and pool_name != f"{lp_info['protocol'].upper()} LP":
-                    farm_apr = self._get_pool_apr_from_db(pool_name, lp_info["protocol"])
-                    if farm_apr:
-                        logger.debug("Found %s farm APR from database: %s = %.2f%%",
-                                     lp_info["protocol"], pool_name, farm_apr)
+                    apr_data = self._get_pool_apr_from_db(pool_name, lp_info["protocol"])
+                    if apr_data:
+                        farm_apr = apr_data.get("apr")
+                        farm_apr_1d = apr_data.get("apr_1d")
+                        if farm_apr:
+                            logger.debug("Found %s farm APR from database: %s = %.2f%% (1d: %s)",
+                                        lp_info["protocol"], pool_name, farm_apr, farm_apr_1d)
 
                 # Calculate IL for farm position
                 final_pool_name = pool_name or f"{lp_info['protocol'].upper()} LP"
@@ -2454,6 +2490,7 @@ class PortfolioService:
                     token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
                     usd_value=lp_value_info.get("ada_value"),  # ADA value for now
                     current_apr=farm_apr,
+                    apr_1d=farm_apr_1d,
                     rewards_earned=None,
                     pool_share_percent=lp_value_info.get("pool_share_percent"),
                     entry_date=il_data.get("entry_date"),
