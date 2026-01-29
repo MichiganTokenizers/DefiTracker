@@ -237,6 +237,41 @@
         pointer-events: none;
     }
 
+    /* Net Gain/Loss - prominent top-right */
+    .net-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--text-secondary);
+    }
+    .net-value.net-gain {
+        color: var(--sea-green);
+    }
+    .net-value.net-loss {
+        color: var(--crimson-carrot);
+    }
+    .net-label {
+        font-size: 0.65rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+    .net-tooltip {
+        cursor: help;
+    }
+
+    /* Yield value (smaller, in metrics row) */
+    .yield-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--sea-green);
+    }
+    .yield-value.yield-negative {
+        color: var(--crimson-carrot);
+    }
+
     /* Entry date badge */
     .entry-date-badge {
         font-size: 0.65rem;

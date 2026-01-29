@@ -89,6 +89,12 @@ class LPPosition:
     current_price_ratio: Optional[float] = None  # Current price ratio
     il_percent: Optional[float] = None  # Impermanent loss as percentage (negative = loss)
     il_usd: Optional[float] = None  # IL in USD terms
+    # Yield tracking fields
+    actual_apr: Optional[float] = None  # Average APR since entry
+    actual_yield: Optional[float] = None  # Yield % earned to date (apr * days/365)
+    net_gain_loss: Optional[float] = None  # actual_yield + il_percent
+    days_held: Optional[int] = None  # Days since entry
+    apr_data_points: Optional[int] = None  # Number of daily APR snapshots available
 
     def to_dict(self) -> Dict:
         return {
@@ -105,6 +111,11 @@ class LPPosition:
             "current_price_ratio": self.current_price_ratio,
             "il_percent": self.il_percent,
             "il_usd": self.il_usd,
+            "actual_apr": self.actual_apr,
+            "actual_yield": self.actual_yield,
+            "net_gain_loss": self.net_gain_loss,
+            "days_held": self.days_held,
+            "apr_data_points": self.apr_data_points,
         }
 
 
@@ -127,6 +138,12 @@ class FarmPosition:
     current_price_ratio: Optional[float] = None
     il_percent: Optional[float] = None
     il_usd: Optional[float] = None
+    # Yield tracking fields
+    actual_apr: Optional[float] = None  # Average APR since entry
+    actual_yield: Optional[float] = None  # Yield % earned to date (apr * days/365)
+    net_gain_loss: Optional[float] = None  # actual_yield + il_percent
+    days_held: Optional[int] = None  # Days since entry
+    apr_data_points: Optional[int] = None  # Number of daily APR snapshots available
 
     def to_dict(self) -> Dict:
         return {
@@ -145,6 +162,11 @@ class FarmPosition:
             "current_price_ratio": self.current_price_ratio,
             "il_percent": self.il_percent,
             "il_usd": self.il_usd,
+            "actual_apr": self.actual_apr,
+            "actual_yield": self.actual_yield,
+            "net_gain_loss": self.net_gain_loss,
+            "days_held": self.days_held,
+            "apr_data_points": self.apr_data_points,
         }
 
 
@@ -243,6 +265,140 @@ class PortfolioService:
             return None
         finally:
             self._db.return_connection(conn)
+
+    def _get_average_apr_since_entry(
+        self, pool_name: str, protocol: str, entry_date: str
+    ) -> Optional[Dict]:
+        """
+        Get average APR since entry date for yield calculations.
+
+        Queries apr_snapshots for all daily values between entry_date and now,
+        returning the average APR and metadata about data availability.
+
+        Args:
+            pool_name: Pool pair name (e.g., "NIGHT/ADA")
+            protocol: Protocol name (e.g., "minswap", "wingriders", "sundaeswap")
+            entry_date: ISO date string (YYYY-MM-DD) of position entry
+
+        Returns:
+            Dict with:
+                - avg_apr: float - Time-weighted average APR
+                - data_points: int - Number of days with APR data
+                - first_date: str - First snapshot date
+                - last_date: str - Last snapshot date
+            Or None if no data found
+        """
+        if not entry_date:
+            return None
+
+        # Normalize pool name for database lookup
+        db_pool_name = pool_name.replace("/", "-")
+        parts = db_pool_name.split("-")
+        if len(parts) == 2:
+            reversed_pool_name = f"{parts[1]}-{parts[0]}"
+        else:
+            reversed_pool_name = db_pool_name
+
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                # Query for average APR since entry date
+                # Use COALESCE to prefer farm_apr (which includes all components)
+                cur.execute("""
+                    SELECT
+                        AVG(COALESCE(NULLIF(s.farm_apr, 0), s.apr)) as avg_apr,
+                        COUNT(*) as data_points,
+                        MIN(s.timestamp)::date as first_date,
+                        MAX(s.timestamp)::date as last_date
+                    FROM apr_snapshots s
+                    JOIN assets a ON s.asset_id = a.asset_id
+                    JOIN protocols p ON s.protocol_id = p.protocol_id
+                    WHERE (LOWER(a.symbol) = LOWER(%s) OR LOWER(a.symbol) = LOWER(%s))
+                      AND LOWER(p.name) = LOWER(%s)
+                      AND s.timestamp::date >= %s::date
+                """, (db_pool_name, reversed_pool_name, protocol, entry_date))
+
+                row = cur.fetchone()
+                if row and row[0] is not None and row[1] > 0:
+                    return {
+                        "avg_apr": float(row[0]),
+                        "data_points": int(row[1]),
+                        "first_date": str(row[2]) if row[2] else None,
+                        "last_date": str(row[3]) if row[3] else None,
+                    }
+
+                return None
+        except Exception as e:
+            logger.debug("Error looking up average APR for %s/%s since %s: %s",
+                        pool_name, protocol, entry_date, e)
+            return None
+        finally:
+            self._db.return_connection(conn)
+
+    def _calculate_yield_metrics(
+        self, pool_name: str, protocol: str, entry_date: str, il_percent: Optional[float]
+    ) -> Dict:
+        """
+        Calculate actual yield and net gain/loss for a position.
+
+        Args:
+            pool_name: Pool pair name
+            protocol: Protocol name
+            entry_date: ISO date string of entry
+            il_percent: Impermanent loss percentage (negative = loss)
+
+        Returns:
+            Dict with actual_apr, actual_yield, net_gain_loss, days_held, apr_data_points
+        """
+        result = {
+            "actual_apr": None,
+            "actual_yield": None,
+            "net_gain_loss": None,
+            "days_held": None,
+            "apr_data_points": None,
+        }
+
+        if not entry_date:
+            return result
+
+        try:
+            from datetime import date, datetime
+
+            # Parse entry date and calculate days held
+            if isinstance(entry_date, str):
+                entry_dt = datetime.strptime(entry_date, "%Y-%m-%d").date()
+            else:
+                entry_dt = entry_date
+
+            days_held = (date.today() - entry_dt).days
+            if days_held < 0:
+                days_held = 0
+
+            result["days_held"] = days_held
+
+            # Get average APR since entry
+            apr_history = self._get_average_apr_since_entry(pool_name, protocol, entry_date)
+
+            if apr_history and apr_history.get("avg_apr"):
+                avg_apr = apr_history["avg_apr"]
+                result["actual_apr"] = round(avg_apr, 2)
+                result["apr_data_points"] = apr_history.get("data_points", 0)
+
+                # Calculate actual yield: APR * (days_held / 365)
+                # APR is in percentage form (e.g., 52.0 for 52%)
+                actual_yield = avg_apr * (days_held / 365)
+                result["actual_yield"] = round(actual_yield, 2)
+
+                # Calculate net gain/loss: yield + IL
+                # IL is already negative when it's a loss
+                if il_percent is not None:
+                    net_gain_loss = actual_yield + il_percent
+                    result["net_gain_loss"] = round(net_gain_loss, 2)
+
+        except Exception as e:
+            logger.debug("Error calculating yield metrics: %s", e)
+
+        return result
 
     def _normalize_pool_name(self, ticker_a: str, ticker_b: str) -> str:
         """
@@ -1606,6 +1762,24 @@ class PortfolioService:
                             )
 
             logger.info("Final il_data for %s: %s", pool_name, il_data)
+
+            # Calculate yield metrics (avg APR since entry, actual yield, net gain/loss)
+            yield_data = self._calculate_yield_metrics(
+                pool_name or f"{protocol.upper()} LP",
+                protocol,
+                il_data.get("entry_date"),
+                il_data.get("il_percent")
+            )
+            if yield_data.get("actual_apr"):
+                logger.info(
+                    "Yield metrics for %s: avg_apr=%.2f%%, yield=%.2f%%, net=%.2f%% (%dd)",
+                    pool_name,
+                    yield_data.get("actual_apr", 0),
+                    yield_data.get("actual_yield", 0),
+                    yield_data.get("net_gain_loss", 0),
+                    yield_data.get("days_held", 0)
+                )
+
             return LPPosition(
                 protocol=protocol,
                 pool=pool_name or f"{protocol.upper()} LP",
@@ -1620,6 +1794,11 @@ class PortfolioService:
                 current_price_ratio=il_data.get("current_price_ratio"),
                 il_percent=il_data.get("il_percent"),
                 il_usd=il_data.get("il_usd"),
+                actual_apr=yield_data.get("actual_apr"),
+                actual_yield=yield_data.get("actual_yield"),
+                net_gain_loss=yield_data.get("net_gain_loss"),
+                days_held=yield_data.get("days_held"),
+                apr_data_points=yield_data.get("apr_data_points"),
             )
         except Exception as e:
             logger.warning("Error creating LP position: %s", e)
@@ -1812,6 +1991,13 @@ class PortfolioService:
                             "wingriders", pool_name, lp_value_info
                         )
 
+                        # Calculate yield metrics
+                        yield_data = self._calculate_yield_metrics(
+                            pool_name, "wingriders",
+                            il_data.get("entry_date"),
+                            il_data.get("il_percent")
+                        )
+
                         position = FarmPosition(
                             protocol="wingriders",
                             pool=pool_name,
@@ -1827,6 +2013,11 @@ class PortfolioService:
                             current_price_ratio=il_data.get("current_price_ratio"),
                             il_percent=il_data.get("il_percent"),
                             il_usd=il_data.get("il_usd"),
+                            actual_apr=yield_data.get("actual_apr"),
+                            actual_yield=yield_data.get("actual_yield"),
+                            net_gain_loss=yield_data.get("net_gain_loss"),
+                            days_held=yield_data.get("days_held"),
+                            apr_data_points=yield_data.get("apr_data_points"),
                         )
                         positions.append(position)
                         logger.debug(
@@ -2028,6 +2219,13 @@ class PortfolioService:
                     "sundaeswap", pool_name, lp_value_info
                 )
 
+                # Calculate yield metrics
+                yield_data = self._calculate_yield_metrics(
+                    pool_name, "sundaeswap",
+                    il_data.get("entry_date"),
+                    il_data.get("il_percent")
+                )
+
                 position = FarmPosition(
                     protocol="sundaeswap",
                     pool=pool_name,
@@ -2044,6 +2242,11 @@ class PortfolioService:
                     current_price_ratio=il_data.get("current_price_ratio"),
                     il_percent=il_data.get("il_percent"),
                     il_usd=il_data.get("il_usd"),
+                    actual_apr=yield_data.get("actual_apr"),
+                    actual_yield=yield_data.get("actual_yield"),
+                    net_gain_loss=yield_data.get("net_gain_loss"),
+                    days_held=yield_data.get("days_held"),
+                    apr_data_points=yield_data.get("apr_data_points"),
                 )
                 positions.append(position)
 
@@ -2235,6 +2438,13 @@ class PortfolioService:
                     lp_info["protocol"], final_pool_name, lp_value_info
                 )
 
+                # Calculate yield metrics
+                yield_data = self._calculate_yield_metrics(
+                    final_pool_name, lp_info["protocol"],
+                    il_data.get("entry_date"),
+                    il_data.get("il_percent")
+                )
+
                 position = FarmPosition(
                     protocol=lp_info["protocol"],
                     pool=final_pool_name,
@@ -2251,6 +2461,11 @@ class PortfolioService:
                     current_price_ratio=il_data.get("current_price_ratio"),
                     il_percent=il_data.get("il_percent"),
                     il_usd=il_data.get("il_usd"),
+                    actual_apr=yield_data.get("actual_apr"),
+                    actual_yield=yield_data.get("actual_yield"),
+                    net_gain_loss=yield_data.get("net_gain_loss"),
+                    days_held=yield_data.get("days_held"),
+                    apr_data_points=yield_data.get("apr_data_points"),
                 )
                 positions.append(position)
 

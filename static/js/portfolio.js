@@ -33,9 +33,9 @@ function initTooltips() {
     tooltipEl.style.display = 'none';
     document.body.appendChild(tooltipEl);
 
-    // Delegated event listeners for dynamic content
+    // Delegated event listeners for dynamic content (both IL and net tooltips)
     document.addEventListener('mouseenter', function(e) {
-        if (e.target.classList.contains('il-tooltip')) {
+        if (e.target.classList.contains('il-tooltip') || e.target.classList.contains('net-tooltip')) {
             const text = e.target.getAttribute('data-tooltip');
             if (text) {
                 tooltipEl.textContent = text;
@@ -46,7 +46,7 @@ function initTooltips() {
     }, true);
 
     document.addEventListener('mouseleave', function(e) {
-        if (e.target.classList.contains('il-tooltip')) {
+        if (e.target.classList.contains('il-tooltip') || e.target.classList.contains('net-tooltip')) {
             tooltipEl.style.display = 'none';
         }
     }, true);
@@ -142,6 +142,35 @@ Formula: IL = 2×√k / (1+k) − 1
 • IL = ${ilPercent.toFixed(2)}%
 
 A ${Math.abs(priceChange)}% price move → ${Math.abs(ilPercent).toFixed(2)}% IL`;
+}
+
+/**
+ * Generate yield tooltip text with napkin math breakdown
+ * @param {object} pos - Position object with yield metrics
+ * @returns {string} - Tooltip text explaining the calculation
+ */
+function generateYieldTooltip(pos) {
+    if (!pos.actual_apr || !pos.days_held) {
+        return 'Net Gain/Loss = Actual Yield + Impermanent Loss\n\nNo APR history available for this position.';
+    }
+
+    const yieldCalc = pos.actual_apr * (pos.days_held / 365);
+    const ilPercent = pos.il_percent || 0;
+    const netGainLoss = pos.net_gain_loss || (yieldCalc + ilPercent);
+
+    return `Yield Calculation:
+• Avg APR: ${pos.actual_apr.toFixed(2)}%
+• Days held: ${pos.days_held}
+• Formula: APR × (days/365)
+• Actual Yield: ${pos.actual_apr.toFixed(2)}% × (${pos.days_held}/365)
+• Actual Yield: ${yieldCalc >= 0 ? '+' : ''}${yieldCalc.toFixed(2)}%
+
+Net Gain/Loss:
+• Yield: ${yieldCalc >= 0 ? '+' : ''}${yieldCalc.toFixed(2)}%
+• IL: ${ilPercent >= 0 ? '+' : ''}${ilPercent.toFixed(2)}%
+• Net: ${netGainLoss >= 0 ? '+' : ''}${netGainLoss.toFixed(2)}%
+
+APR data from ${pos.apr_data_points || 0} daily snapshots`;
 }
 
 /**
@@ -335,7 +364,7 @@ function renderLPPositionCard(pos) {
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
+    const currentApr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
@@ -345,16 +374,24 @@ function renderLPPositionCard(pos) {
     const tokenAAmount = tokenA.amount ? formatNumber(tokenA.amount) : '0';
     const tokenBAmount = tokenB.amount ? formatNumber(tokenB.amount) : '0';
 
-    // Impermanent loss display with price ratio delta
+    // Impermanent loss display
     const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
     const ilPercent = hasIL ? pos.il_percent : null;
     const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
-
-    // Calculate price ratio change percentage and tooltip
-    const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
     const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
+
+    // Yield metrics (new)
+    const daysHeld = pos.days_held || 0;
+    const actualApr = pos.actual_apr ? `${formatNumber(pos.actual_apr)}%` : '--';
+    const actualYield = pos.actual_yield !== null && pos.actual_yield !== undefined
+        ? `${pos.actual_yield >= 0 ? '+' : ''}${pos.actual_yield.toFixed(2)}%` : '--';
+    const netGainLoss = pos.net_gain_loss !== null && pos.net_gain_loss !== undefined
+        ? `${pos.net_gain_loss >= 0 ? '+' : ''}${pos.net_gain_loss.toFixed(2)}%` : '--';
+    const netClass = pos.net_gain_loss !== null
+        ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
+    const yieldTooltip = generateYieldTooltip(pos);
 
     return `
         <div class="position-card">
@@ -364,29 +401,38 @@ function renderLPPositionCard(pos) {
                     ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
+                    <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
+                    <div class="net-label">Net Gain/Loss</div>
                     <div class="value-display">${adaValue}</div>
                     ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
             </div>
             <div class="row g-3">
                 <div class="col-3">
-                    <div class="data-label">APR</div>
-                    <div class="apr-value">${apr}</div>
+                    <div class="data-label">Current APR</div>
+                    <div class="apr-value">${currentApr}</div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="data-label">Avg APR (${daysHeld}d)</div>
+                    <div class="apr-value">${actualApr}</div>
                 </div>
-                <div class="col-3">
+                <div class="col-2">
+                    <div class="data-label">Yield</div>
+                    <div class="yield-value">${actualYield}</div>
+                </div>
+                <div class="col-2">
+                    <div class="data-label">IL</div>
+                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
+                </div>
+                <div class="col-2">
                     <div class="data-label">Pool Share</div>
                     <div class="data-value token-amount">${poolShare}</div>
                 </div>
-                <div class="col-3">
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-12">
                     <div class="data-label">Your Tokens</div>
-                    <div class="token-amount">
-                        ${tokenAAmount} ${tokenA.symbol || '?'}<br>
-                        ${tokenBAmount} ${tokenB.symbol || '?'}
-                    </div>
+                    <div class="token-amount">${tokenAAmount} ${tokenA.symbol || '?'} / ${tokenBAmount} ${tokenB.symbol || '?'}</div>
                 </div>
             </div>
         </div>
@@ -415,7 +461,7 @@ function renderFarmPositionCard(pos) {
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    const apr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
+    const currentApr = pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--';
 
     const tokenA = pos.token_a || {};
     const tokenB = pos.token_b || {};
@@ -429,16 +475,24 @@ function renderFarmPositionCard(pos) {
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
 
-    // Impermanent loss display with price ratio delta (same as LP positions)
+    // Impermanent loss display
     const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
     const ilPercent = hasIL ? pos.il_percent : null;
     const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
-
-    // Calculate price ratio change percentage and tooltip
-    const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
     const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
+
+    // Yield metrics (new)
+    const daysHeld = pos.days_held || 0;
+    const actualApr = pos.actual_apr ? `${formatNumber(pos.actual_apr)}%` : '--';
+    const actualYield = pos.actual_yield !== null && pos.actual_yield !== undefined
+        ? `${pos.actual_yield >= 0 ? '+' : ''}${pos.actual_yield.toFixed(2)}%` : '--';
+    const netGainLoss = pos.net_gain_loss !== null && pos.net_gain_loss !== undefined
+        ? `${pos.net_gain_loss >= 0 ? '+' : ''}${pos.net_gain_loss.toFixed(2)}%` : '--';
+    const netClass = pos.net_gain_loss !== null
+        ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
+    const yieldTooltip = generateYieldTooltip(pos);
 
     return `
         <div class="position-card farm-position">
@@ -449,6 +503,8 @@ function renderFarmPositionCard(pos) {
                     ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
+                    <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
+                    <div class="net-label">Net Gain/Loss</div>
                     <div class="value-display">${adaValue}</div>
                     ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
@@ -456,22 +512,29 @@ function renderFarmPositionCard(pos) {
             <div class="row g-3">
                 <div class="col-3">
                     <div class="data-label">Farm APR</div>
-                    <div class="apr-value">${apr}</div>
+                    <div class="apr-value">${currentApr}</div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="data-label">Avg APR (${daysHeld}d)</div>
+                    <div class="apr-value">${actualApr}</div>
                 </div>
-                <div class="col-3">
+                <div class="col-2">
+                    <div class="data-label">Yield</div>
+                    <div class="yield-value">${actualYield}</div>
+                </div>
+                <div class="col-2">
+                    <div class="data-label">IL</div>
+                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
+                </div>
+                <div class="col-2">
                     <div class="data-label">Pool Share</div>
                     <div class="data-value token-amount">${poolShare}</div>
                 </div>
-                <div class="col-3">
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-12">
                     <div class="data-label">Your Tokens</div>
-                    <div class="token-amount">
-                        ${tokenAAmount} ${tokenASymbol}<br>
-                        ${tokenBAmount} ${tokenBSymbol}
-                    </div>
+                    <div class="token-amount">${tokenAAmount} ${tokenASymbol} / ${tokenBAmount} ${tokenBSymbol}</div>
                 </div>
             </div>
         </div>
