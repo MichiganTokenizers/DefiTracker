@@ -14,10 +14,68 @@ const PROTOCOL_LOGOS = {
 // Current ADA price in USD (fetched on page load)
 let adaPriceUsd = null;
 
+// Tooltip element reference
+let tooltipEl = null;
+
 // Load positions on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadPortfolioPositions();
+    initTooltips();
 });
+
+/**
+ * Initialize tooltip event listeners (delegated)
+ */
+function initTooltips() {
+    // Create tooltip element
+    tooltipEl = document.createElement('div');
+    tooltipEl.className = 'il-tooltip-popup';
+    tooltipEl.style.display = 'none';
+    document.body.appendChild(tooltipEl);
+
+    // Delegated event listeners for dynamic content
+    document.addEventListener('mouseenter', function(e) {
+        if (e.target.classList.contains('il-tooltip')) {
+            const text = e.target.getAttribute('data-tooltip');
+            if (text) {
+                tooltipEl.textContent = text;
+                tooltipEl.style.display = 'block';
+                positionTooltip(e.target);
+            }
+        }
+    }, true);
+
+    document.addEventListener('mouseleave', function(e) {
+        if (e.target.classList.contains('il-tooltip')) {
+            tooltipEl.style.display = 'none';
+        }
+    }, true);
+}
+
+/**
+ * Position tooltip below the target element
+ */
+function positionTooltip(target) {
+    const rect = target.getBoundingClientRect();
+    const tooltipRect = tooltipEl.getBoundingClientRect();
+
+    let left = rect.left;
+    let top = rect.bottom + 8;
+
+    // Keep tooltip within viewport horizontally
+    if (left + tooltipRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipRect.width - 10;
+    }
+    if (left < 10) left = 10;
+
+    // If tooltip would go below viewport, show above instead
+    if (top + tooltipRect.height > window.innerHeight - 10) {
+        top = rect.top - tooltipRect.height - 8;
+    }
+
+    tooltipEl.style.left = left + 'px';
+    tooltipEl.style.top = top + 'px';
+}
 
 /**
  * Fetch current ADA price from CoinGecko
