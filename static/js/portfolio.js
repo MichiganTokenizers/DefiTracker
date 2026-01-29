@@ -57,6 +57,36 @@ function calculatePriceRatioDelta(entryRatio, currentRatio) {
 }
 
 /**
+ * Generate IL tooltip text with napkin math breakdown
+ * @param {number} entryRatio - Price ratio at entry
+ * @param {number} currentRatio - Current price ratio
+ * @param {number} ilPercent - Calculated IL percentage
+ * @returns {string} - Tooltip text explaining the calculation
+ */
+function generateILTooltip(entryRatio, currentRatio, ilPercent) {
+    if (!entryRatio || !currentRatio || ilPercent === null) {
+        return 'Impermanent loss measures the difference between holding tokens in a liquidity pool vs holding them separately.';
+    }
+
+    const k = currentRatio / entryRatio;
+    const priceChange = ((k - 1) * 100).toFixed(1);
+    const priceChangeSign = k >= 1 ? '+' : '';
+
+    return `IL Calculation:
+• Entry ratio: ${entryRatio.toFixed(4)}
+• Current ratio: ${currentRatio.toFixed(4)}
+• Price change (k): ${priceChangeSign}${priceChange}%
+
+Formula: IL = 2×√k / (1+k) − 1
+• k = ${k.toFixed(4)}
+• √k = ${Math.sqrt(k).toFixed(4)}
+• IL = 2×${Math.sqrt(k).toFixed(4)} / ${(1 + k).toFixed(4)} − 1
+• IL = ${ilPercent.toFixed(2)}%
+
+A ${Math.abs(priceChange)}% price move → ${Math.abs(ilPercent).toFixed(2)}% IL`;
+}
+
+/**
  * Fetch all portfolio positions from the API
  */
 async function loadPortfolioPositions() {
@@ -268,8 +298,9 @@ function renderLPPositionCard(pos) {
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
 
-    // Calculate price ratio change percentage
+    // Calculate price ratio change percentage and tooltip
     const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
+    const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
 
     return `
         <div class="position-card">
@@ -290,7 +321,7 @@ function renderLPPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="il-value ${ilClass} il-tooltip" title="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
@@ -351,8 +382,9 @@ function renderFarmPositionCard(pos) {
     const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
     const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
 
-    // Calculate price ratio change percentage
+    // Calculate price ratio change percentage and tooltip
     const priceRatioDelta = calculatePriceRatioDelta(pos.entry_price_ratio, pos.current_price_ratio);
+    const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
 
     return `
         <div class="position-card farm-position">
@@ -374,7 +406,7 @@ function renderFarmPositionCard(pos) {
                 </div>
                 <div class="col-3">
                     <div class="data-label">Impermanent Loss</div>
-                    <div class="il-value ${ilClass}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
+                    <div class="il-value ${ilClass} il-tooltip" title="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}${priceRatioDelta ? ` <span class="price-delta">(${priceRatioDelta})</span>` : ''}</div>
                 </div>
                 <div class="col-3">
                     <div class="data-label">Pool Share</div>
