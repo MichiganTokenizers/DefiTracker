@@ -1468,15 +1468,27 @@ function getProtocolDisplayName(protocol) {
     return protocolDisplayNames[protocol] || protocol.charAt(0).toUpperCase() + protocol.slice(1);
 }
 
+function formatTvl(tvl) {
+    if (tvl >= 1000000) {
+        return `$${(tvl / 1000000).toFixed(1)}M`;
+    } else if (tvl >= 1000) {
+        return `$${(tvl / 1000).toFixed(0)}K`;
+    } else if (tvl > 0) {
+        return `$${tvl.toFixed(0)}`;
+    }
+    return '';
+}
+
 function initSingleAssetChart() {
     const assetSelect = document.getElementById('singleAssetSelect');
 
-    // Populate asset dropdown from allAssets
+    // Populate asset dropdown from allAssets (already sorted by TVL)
     assetSelect.innerHTML = '<option value="">Select an asset...</option>';
     allAssets.forEach(asset => {
         const option = document.createElement('option');
         option.value = asset.symbol;
-        option.textContent = asset.symbol;
+        const tvlDisplay = asset.tvl ? ` (${formatTvl(asset.tvl)})` : '';
+        option.textContent = `${asset.symbol}${tvlDisplay}`;
         assetSelect.appendChild(option);
     });
 
