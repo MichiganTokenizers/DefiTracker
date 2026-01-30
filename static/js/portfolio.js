@@ -394,46 +394,60 @@ function renderLPPositionCard(pos) {
         ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
     const yieldTooltip = generateYieldTooltip(pos);
 
+    // Format duration as days and hours
+    const durationDisplay = formatDuration(daysHeld);
+
     return `
         <div class="position-card">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
-                    ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
                     <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
                     <div class="net-label">Net Gain/Loss</div>
-                    <div class="value-display">${adaValue}</div>
-                    ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
             </div>
             <div class="row g-3">
                 <div class="col-3">
-                    <div class="data-label">1d APR</div>
-                    <div class="apr-value">${apr1d}</div>
+                    <div class="metrics-stack">
+                        <div class="data-label">1d APR</div>
+                        <div class="apr-value">${apr1d}</div>
+                        <div class="data-label mt-2">Avg APR (${daysHeld}d)</div>
+                        <div class="apr-value apr-secondary">${actualApr}</div>
+                    </div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">Avg APR (${daysHeld}d)</div>
-                    <div class="apr-value">${actualApr}</div>
+                    <div class="metrics-stack">
+                        <div class="data-label">Started</div>
+                        <div class="data-value">${entryDate || '--'}</div>
+                        <div class="data-label mt-2">Duration</div>
+                        <div class="data-value">${durationDisplay}</div>
+                    </div>
                 </div>
-                <div class="col-2">
-                    <div class="data-label">Yield</div>
-                    <div class="yield-value">${actualYield}</div>
+                <div class="col-3">
+                    <div class="metrics-stack">
+                        <div class="data-label">Yield</div>
+                        <div class="yield-value">${actualYield}</div>
+                        <div class="data-label mt-2">Impermanent Loss</div>
+                        <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
+                    </div>
                 </div>
-                <div class="col-2">
-                    <div class="data-label">IL</div>
-                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
-                </div>
-                <div class="col-2">
-                    <div class="data-label">Pool Share</div>
-                    <div class="data-value token-amount">${poolShare}</div>
-                </div>
-            </div>
-            <div class="row g-3 mt-2">
-                <div class="col-12">
-                    <div class="data-label">Your Tokens</div>
-                    <div class="token-amount">${tokenAAmount} ${tokenA.symbol || '?'} / ${tokenBAmount} ${tokenB.symbol || '?'}</div>
+                <div class="col-3">
+                    <table class="position-details-table">
+                        <tr>
+                            <td class="detail-label">Your Tokens</td>
+                            <td class="detail-value token-amount">${tokenAAmount} ${tokenA.symbol || '?'} / ${tokenBAmount} ${tokenB.symbol || '?'}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Value</td>
+                            <td class="detail-value">${adaValue}${usdDisplay ? ` <span class="value-usd-inline">(${usdDisplay})</span>` : ''}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Pool Share</td>
+                            <td class="detail-value token-amount">${poolShare}</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
         </div>
@@ -452,6 +466,15 @@ function formatEntryDate(isoDate) {
     } catch (e) {
         return null;
     }
+}
+
+/**
+ * Format duration in days as "X days" or "X days, Y hrs"
+ */
+function formatDuration(days) {
+    if (!days || days <= 0) return '--';
+    if (days === 1) return '1 day';
+    return `${days} days`;
 }
 
 /**
@@ -496,47 +519,61 @@ function renderFarmPositionCard(pos) {
         ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
     const yieldTooltip = generateYieldTooltip(pos);
 
+    // Format duration as days and hours
+    const durationDisplay = formatDuration(daysHeld);
+
     return `
         <div class="position-card farm-position">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
                     <span class="farm-badge">Farming</span>
-                    ${entryDate ? `<span class="entry-date-badge">Since ${entryDate}</span>` : ''}
                 </div>
                 <div class="text-end">
                     <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
                     <div class="net-label">Net Gain/Loss</div>
-                    <div class="value-display">${adaValue}</div>
-                    ${usdDisplay ? `<div class="value-usd">${usdDisplay}</div>` : ''}
                 </div>
             </div>
             <div class="row g-3">
                 <div class="col-3">
-                    <div class="data-label">1d APR</div>
-                    <div class="apr-value">${apr1d}</div>
+                    <div class="metrics-stack">
+                        <div class="data-label">1d APR</div>
+                        <div class="apr-value">${apr1d}</div>
+                        <div class="data-label mt-2">Avg APR (${daysHeld}d)</div>
+                        <div class="apr-value apr-secondary">${actualApr}</div>
+                    </div>
                 </div>
                 <div class="col-3">
-                    <div class="data-label">Avg APR (${daysHeld}d)</div>
-                    <div class="apr-value">${actualApr}</div>
+                    <div class="metrics-stack">
+                        <div class="data-label">Started</div>
+                        <div class="data-value">${entryDate || '--'}</div>
+                        <div class="data-label mt-2">Duration</div>
+                        <div class="data-value">${durationDisplay}</div>
+                    </div>
                 </div>
-                <div class="col-2">
-                    <div class="data-label">Yield</div>
-                    <div class="yield-value">${actualYield}</div>
+                <div class="col-3">
+                    <div class="metrics-stack">
+                        <div class="data-label">Yield</div>
+                        <div class="yield-value">${actualYield}</div>
+                        <div class="data-label mt-2">Impermanent Loss</div>
+                        <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
+                    </div>
                 </div>
-                <div class="col-2">
-                    <div class="data-label">IL</div>
-                    <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
-                </div>
-                <div class="col-2">
-                    <div class="data-label">Pool Share</div>
-                    <div class="data-value token-amount">${poolShare}</div>
-                </div>
-            </div>
-            <div class="row g-3 mt-2">
-                <div class="col-12">
-                    <div class="data-label">Your Tokens</div>
-                    <div class="token-amount">${tokenAAmount} ${tokenASymbol} / ${tokenBAmount} ${tokenBSymbol}</div>
+                <div class="col-3">
+                    <table class="position-details-table">
+                        <tr>
+                            <td class="detail-label">Your Tokens</td>
+                            <td class="detail-value token-amount">${tokenAAmount} ${tokenASymbol} / ${tokenBAmount} ${tokenBSymbol}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Value</td>
+                            <td class="detail-value">${adaValue}${usdDisplay ? ` <span class="value-usd-inline">(${usdDisplay})</span>` : ''}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Pool Share</td>
+                            <td class="detail-value token-amount">${poolShare}</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
         </div>
