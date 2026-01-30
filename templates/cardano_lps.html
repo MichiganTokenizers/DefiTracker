@@ -788,32 +788,49 @@ function isDefaultAsset(symbol) {
 }
 
 async function loadAssets() {
-    const response = await fetch(`/api/${chain}/all/assets?yield_type=${yieldType}`);
-    const rawAssets = await response.json();
-    
-    const symbolSet = new Set();
-    rawAssets.forEach(a => symbolSet.add(a.symbol));
-    allAssets = Array.from(symbolSet).map(s => ({ symbol: s }));
-    
+    // Fetch history data to get TVL for sorting
+    const days = document.getElementById('timeRange').value;
+    const historyResponse = await fetch(`/api/${chain}/all/history?days=${days}&yield_type=${yieldType}`);
+    const historyData = await historyResponse.json();
+
+    // Build asset list with max TVL for each symbol
+    const assetTvlMap = {};
+    historyData.forEach(item => {
+        const symbol = item.symbol;
+        // Get latest TVL from the data array
+        const latestData = item.data && item.data.length > 0 ? item.data[item.data.length - 1] : null;
+        const tvl = latestData ? (latestData.tvl_usd || 0) : 0;
+
+        // Keep the highest TVL for each symbol (in case multiple protocols have the same pair)
+        if (!assetTvlMap[symbol] || tvl > assetTvlMap[symbol]) {
+            assetTvlMap[symbol] = tvl;
+        }
+    });
+
+    // Create sorted asset list by TVL descending
+    allAssets = Object.keys(assetTvlMap)
+        .map(symbol => ({ symbol, tvl: assetTvlMap[symbol] }))
+        .sort((a, b) => b.tvl - a.tvl);
+
     const optionsContainer = document.getElementById('assetOptions');
     optionsContainer.innerHTML = '';
-    
+
     allAssets.forEach(asset => {
         const isDefault = isDefaultAsset(asset.symbol);
         if (isDefault) {
             selectedAssets.add(asset.symbol);
         }
-        
+
         const div = document.createElement('div');
         div.className = 'multi-select-option';
         div.innerHTML = `
-            <input type="checkbox" id="asset-${asset.symbol}" value="${asset.symbol}" 
+            <input type="checkbox" id="asset-${asset.symbol}" value="${asset.symbol}"
                    ${isDefault ? 'checked' : ''} onchange="toggleAsset('${asset.symbol}')">
             <label for="asset-${asset.symbol}">${asset.symbol}</label>
         `;
         optionsContainer.appendChild(div);
     });
-    
+
     updateAssetLabel();
 }
 
