@@ -158,6 +158,11 @@
         margin: 0;
         flex: 1;
     }
+    .multi-select-option .tvl-hint {
+        color: var(--text-secondary);
+        font-size: 0.85em;
+        opacity: 0.7;
+    }
     
     /* Styled cards - sand dune theme */
     .chart-card-dark,
@@ -821,12 +826,19 @@ async function loadAssets() {
             selectedAssets.add(asset.symbol);
         }
 
+        // Format TVL for display
+        const tvlDisplay = asset.tvl >= 1000000
+            ? `$${(asset.tvl / 1000000).toFixed(1)}M`
+            : asset.tvl >= 1000
+                ? `$${(asset.tvl / 1000).toFixed(0)}K`
+                : `$${asset.tvl.toFixed(0)}`;
+
         const div = document.createElement('div');
         div.className = 'multi-select-option';
         div.innerHTML = `
             <input type="checkbox" id="asset-${asset.symbol}" value="${asset.symbol}"
                    ${isDefault ? 'checked' : ''} onchange="toggleAsset('${asset.symbol}')">
-            <label for="asset-${asset.symbol}">${asset.symbol}</label>
+            <label for="asset-${asset.symbol}">${asset.symbol} <span class="tvl-hint">(${tvlDisplay})</span></label>
         `;
         optionsContainer.appendChild(div);
     });
