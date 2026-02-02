@@ -1699,17 +1699,22 @@ class PortfolioService:
             if not pool_name:
                 pool_name = self._get_pool_name_from_asset(policy_id, asset_name_hex, protocol)
 
-            # Look up APR from database if not available from protocol API
+            # Get APR from protocol API if available
             position_apr = lp_value_info.get("apr")
             position_apr_1d = None
-            if not position_apr and pool_name and pool_name != f"{protocol.upper()} LP":
+
+            # Always look up apr_1d from database (and fallback APR if not from API)
+            if pool_name and pool_name != f"{protocol.upper()} LP":
                 apr_data = self._get_pool_apr_from_db(pool_name, protocol)
                 if apr_data:
-                    position_apr = apr_data.get("apr")
+                    # Always use database apr_1d (more consistent with charts)
                     position_apr_1d = apr_data.get("apr_1d")
-                    if position_apr:
+                    # Use database APR if not available from protocol API
+                    if not position_apr:
+                        position_apr = apr_data.get("apr")
+                    if position_apr or position_apr_1d:
                         logger.debug("Found %s APR from database: %s = %.2f%% (1d: %s)",
-                                    protocol, pool_name, position_apr, position_apr_1d)
+                                    protocol, pool_name, position_apr or 0, position_apr_1d)
 
             # Calculate impermanent loss using reserve-based price ratios
             if wallet_address:
@@ -2236,17 +2241,22 @@ class PortfolioService:
                     if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
                         pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
-                # Look up APR from database if not available from API
+                # Get APR from protocol API if available
                 farm_apr = lp_value_info.get("apr")
                 farm_apr_1d = None
-                if not farm_apr and pool_name != "SundaeSwap LP":
+
+                # Always look up apr_1d from database (and fallback APR if not from API)
+                if pool_name and pool_name != "SundaeSwap LP":
                     apr_data = self._get_pool_apr_from_db(pool_name, "sundaeswap")
                     if apr_data:
-                        farm_apr = apr_data.get("apr")
+                        # Always use database apr_1d (more consistent with charts)
                         farm_apr_1d = apr_data.get("apr_1d")
-                        if farm_apr:
+                        # Use database APR if not available from protocol API
+                        if not farm_apr:
+                            farm_apr = apr_data.get("apr")
+                        if farm_apr or farm_apr_1d:
                             logger.debug("Found SundaeSwap APR from database: %s = %.2f%% (1d: %s)",
-                                        pool_name, farm_apr, farm_apr_1d)
+                                        pool_name, farm_apr or 0, farm_apr_1d)
 
                 # Calculate IL for farm position
                 il_data = self._calculate_farm_position_il(
@@ -2459,17 +2469,22 @@ class PortfolioService:
                         if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
                             pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
-                # Look up APR from database if not available from protocol API
+                # Get APR from protocol API if available
                 farm_apr = lp_value_info.get("apr")
                 farm_apr_1d = None
-                if not farm_apr and pool_name and pool_name != f"{lp_info['protocol'].upper()} LP":
+
+                # Always look up apr_1d from database (and fallback APR if not from API)
+                if pool_name and pool_name != f"{lp_info['protocol'].upper()} LP":
                     apr_data = self._get_pool_apr_from_db(pool_name, lp_info["protocol"])
                     if apr_data:
-                        farm_apr = apr_data.get("apr")
+                        # Always use database apr_1d (more consistent with charts)
                         farm_apr_1d = apr_data.get("apr_1d")
-                        if farm_apr:
+                        # Use database APR if not available from protocol API
+                        if not farm_apr:
+                            farm_apr = apr_data.get("apr")
+                        if farm_apr or farm_apr_1d:
                             logger.debug("Found %s farm APR from database: %s = %.2f%% (1d: %s)",
-                                        lp_info["protocol"], pool_name, farm_apr, farm_apr_1d)
+                                        lp_info["protocol"], pool_name, farm_apr or 0, farm_apr_1d)
 
                 # Calculate IL for farm position
                 final_pool_name = pool_name or f"{lp_info['protocol'].upper()} LP"
