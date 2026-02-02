@@ -317,12 +317,12 @@ class PortfolioService:
         try:
             with conn.cursor() as cur:
                 # Query for average APR since entry date
-                # Use COALESCE to prefer farm_apr (which includes all components)
+                # Use apr_1d to match the 1d APR shown on charts
                 # Filter by yield_type='lp' to match the chart/table queries
                 cur.execute("""
                     SELECT
-                        AVG(COALESCE(NULLIF(s.farm_apr, 0), s.apr)) as avg_apr,
-                        COUNT(*) as data_points,
+                        AVG(s.apr_1d) as avg_apr,
+                        COUNT(*) FILTER (WHERE s.apr_1d IS NOT NULL) as data_points,
                         MIN(s.timestamp)::date as first_date,
                         MAX(s.timestamp)::date as last_date
                     FROM apr_snapshots s
@@ -332,6 +332,7 @@ class PortfolioService:
                       AND LOWER(p.name) = LOWER(%s)
                       AND s.timestamp::date >= %s::date
                       AND s.yield_type = 'lp'
+                      AND s.apr_1d IS NOT NULL
                 """, (db_pool_name, reversed_pool_name, protocol, entry_date))
 
                 row = cur.fetchone()
