@@ -238,6 +238,7 @@ class PortfolioService:
         try:
             with conn.cursor() as cur:
                 # Query for latest APR snapshot matching pool and protocol
+                # Filter by yield_type='lp' to match the chart/table queries
                 cur.execute("""
                     SELECT s.apr, s.farm_apr, s.fee_apr, s.staking_apr, s.apr_1d
                     FROM apr_snapshots s
@@ -245,6 +246,7 @@ class PortfolioService:
                     JOIN protocols p ON s.protocol_id = p.protocol_id
                     WHERE (LOWER(a.symbol) = LOWER(%s) OR LOWER(a.symbol) = LOWER(%s))
                       AND LOWER(p.name) = LOWER(%s)
+                      AND s.yield_type = 'lp'
                     ORDER BY s.timestamp DESC
                     LIMIT 1
                 """, (db_pool_name, reversed_pool_name, protocol))
@@ -316,6 +318,7 @@ class PortfolioService:
             with conn.cursor() as cur:
                 # Query for average APR since entry date
                 # Use COALESCE to prefer farm_apr (which includes all components)
+                # Filter by yield_type='lp' to match the chart/table queries
                 cur.execute("""
                     SELECT
                         AVG(COALESCE(NULLIF(s.farm_apr, 0), s.apr)) as avg_apr,
@@ -328,6 +331,7 @@ class PortfolioService:
                     WHERE (LOWER(a.symbol) = LOWER(%s) OR LOWER(a.symbol) = LOWER(%s))
                       AND LOWER(p.name) = LOWER(%s)
                       AND s.timestamp::date >= %s::date
+                      AND s.yield_type = 'lp'
                 """, (db_pool_name, reversed_pool_name, protocol, entry_date))
 
                 row = cur.fetchone()
