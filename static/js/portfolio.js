@@ -1,6 +1,6 @@
 /**
- * Portfolio page functionality
- * Fetches and displays user's DeFi positions organized by protocol
+ * Portfolio page - Two-column position cards layout
+ * Layout: Attributes (left) | Results (right)
  */
 
 // Protocol logo mappings
@@ -11,7 +11,7 @@ const PROTOCOL_LOGOS = {
     'liqwid': '/static/liqwid-logo.png'
 };
 
-// Current ADA price in USD (fetched on page load)
+// Current ADA price in USD
 let adaPriceUsd = null;
 
 // Tooltip element reference
@@ -24,18 +24,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Initialize tooltip event listeners (delegated)
+ * Initialize tooltip event listeners
  */
 function initTooltips() {
-    // Create tooltip element
     tooltipEl = document.createElement('div');
-    tooltipEl.className = 'il-tooltip-popup';
+    tooltipEl.className = 'tooltip-popup';
     tooltipEl.style.display = 'none';
     document.body.appendChild(tooltipEl);
 
-    // Delegated event listeners for dynamic content (both IL and net tooltips)
     document.addEventListener('mouseenter', function(e) {
-        if (e.target.classList.contains('il-tooltip') || e.target.classList.contains('net-tooltip')) {
+        if (e.target.classList.contains('tooltip-trigger')) {
             const text = e.target.getAttribute('data-tooltip');
             if (text) {
                 tooltipEl.textContent = text;
@@ -46,7 +44,7 @@ function initTooltips() {
     }, true);
 
     document.addEventListener('mouseleave', function(e) {
-        if (e.target.classList.contains('il-tooltip') || e.target.classList.contains('net-tooltip')) {
+        if (e.target.classList.contains('tooltip-trigger')) {
             tooltipEl.style.display = 'none';
         }
     }, true);
@@ -62,13 +60,11 @@ function positionTooltip(target) {
     let left = rect.left;
     let top = rect.bottom + 8;
 
-    // Keep tooltip within viewport horizontally
     if (left + tooltipRect.width > window.innerWidth - 10) {
         left = window.innerWidth - tooltipRect.width - 10;
     }
     if (left < 10) left = 10;
 
-    // If tooltip would go below viewport, show above instead
     if (top + tooltipRect.height > window.innerHeight - 10) {
         top = rect.top - tooltipRect.height - 8;
     }
@@ -86,7 +82,6 @@ async function fetchAdaPrice() {
         if (response.ok) {
             const data = await response.json();
             adaPriceUsd = data.cardano?.usd || null;
-            console.log('ADA price:', adaPriceUsd);
         }
     } catch (e) {
         console.warn('Could not fetch ADA price:', e);
@@ -94,7 +89,7 @@ async function fetchAdaPrice() {
 }
 
 /**
- * Convert ADA value to USD string
+ * Convert ADA value to USD
  */
 function adaToUsd(adaValue) {
     if (!adaPriceUsd || !adaValue) return null;
@@ -102,24 +97,7 @@ function adaToUsd(adaValue) {
 }
 
 /**
- * Calculate price ratio change as a percentage string
- * @param {number} entryRatio - Price ratio at entry
- * @param {number} currentRatio - Current price ratio
- * @returns {string|null} - Formatted string like "+4.2%" or "-8.5%", or null if can't calculate
- */
-function calculatePriceRatioDelta(entryRatio, currentRatio) {
-    if (!entryRatio || !currentRatio || entryRatio <= 0) return null;
-    const delta = ((currentRatio - entryRatio) / entryRatio) * 100;
-    const sign = delta >= 0 ? '+' : '';
-    return `${sign}${delta.toFixed(1)}%`;
-}
-
-/**
- * Generate IL tooltip text with napkin math breakdown
- * @param {number} entryRatio - Price ratio at entry
- * @param {number} currentRatio - Current price ratio
- * @param {number} ilPercent - Calculated IL percentage
- * @returns {string} - Tooltip text explaining the calculation
+ * Generate IL tooltip text
  */
 function generateILTooltip(entryRatio, currentRatio, ilPercent) {
     if (!entryRatio || !currentRatio || ilPercent === null) {
@@ -131,27 +109,20 @@ function generateILTooltip(entryRatio, currentRatio, ilPercent) {
     const priceChangeSign = k >= 1 ? '+' : '';
 
     return `IL Calculation:
-• Entry ratio: ${entryRatio.toFixed(4)}
-• Current ratio: ${currentRatio.toFixed(4)}
-• Price change (k): ${priceChangeSign}${priceChange}%
+Entry ratio: ${entryRatio.toFixed(4)}
+Current ratio: ${currentRatio.toFixed(4)}
+Price change: ${priceChangeSign}${priceChange}%
 
-Formula: IL = 2×√k / (1+k) − 1
-• k = ${k.toFixed(4)}
-• √k = ${Math.sqrt(k).toFixed(4)}
-• IL = 2×${Math.sqrt(k).toFixed(4)} / ${(1 + k).toFixed(4)} − 1
-• IL = ${ilPercent.toFixed(2)}%
-
-A ${Math.abs(priceChange)}% price move → ${Math.abs(ilPercent).toFixed(2)}% IL`;
+Formula: IL = 2*sqrt(k) / (1+k) - 1
+Result: ${ilPercent.toFixed(2)}%`;
 }
 
 /**
- * Generate yield tooltip text with napkin math breakdown
- * @param {object} pos - Position object with yield metrics
- * @returns {string} - Tooltip text explaining the calculation
+ * Generate yield tooltip text
  */
 function generateYieldTooltip(pos) {
     if (!pos.actual_apr || !pos.days_held) {
-        return 'Net Gain/Loss = Actual Yield + Impermanent Loss\n\nNo APR history available for this position.';
+        return 'Net Gain/Loss = Actual Yield + Impermanent Loss';
     }
 
     const yieldCalc = pos.actual_apr * (pos.days_held / 365);
@@ -159,18 +130,13 @@ function generateYieldTooltip(pos) {
     const netGainLoss = pos.net_gain_loss || (yieldCalc + ilPercent);
 
     return `Yield Calculation:
-• Avg APR: ${pos.actual_apr.toFixed(2)}%
-• Days held: ${pos.days_held}
-• Formula: APR × (days/365)
-• Actual Yield: ${pos.actual_apr.toFixed(2)}% × (${pos.days_held}/365)
-• Actual Yield: ${yieldCalc >= 0 ? '+' : ''}${yieldCalc.toFixed(2)}%
+Avg APR: ${pos.actual_apr.toFixed(2)}%
+Days held: ${pos.days_held}
+Actual Yield: ${yieldCalc.toFixed(2)}%
 
-Net Gain/Loss:
-• Yield: ${yieldCalc >= 0 ? '+' : ''}${yieldCalc.toFixed(2)}%
-• IL: ${ilPercent >= 0 ? '+' : ''}${ilPercent.toFixed(2)}%
-• Net: ${netGainLoss >= 0 ? '+' : ''}${netGainLoss.toFixed(2)}%
-
-APR data from ${pos.apr_data_points || 0} daily snapshots`;
+Net = Yield + IL
+${yieldCalc.toFixed(2)}% + ${ilPercent.toFixed(2)}%
+= ${netGainLoss.toFixed(2)}%`;
 }
 
 /**
@@ -181,7 +147,6 @@ async function loadPortfolioPositions() {
     setLoading(true);
 
     try {
-        // Fetch ADA price first (in parallel with positions would be better but keep simple)
         await fetchAdaPrice();
 
         const response = await fetch('/api/portfolio/positions', {
@@ -194,20 +159,6 @@ async function loadPortfolioPositions() {
             throw new Error(data.message || data.error || 'Failed to load positions');
         }
 
-        // Debug: Log raw positions data to check IL fields
-        console.log('LP Positions from API:', data.lp_positions);
-        console.log('Farm Positions from API:', data.farm_positions);
-        if (data.farm_positions && data.farm_positions.length > 0) {
-            console.log('First Farm position IL data:', {
-                pool: data.farm_positions[0].pool,
-                il_percent: data.farm_positions[0].il_percent,
-                entry_date: data.farm_positions[0].entry_date,
-                entry_price_ratio: data.farm_positions[0].entry_price_ratio,
-                current_price_ratio: data.farm_positions[0].current_price_ratio
-            });
-        }
-
-        // Organize positions by protocol
         const positionsByProtocol = organizeByProtocol(
             data.lp_positions || [],
             data.farm_positions || [],
@@ -215,7 +166,6 @@ async function loadPortfolioPositions() {
             data.warning
         );
 
-        // Render each protocol section
         renderProtocolSection('minswap', positionsByProtocol.minswap);
         renderProtocolSection('wingriders', positionsByProtocol.wingriders);
         renderProtocolSection('sundaeswap', positionsByProtocol.sundaeswap);
@@ -244,14 +194,12 @@ function organizeByProtocol(lpPositions, farmPositions, lendingPositions, warnin
         liqwid: { supply: [], borrow: [], warning: null }
     };
 
-    // Store warning for LP section
     if (warning) {
         protocols.minswap.warning = warning;
         protocols.wingriders.warning = warning;
         protocols.sundaeswap.warning = warning;
     }
 
-    // Organize LP positions
     lpPositions.forEach(pos => {
         const protocol = (pos.protocol || '').toLowerCase();
         if (protocols[protocol]) {
@@ -259,7 +207,6 @@ function organizeByProtocol(lpPositions, farmPositions, lendingPositions, warnin
         }
     });
 
-    // Organize farm positions
     farmPositions.forEach(pos => {
         const protocol = (pos.protocol || '').toLowerCase();
         if (protocols[protocol]) {
@@ -267,7 +214,6 @@ function organizeByProtocol(lpPositions, farmPositions, lendingPositions, warnin
         }
     });
 
-    // Organize lending positions
     lendingPositions.forEach(pos => {
         if (pos.type === 'supply') {
             protocols.liqwid.supply.push(pos);
@@ -280,25 +226,25 @@ function organizeByProtocol(lpPositions, farmPositions, lendingPositions, warnin
 }
 
 /**
- * Refresh positions (called by refresh button)
+ * Refresh positions
  */
 async function refreshPositions() {
     const btn = document.getElementById('refreshBtn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '↻ Refreshing...';
+        btn.innerHTML = 'Refreshing...';
     }
 
     await loadPortfolioPositions();
 
     if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '↻ Refresh';
+        btn.innerHTML = 'Refresh';
     }
 }
 
 /**
- * Render a DEX protocol section (Minswap, WingRiders, SundaeSwap)
+ * Render a DEX protocol section
  */
 function renderProtocolSection(protocol, data) {
     const containerId = `${protocol}Section`;
@@ -309,7 +255,6 @@ function renderProtocolSection(protocol, data) {
     const hasFarm = data.farm && data.farm.length > 0;
     const hasWarning = data.warning;
 
-    // Show warning if API key not configured
     if (hasWarning && !hasLp && !hasFarm) {
         container.innerHTML = `
             <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); color: #856404; border-radius: 8px; padding: 1rem;">
@@ -324,7 +269,7 @@ function renderProtocolSection(protocol, data) {
             <div class="empty-state">
                 <div class="empty-state-icon">💧</div>
                 <p>No positions found</p>
-                <small>Provide liquidity or stake LP tokens on ${capitalizeFirst(protocol)} to see your positions here.</small>
+                <small>Provide liquidity on ${capitalizeFirst(protocol)} to see your positions here.</small>
             </div>
         `;
         return;
@@ -332,25 +277,17 @@ function renderProtocolSection(protocol, data) {
 
     let html = '';
 
-    // Single combined section for all LP positions
-    html += `
-        <div class="subsection-header">
-            <span class="subsection-icon">💧</span>
-            <h6>Liquidity Pool Positions</h6>
-        </div>
-    `;
-
-    // Render farming positions first (with "Farming" pill)
+    // Render farming positions first
     if (hasFarm) {
         data.farm.forEach(pos => {
-            html += renderFarmPositionCard(pos);
+            html += renderPositionCard(pos, true);
         });
     }
 
     // Then render non-farming LP positions
     if (hasLp) {
         data.lp.forEach(pos => {
-            html += renderLPPositionCard(pos);
+            html += renderPositionCard(pos, false);
         });
     }
 
@@ -358,134 +295,27 @@ function renderProtocolSection(protocol, data) {
 }
 
 /**
- * Render a single LP position card
+ * Render a single LP position card with two-column layout
+ * Left: Attributes (Start, Value, Pool Share, 1d APR, Tokens)
+ * Right: Results (Duration, Avg APR, Actual Yield, Impermanent Loss, Net Gain/Loss)
  */
-function renderLPPositionCard(pos) {
+function renderPositionCard(pos, isFarm) {
+    // Extract data
+    const poolName = pos.pool || 'Unknown Pool';
+
+    // Left column values
+    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : '--';
+    const daysHeld = pos.days_held || 0;
+    const duration = formatDuration(daysHeld);
+
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    // Use 1d APR if available, fall back to current_apr
-    const apr1d = pos.apr_1d ? `${formatNumber(pos.apr_1d)}%` : (pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--');
+
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
         : '--';
 
-    const tokenA = pos.token_a || {};
-    const tokenB = pos.token_b || {};
-    const tokenAAmount = tokenA.amount ? formatNumber(tokenA.amount) : '0';
-    const tokenBAmount = tokenB.amount ? formatNumber(tokenB.amount) : '0';
-
-    // Impermanent loss display
-    const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
-    const ilPercent = hasIL ? pos.il_percent : null;
-    const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
-    const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
-    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
-    const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
-
-    // Yield metrics (new)
-    const daysHeld = pos.days_held || 0;
-    const actualApr = pos.actual_apr ? `${formatNumber(pos.actual_apr)}%` : '--';
-    const actualYield = pos.actual_yield !== null && pos.actual_yield !== undefined
-        ? `${pos.actual_yield >= 0 ? '+' : ''}${pos.actual_yield.toFixed(2)}%` : '--';
-    const netGainLoss = pos.net_gain_loss !== null && pos.net_gain_loss !== undefined
-        ? `${pos.net_gain_loss >= 0 ? '+' : ''}${pos.net_gain_loss.toFixed(2)}%` : '--';
-    const netClass = pos.net_gain_loss !== null
-        ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
-    const yieldTooltip = generateYieldTooltip(pos);
-
-    // Format duration as days and hours
-    const durationDisplay = formatDuration(daysHeld);
-
-    return `
-        <div class="position-card">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                    <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
-                </div>
-                <div class="text-end">
-                    <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
-                    <div class="net-label">Net Gain/Loss</div>
-                </div>
-            </div>
-            <div class="row g-3">
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">1d APR</div>
-                        <div class="apr-value">${apr1d}</div>
-                        <div class="data-label mt-2">Avg APR (${daysHeld}d)</div>
-                        <div class="apr-value apr-secondary">${actualApr}</div>
-                    </div>
-                </div>
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">Started</div>
-                        <div class="data-value">${entryDate || '--'}</div>
-                        <div class="data-label mt-2">Duration</div>
-                        <div class="data-value">${durationDisplay}</div>
-                    </div>
-                </div>
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">Yield</div>
-                        <div class="yield-value">${actualYield}</div>
-                        <div class="data-label mt-2">Impermanent Loss</div>
-                        <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
-                    </div>
-                </div>
-                <div class="col-3">
-                    <table class="position-details-table">
-                        <tr>
-                            <td class="detail-label">Your Tokens</td>
-                            <td class="detail-value token-amount">${tokenAAmount} ${tokenA.symbol || '?'} / ${tokenBAmount} ${tokenB.symbol || '?'}</td>
-                        </tr>
-                        <tr>
-                            <td class="detail-label">Value</td>
-                            <td class="detail-value">${adaValue}${usdDisplay ? ` <span class="value-usd-inline">(${usdDisplay})</span>` : ''}</td>
-                        </tr>
-                        <tr>
-                            <td class="detail-label">Pool Share</td>
-                            <td class="detail-value token-amount">${poolShare}</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Format entry date for display (e.g., "Dec 9, 2025")
- */
-function formatEntryDate(isoDate) {
-    if (!isoDate) return null;
-    try {
-        const date = new Date(isoDate);
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * Format duration in days as "X days" or "X days, Y hrs"
- */
-function formatDuration(days) {
-    if (!days || days <= 0) return '--';
-    if (days === 1) return '1 day';
-    return `${days} days`;
-}
-
-/**
- * Render a single farm position card
- */
-function renderFarmPositionCard(pos) {
-    // Value displayed in ADA with USD conversion
-    const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
-    const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
-    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
-    // Use 1d APR if available, fall back to current_apr
     const apr1d = pos.apr_1d ? `${formatNumber(pos.apr_1d)}%` : (pos.current_apr ? `${formatNumber(pos.current_apr)}%` : '--');
 
     const tokenA = pos.token_a || {};
@@ -495,85 +325,97 @@ function renderFarmPositionCard(pos) {
     const tokenASymbol = tokenA.symbol || '?';
     const tokenBSymbol = tokenB.symbol || '?';
 
-    // Pool share percentage
-    const poolShare = pos.pool_share_percent
-        ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
-        : '--';
+    // Right column values
+    const avgApr = pos.actual_apr ? `${formatNumber(pos.actual_apr)}%` : '--';
 
-    // Impermanent loss display
-    const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
-    const ilPercent = hasIL ? pos.il_percent : null;
-    const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'il-loss' : 'il-gain') : '';
-    const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
-    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : null;
-    const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
-
-    // Yield metrics (new)
-    const daysHeld = pos.days_held || 0;
-    const actualApr = pos.actual_apr ? `${formatNumber(pos.actual_apr)}%` : '--';
     const actualYield = pos.actual_yield !== null && pos.actual_yield !== undefined
         ? `${pos.actual_yield >= 0 ? '+' : ''}${pos.actual_yield.toFixed(2)}%` : '--';
+    const yieldClass = pos.actual_yield !== null
+        ? (pos.actual_yield >= 0 ? 'positive' : 'negative') : '';
+
+    const hasIL = pos.il_percent !== null && pos.il_percent !== undefined;
+    const ilPercent = hasIL ? pos.il_percent : null;
+    const ilDisplay = ilPercent !== null ? `${ilPercent > 0 ? '+' : ''}${ilPercent.toFixed(2)}%` : '--';
+    const ilClass = ilPercent !== null ? (ilPercent < 0 ? 'negative' : 'positive') : '';
+    const ilTooltip = generateILTooltip(pos.entry_price_ratio, pos.current_price_ratio, ilPercent);
+
     const netGainLoss = pos.net_gain_loss !== null && pos.net_gain_loss !== undefined
         ? `${pos.net_gain_loss >= 0 ? '+' : ''}${pos.net_gain_loss.toFixed(2)}%` : '--';
     const netClass = pos.net_gain_loss !== null
-        ? (pos.net_gain_loss >= 0 ? 'net-gain' : 'net-loss') : '';
+        ? (pos.net_gain_loss >= 0 ? 'positive' : 'negative') : '';
     const yieldTooltip = generateYieldTooltip(pos);
 
-    // Format duration as days and hours
-    const durationDisplay = formatDuration(daysHeld);
+    const farmClass = isFarm ? 'farm-position' : '';
+    const farmBadge = isFarm ? '<span class="farm-badge">Farming</span>' : '';
 
     return `
-        <div class="position-card farm-position">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                    <span class="pool-name">${pos.pool || 'Unknown Pool'}</span>
-                    <span class="farm-badge">Farming</span>
-                </div>
-                <div class="text-end">
-                    <div class="net-value ${netClass} net-tooltip" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</div>
-                    <div class="net-label">Net Gain/Loss</div>
-                </div>
-            </div>
-            <div class="row g-3">
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">1d APR</div>
-                        <div class="apr-value">${apr1d}</div>
-                        <div class="data-label mt-2">Avg APR (${daysHeld}d)</div>
-                        <div class="apr-value apr-secondary">${actualApr}</div>
+        <div class="position-card ${farmClass}">
+            <div class="pool-name">${poolName}${farmBadge}</div>
+
+            <div class="position-columns">
+                <!-- Left Column: Attributes -->
+                <div class="attributes-column">
+                    <div class="column-header">Attributes</div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Start</span>
+                        <span class="attr-value">${entryDate}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Value</span>
+                        <span class="attr-value">${adaValue}${usdDisplay ? ` <span class="small">(${usdDisplay})</span>` : ''}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Pool Share</span>
+                        <span class="attr-value mono">${poolShare}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">1d APR</span>
+                        <span class="attr-value">${apr1d}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Tokens</span>
+                        <div class="tokens-display">
+                            <div class="token-line">${tokenAAmount} ${tokenASymbol}</div>
+                            <div class="token-line">${tokenBAmount} ${tokenBSymbol}</div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">Started</div>
-                        <div class="data-value">${entryDate || '--'}</div>
-                        <div class="data-label mt-2">Duration</div>
-                        <div class="data-value">${durationDisplay}</div>
+
+                <!-- Right Column: Results -->
+                <div class="results-column">
+                    <div class="column-header">Results</div>
+
+                    <div class="result-row">
+                        <span class="result-label">Duration</span>
+                        <span class="result-value">${duration}</span>
                     </div>
-                </div>
-                <div class="col-3">
-                    <div class="metrics-stack">
-                        <div class="data-label">Yield</div>
-                        <div class="yield-value">${actualYield}</div>
-                        <div class="data-label mt-2">Impermanent Loss</div>
-                        <div class="il-value ${ilClass} il-tooltip" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</div>
+
+                    <div class="result-row">
+                        <span class="result-label">Avg APR</span>
+                        <span class="result-value">${avgApr}</span>
                     </div>
-                </div>
-                <div class="col-3">
-                    <table class="position-details-table">
-                        <tr>
-                            <td class="detail-label">Your Tokens</td>
-                            <td class="detail-value token-amount">${tokenAAmount} ${tokenASymbol} / ${tokenBAmount} ${tokenBSymbol}</td>
-                        </tr>
-                        <tr>
-                            <td class="detail-label">Value</td>
-                            <td class="detail-value">${adaValue}${usdDisplay ? ` <span class="value-usd-inline">(${usdDisplay})</span>` : ''}</td>
-                        </tr>
-                        <tr>
-                            <td class="detail-label">Pool Share</td>
-                            <td class="detail-value token-amount">${poolShare}</td>
-                        </tr>
-                    </table>
+
+                    <div class="result-row">
+                        <span class="result-label">Actual Yield</span>
+                        <span class="result-value ${yieldClass}">${actualYield}</span>
+                    </div>
+
+                    <div class="result-row">
+                        <span class="result-label">Impermanent Loss</span>
+                        <span class="result-value ${ilClass} tooltip-trigger" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</span>
+                    </div>
+
+                    <div class="net-gain-row">
+                        <div class="result-row">
+                            <span class="net-gain-label">Net Gain/Loss</span>
+                            <span class="net-gain-value ${netClass} tooltip-trigger" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -581,7 +423,31 @@ function renderFarmPositionCard(pos) {
 }
 
 /**
- * Render Liqwid section with Supply and Borrow subsections
+ * Format entry date (e.g., "Dec 8, '25")
+ */
+function formatEntryDate(isoDate) {
+    if (!isoDate) return null;
+    try {
+        const date = new Date(isoDate);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const year = date.getFullYear().toString().slice(-2);
+        return `${months[date.getMonth()]} ${date.getDate()}, '${year}`;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Format duration in days
+ */
+function formatDuration(days) {
+    if (!days || days <= 0) return '--';
+    if (days === 1) return '1 day';
+    return `${days} days`;
+}
+
+/**
+ * Render Liqwid section
  */
 function renderLiqwidSection(data) {
     const container = document.getElementById('liqwidSection');
@@ -603,7 +469,6 @@ function renderLiqwidSection(data) {
 
     let html = '';
 
-    // Supply subsection
     if (hasSupply) {
         html += `
             <div class="subsection-header">
@@ -612,11 +477,10 @@ function renderLiqwidSection(data) {
             </div>
         `;
         data.supply.forEach(pos => {
-            html += renderLendingPositionCard(pos);
+            html += renderLendingCard(pos);
         });
     }
 
-    // Borrow subsection
     if (hasBorrow) {
         html += `
             <div class="subsection-header">
@@ -625,7 +489,7 @@ function renderLiqwidSection(data) {
             </div>
         `;
         data.borrow.forEach(pos => {
-            html += renderLendingPositionCard(pos);
+            html += renderLendingCard(pos);
         });
     }
 
@@ -633,11 +497,10 @@ function renderLiqwidSection(data) {
 }
 
 /**
- * Render a single lending position card
+ * Render a lending position card
  */
-function renderLendingPositionCard(pos) {
+function renderLendingCard(pos) {
     const isSupply = pos.type === 'supply';
-    const colorClass = isSupply ? '' : 'text-danger';
     const typeBadgeClass = isSupply ? 'supply' : 'borrow';
 
     const usdValue = pos.usd_value ? `$${formatNumber(pos.usd_value)}` : '--';
@@ -645,36 +508,27 @@ function renderLendingPositionCard(pos) {
     const amount = pos.amount ? formatNumber(pos.amount) : '0';
 
     return `
-        <div class="position-card">
-            <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="lending-card">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="pool-name">${pos.market || '?'}</span>
                     <span class="type-badge ${typeBadgeClass}">${isSupply ? 'Supply' : 'Borrow'}</span>
                 </div>
                 <div class="text-end">
-                    <div class="value-display">${amount} ${pos.market || ''}</div>
-                    <div class="value-usd">${usdValue}</div>
+                    <div style="font-size: 1.1rem; font-weight: 600;">${amount} ${pos.market || ''}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${usdValue}</div>
                 </div>
             </div>
-            <div class="row g-3">
-                <div class="col-6">
-                    <div class="data-label">${isSupply ? 'Earn APY' : 'Borrow APY'}</div>
-                    <div class="apr-value ${colorClass}">${apy}</div>
-                </div>
-                <div class="col-6">
-                    <div class="data-label">Protocol</div>
-                    <div class="d-flex align-items-center">
-                        <img src="${getProtocolLogo('liqwid')}" height="18" class="me-2" alt="Liqwid" style="border-radius: 4px;">
-                        <span class="data-value">Liqwid</span>
-                    </div>
-                </div>
+            <div class="mt-3">
+                <span class="attr-label">${isSupply ? 'Earn APY' : 'Borrow APY'}</span>
+                <span class="result-value ${isSupply ? 'positive' : 'negative'}" style="margin-left: 0.5rem;">${apy}</span>
             </div>
         </div>
     `;
 }
 
 /**
- * Update the total portfolio value display
+ * Update total portfolio value
  */
 function updateTotalValue(value) {
     const el = document.getElementById('totalValue');
@@ -688,7 +542,6 @@ function updateTotalValue(value) {
         }
     }
 
-    // Update USD value if element exists and we have ADA price
     if (usdEl) {
         const usdValue = value && adaPriceUsd ? value * adaPriceUsd : null;
         if (usdValue) {
@@ -698,13 +551,6 @@ function updateTotalValue(value) {
             usdEl.style.display = 'none';
         }
     }
-}
-
-/**
- * Get protocol logo URL
- */
-function getProtocolLogo(protocol) {
-    return PROTOCOL_LOGOS[protocol?.toLowerCase()] || '/static/cardano-symbol.svg';
 }
 
 /**
@@ -739,7 +585,7 @@ function formatNumber(num) {
 }
 
 /**
- * Render empty states for all protocol sections
+ * Render empty states
  */
 function renderEmptyStates() {
     const protocols = ['minswap', 'wingriders', 'sundaeswap'];

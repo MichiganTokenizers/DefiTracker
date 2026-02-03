@@ -16,7 +16,7 @@
         --liqwid-bg: rgba(14, 135, 73, 0.12);
     }
 
-    /* Protocol section cards - sand dune gradient like home/lps pages */
+    /* Protocol section cards */
     .protocol-card {
         background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
         border-radius: 16px;
@@ -60,16 +60,21 @@
         background: white;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
+    .protocol-header .section-title {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-left: auto;
+        font-weight: 600;
+    }
 
-    /* Protocol-specific header colors - solid light colors, no transparency */
+    /* Protocol-specific header colors */
     .protocol-card.minswap .protocol-header {
         background: #b8e4f2;
     }
     .protocol-card.minswap .protocol-header::before {
         background: #7fcce9;
-    }
-    .protocol-card.minswap .protocol-header h5 {
-        color: var(--carbon-black);
     }
 
     .protocol-card.wingriders .protocol-header {
@@ -78,18 +83,12 @@
     .protocol-card.wingriders .protocol-header::before {
         background: #f5d066;
     }
-    .protocol-card.wingriders .protocol-header h5 {
-        color: var(--carbon-black);
-    }
 
     .protocol-card.sundaeswap .protocol-header {
         background: #e4d1fa;
     }
     .protocol-card.sundaeswap .protocol-header::before {
         background: #c9a3f5;
-    }
-    .protocol-card.sundaeswap .protocol-header h5 {
-        color: var(--carbon-black);
     }
 
     .protocol-card.liqwid .protocol-header {
@@ -98,16 +97,13 @@
     .protocol-card.liqwid .protocol-header::before {
         background: #79cf55;
     }
-    .protocol-card.liqwid .protocol-header h5 {
-        color: var(--carbon-black);
-    }
 
     /* Protocol content area */
     .protocol-content {
         padding: 1.25rem 1.5rem;
     }
 
-    /* Summary card - YieldLife styled */
+    /* Summary card */
     .summary-card {
         background: linear-gradient(135deg, var(--sand-dune) 0%, rgba(221,214,185,0.4) 100%);
         border: 2px solid var(--moss-green);
@@ -153,7 +149,7 @@
         font-weight: 500;
     }
 
-    /* Position cards */
+    /* Position cards - new two-column layout */
     .position-card {
         background: var(--sand-dune);
         border: 1px solid rgba(31, 32, 31, 0.08);
@@ -170,197 +166,110 @@
     }
     .position-card .pool-name {
         font-weight: 700;
-        font-size: 1rem;
+        font-size: 1.1rem;
         color: var(--carbon-black);
-    }
-    .position-card .value-display {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--carbon-black);
-    }
-    .position-card .value-usd {
-        font-size: 0.85rem;
-        color: var(--text-secondary);
     }
 
-    /* APR/APY display */
-    .apr-value {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: var(--sea-green);
+    /* Two-column layout for position details */
+    .position-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-top: 1rem;
     }
-    .apr-label {
+
+    /* Column headers */
+    .column-header {
         font-size: 0.7rem;
-        color: var(--text-secondary);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }
-
-    /* Impermanent Loss display */
-    .il-value {
-        font-size: 1.15rem;
+        letter-spacing: 1px;
+        color: var(--text-secondary);
         font-weight: 700;
-        color: var(--text-secondary);
-    }
-    .il-value.il-loss {
-        color: var(--crimson-carrot);
-    }
-    .il-value.il-gain {
-        color: var(--sea-green);
-    }
-    .il-value .price-delta {
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        opacity: 0.8;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        margin-bottom: 0.75rem;
     }
 
-    /* IL tooltip styling */
-    .il-tooltip {
-        cursor: help;
-    }
-    .il-tooltip-popup {
-        position: fixed;
-        padding: 12px 14px;
-        background: var(--carbon-black);
-        color: #fff;
-        font-size: 0.72rem;
-        font-family: 'SF Mono', 'Fira Code', monospace;
-        line-height: 1.5;
-        white-space: pre-line;
-        border-radius: 8px;
-        z-index: 10000;
-        min-width: 280px;
-        max-width: 320px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-        pointer-events: none;
-    }
-
-    /* Net Gain/Loss - prominent top-right */
-    .net-value {
-        font-size: 1.75rem;
-        font-weight: 700;
-        line-height: 1.2;
-        color: var(--text-secondary);
-    }
-    .net-value.net-gain {
-        color: var(--sea-green);
-    }
-    .net-value.net-loss {
-        color: var(--crimson-carrot);
-    }
-    .net-label {
-        font-size: 0.65rem;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-        margin-bottom: 6px;
-    }
-    .net-tooltip {
-        cursor: help;
-    }
-
-    /* Yield value (smaller, in metrics row) */
-    .yield-value {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: var(--sea-green);
-    }
-    .yield-value.yield-negative {
-        color: var(--crimson-carrot);
-    }
-
-    /* Metrics stack layout */
-    .metrics-stack {
+    /* Attribute rows */
+    .attr-row {
         display: flex;
-        flex-direction: column;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.4rem 0;
     }
-    .metrics-stack .mt-2 {
-        margin-top: 0.75rem !important;
-    }
-    .apr-secondary {
-        opacity: 0.85;
-        font-size: 1rem;
-    }
-
-    /* Position details table */
-    .position-details-table {
-        width: 100%;
-        font-size: 0.85rem;
-    }
-    .position-details-table td {
-        padding: 4px 0;
-        vertical-align: top;
-    }
-    .position-details-table .detail-label {
-        font-size: 0.7rem;
+    .attr-label {
+        font-size: 0.8rem;
         color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-        padding-right: 8px;
-        white-space: nowrap;
-        width: 1%;
+        font-weight: 500;
     }
-    .position-details-table .detail-value {
+    .attr-value {
         font-size: 0.9rem;
         font-weight: 600;
         color: var(--carbon-black);
         text-align: right;
     }
-    .value-usd-inline {
+    .attr-value.small {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .attr-value.mono {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* Results column styling */
+    .result-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.4rem 0;
+    }
+    .result-label {
         font-size: 0.8rem;
         color: var(--text-secondary);
         font-weight: 500;
     }
-
-    /* Entry date badge */
-    .entry-date-badge {
-        font-size: 0.65rem;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-weight: 600;
-        background: rgba(31, 32, 31, 0.06);
-        color: var(--text-secondary);
-        margin-left: 8px;
-        vertical-align: middle;
-    }
-
-    /* Data labels */
-    .data-label {
-        font-size: 0.7rem;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-        margin-bottom: 2px;
-    }
-    .data-value {
+    .result-value {
         font-size: 0.95rem;
         font-weight: 600;
         color: var(--carbon-black);
     }
-
-    /* Position type badges */
-    .type-badge {
-        font-size: 0.7rem;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .type-badge.supply {
-        background: linear-gradient(135deg, rgba(14, 135, 73, 0.15), rgba(121, 207, 85, 0.15));
+    .result-value.positive {
         color: var(--sea-green);
-        border: 1px solid rgba(14, 135, 73, 0.25);
     }
-    .type-badge.borrow {
-        background: linear-gradient(135deg, rgba(247, 75, 3, 0.1), rgba(255, 120, 60, 0.1));
+    .result-value.negative {
         color: var(--crimson-carrot);
-        border: 1px solid rgba(247, 75, 3, 0.25);
+    }
+
+    /* Net Gain/Loss - prominent display */
+    .net-gain-row {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 2px solid rgba(0,0,0,0.08);
+    }
+    .net-gain-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+    }
+    .net-gain-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    .net-gain-value.positive {
+        color: var(--sea-green);
+    }
+    .net-gain-value.negative {
+        color: var(--crimson-carrot);
+    }
+
+    /* Token breakdown */
+    .tokens-display {
+        font-size: 0.85rem;
+        color: var(--carbon-black);
+        line-height: 1.5;
+    }
+    .tokens-display .token-line {
+        font-family: 'SF Mono', 'Fira Code', monospace;
     }
 
     /* Farm badge */
@@ -408,11 +317,31 @@
         margin-right: 8px;
     }
 
-    /* Token amounts */
-    .token-amount {
-        font-family: 'SF Mono', 'Fira Code', monospace;
-        font-size: 0.9rem;
-        color: var(--carbon-black);
+    /* Lending position cards - simpler layout */
+    .lending-card {
+        background: var(--sand-dune);
+        border: 1px solid rgba(31, 32, 31, 0.08);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .type-badge {
+        font-size: 0.7rem;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .type-badge.supply {
+        background: linear-gradient(135deg, rgba(14, 135, 73, 0.15), rgba(121, 207, 85, 0.15));
+        color: var(--sea-green);
+        border: 1px solid rgba(14, 135, 73, 0.25);
+    }
+    .type-badge.borrow {
+        background: linear-gradient(135deg, rgba(247, 75, 3, 0.1), rgba(255, 120, 60, 0.1));
+        color: var(--crimson-carrot);
+        border: 1px solid rgba(247, 75, 3, 0.25);
     }
 
     /* Empty state */
@@ -468,9 +397,6 @@
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(14, 135, 73, 0.35);
     }
-    .refresh-btn:active {
-        transform: translateY(0);
-    }
     .refresh-btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -486,6 +412,36 @@
         padding: 1rem 1.25rem;
         margin-bottom: 1.5rem;
         font-weight: 500;
+    }
+
+    /* Tooltip styling */
+    .tooltip-trigger {
+        cursor: help;
+        border-bottom: 1px dotted var(--text-secondary);
+    }
+    .tooltip-popup {
+        position: fixed;
+        padding: 12px 14px;
+        background: var(--carbon-black);
+        color: #fff;
+        font-size: 0.72rem;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        line-height: 1.5;
+        white-space: pre-line;
+        border-radius: 8px;
+        z-index: 10000;
+        min-width: 280px;
+        max-width: 320px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        pointer-events: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .position-columns {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
     }
 </style>
 {% endblock %}
@@ -514,7 +470,7 @@
                         <small style="color: var(--carbon-black);">Total Portfolio Value</small>
                         <div class="mt-3">
                             <button class="refresh-btn" id="refreshBtn" onclick="refreshPositions()">
-                                ↻ Refresh
+                                Refresh
                             </button>
                         </div>
                     </div>
@@ -529,7 +485,7 @@
             <div class="protocol-card minswap">
                 <div class="protocol-header">
                     <img src="/static/minswap-logo.png" class="protocol-logo" alt="Minswap">
-                    <h5>Minswap</h5>
+                    <h5>Minswap LP Positions</h5>
                 </div>
                 <div class="protocol-content" id="minswapSection">
                     <div class="loading-spinner">
@@ -549,7 +505,7 @@
             <div class="protocol-card wingriders">
                 <div class="protocol-header">
                     <img src="/static/wingriders-logo.svg" class="protocol-logo" alt="WingRiders">
-                    <h5>WingRiders</h5>
+                    <h5>WingRiders LP Positions</h5>
                 </div>
                 <div class="protocol-content" id="wingridersSection">
                     <div class="loading-spinner">
@@ -569,7 +525,7 @@
             <div class="protocol-card sundaeswap">
                 <div class="protocol-header">
                     <img src="/static/sundaeswap-logo.ico" class="protocol-logo" alt="SundaeSwap">
-                    <h5>SundaeSwap</h5>
+                    <h5>SundaeSwap LP Positions</h5>
                 </div>
                 <div class="protocol-content" id="sundaeswapSection">
                     <div class="loading-spinner">
