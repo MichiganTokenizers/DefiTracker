@@ -183,6 +183,12 @@ class LendingPosition:
     amount: float
     usd_value: Optional[float] = None
     current_apy: Optional[float] = None
+    # Yield tracking fields (matching LP positions)
+    entry_date: Optional[str] = None  # ISO date when position was created
+    days_held: Optional[int] = None  # Days since entry
+    avg_apy: Optional[float] = None  # Average APY since entry
+    actual_yield: Optional[float] = None  # Yield % earned to date
+    net_gain_loss: Optional[float] = None  # Net gain/loss percentage
 
     def to_dict(self) -> Dict:
         return {
@@ -192,6 +198,11 @@ class LendingPosition:
             "amount": self.amount,
             "usd_value": self.usd_value,
             "current_apy": self.current_apy,
+            "entry_date": self.entry_date,
+            "days_held": self.days_held,
+            "avg_apy": self.avg_apy,
+            "actual_yield": self.actual_yield,
+            "net_gain_loss": self.net_gain_loss,
         }
 
 
@@ -2707,7 +2718,8 @@ class PortfolioService:
                     market_data = self._get_liqwid_market_data(market_id)
                     if market_data:
                         position = self._create_liqwid_supply_position(
-                            market_id, market_data, quantity
+                            market_id, market_data, quantity,
+                            wallet_address=wallet_address, qtoken_unit=unit
                         )
                         if position:
                             positions.append(position)
@@ -2864,7 +2876,8 @@ class PortfolioService:
         return None
 
     def _create_liqwid_supply_position(
-        self, market_id: str, market_data: Dict, qtoken_amount: str
+        self, market_id: str, market_data: Dict, qtoken_amount: str,
+        wallet_address: str = None, qtoken_unit: str = None
     ) -> Optional[LendingPosition]:
         """Create a LendingPosition from qToken balance and market data."""
         try:
@@ -2891,6 +2904,23 @@ class PortfolioService:
             # Convert APY to percentage
             apy_percent = supply_apy * 100
 
+            # Look up entry date from wallet transaction history
+            entry_date = None
+            days_held = None
+            actual_yield = None
+            net_gain_loss = None
+
+            if wallet_address and qtoken_unit:
+                entry_date = self._get_qtoken_entry_date(wallet_address, qtoken_unit, market=symbol)
+                if entry_date:
+                    from datetime import datetime
+                    entry_dt = datetime.strptime(entry_date, "%Y-%m-%d")
+                    days_held = (datetime.now() - entry_dt).days
+                    # Calculate actual yield: APY * days / 365
+                    if apy_percent > 0 and days_held > 0:
+                        actual_yield = round((apy_percent * days_held) / 365, 2)
+                        net_gain_loss = actual_yield  # No IL for lending
+
             return LendingPosition(
                 protocol="liqwid",
                 market=symbol,
@@ -2898,10 +2928,242 @@ class PortfolioService:
                 amount=round(underlying_amount, 6),
                 usd_value=round(usd_value, 2) if usd_value else None,
                 current_apy=round(apy_percent, 2) if apy_percent > 0 else None,
+                entry_date=entry_date,
+                days_held=days_held,
+                avg_apy=round(apy_percent, 2) if apy_percent > 0 else None,  # Use current as avg for now
+                actual_yield=actual_yield,
+                net_gain_loss=net_gain_loss,
             )
 
         except Exception as e:
             logger.warning("Error creating Liqwid supply position: %s", e)
+            return None
+
+    def _get_lending_entry_from_db(
+        self, wallet_address: str, token_unit: str
+    ) -> Optional[Dict]:
+        """
+        Get stored lending entry data from database.
+
+        Args:
+            wallet_address: User's wallet address
+            token_unit: Full asset unit (policy_id + asset_name hex)
+
+        Returns:
+            Dict with entry_date or None if not found
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT entry_date, entry_tx_hash, protocol, market, position_type
+                    FROM user_lending_entries
+                    WHERE wallet_address = %s
+                      AND token_unit = %s
+                """, (wallet_address, token_unit))
+
+                row = cur.fetchone()
+                if row:
+                    return {
+                        "entry_date": row[0].isoformat() if row[0] else None,
+                        "entry_tx_hash": row[1],
+                        "protocol": row[2],
+                        "market": row[3],
+                        "position_type": row[4],
+                    }
+                return None
+        except Exception as e:
+            logger.debug("Error fetching lending entry from DB: %s", e)
+            return None
+        finally:
+            self._db.return_connection(conn)
+
+    def _store_lending_entry(
+        self, wallet_address: str, token_unit: str, protocol: str,
+        market: str, position_type: str, entry_date: str,
+        entry_tx_hash: Optional[str] = None
+    ) -> bool:
+        """
+        Store lending entry data in database.
+
+        Args:
+            wallet_address: User's wallet address
+            token_unit: Full asset unit (policy_id + asset_name hex)
+            protocol: Protocol name (e.g., 'liqwid')
+            market: Market symbol (e.g., 'ADA')
+            position_type: 'supply' or 'borrow'
+            entry_date: ISO date string (YYYY-MM-DD)
+            entry_tx_hash: Optional transaction hash
+
+        Returns:
+            True if stored successfully
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_lending_entries (
+                        wallet_address, token_unit, protocol, market,
+                        position_type, entry_date, entry_tx_hash
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (wallet_address, token_unit)
+                    DO UPDATE SET
+                        entry_date = LEAST(user_lending_entries.entry_date, EXCLUDED.entry_date),
+                        updated_at = CURRENT_TIMESTAMP
+                """, (
+                    wallet_address, token_unit, protocol, market,
+                    position_type, entry_date, entry_tx_hash
+                ))
+            conn.commit()
+            logger.info("Stored lending entry for %s: %s on %s",
+                       wallet_address[:20], market, entry_date)
+            return True
+        except Exception as e:
+            logger.warning("Error storing lending entry: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            self._db.return_connection(conn)
+
+    def _get_qtoken_entry_date(
+        self, wallet_address: str, qtoken_unit: str,
+        market: str = None
+    ) -> Optional[str]:
+        """
+        Find when a qToken was first received by this wallet.
+
+        First checks database for cached entry, then scans wallet transaction
+        history via Blockfrost if not found, and stores the result.
+
+        Args:
+            wallet_address: User's wallet address
+            qtoken_unit: Full asset unit (policy_id + asset_name hex)
+            market: Market symbol for storage (e.g., 'ADA')
+
+        Returns:
+            ISO date string (YYYY-MM-DD) of first receipt, or None if not found
+        """
+        # Check database first
+        db_entry = self._get_lending_entry_from_db(wallet_address, qtoken_unit)
+        if db_entry and db_entry.get("entry_date"):
+            logger.debug("Found qToken entry date in DB: %s", db_entry["entry_date"])
+            return db_entry["entry_date"]
+
+        if not BLOCKFROST_API_KEY:
+            return None
+
+        entry_date = None
+        entry_tx_hash = None
+
+        try:
+            headers = {"project_id": BLOCKFROST_API_KEY}
+            wallet_prefix = wallet_address[:30]
+
+            # Query oldest transactions first
+            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
+            params = {"order": "asc", "count": 100}
+
+            resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+
+            if resp.status_code != 200:
+                logger.debug("Could not fetch wallet transactions for qToken entry: %d", resp.status_code)
+                return None
+
+            transactions = resp.json()
+            if not transactions:
+                return None
+
+            logger.debug("Checking %d transactions for qToken %s...", len(transactions), qtoken_unit[:20])
+
+            # Find first transaction where wallet received this qToken
+            for tx_info in transactions:
+                tx_hash = tx_info.get("tx_hash", "")
+                block_time = tx_info.get("block_time")
+
+                # Get transaction UTXOs
+                utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
+                utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
+
+                if utxo_resp.status_code != 200:
+                    continue
+
+                utxo_data = utxo_resp.json()
+
+                # Check if wallet received qToken in outputs
+                for output in utxo_data.get("outputs", []):
+                    output_addr = output.get("address", "")
+                    if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
+                        for amount in output.get("amount", []):
+                            if amount.get("unit") == qtoken_unit:
+                                if block_time:
+                                    from datetime import datetime
+                                    dt = datetime.fromtimestamp(block_time)
+                                    entry_date = dt.strftime("%Y-%m-%d")
+                                    entry_tx_hash = tx_hash
+                                    logger.info("Found qToken entry date: %s", entry_date)
+                                    break
+                    if entry_date:
+                        break
+                if entry_date:
+                    break
+
+            # Not in oldest 100, check recent transactions
+            if not entry_date:
+                url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
+                params = {"order": "desc", "count": 50}
+
+                resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+
+                if resp.status_code == 200:
+                    recent_txs = resp.json()
+                    for tx_info in reversed(recent_txs):
+                        tx_hash = tx_info.get("tx_hash", "")
+                        block_time = tx_info.get("block_time")
+
+                        utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
+                        utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
+
+                        if utxo_resp.status_code != 200:
+                            continue
+
+                        utxo_data = utxo_resp.json()
+
+                        for output in utxo_data.get("outputs", []):
+                            output_addr = output.get("address", "")
+                            if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
+                                for amount in output.get("amount", []):
+                                    if amount.get("unit") == qtoken_unit:
+                                        if block_time:
+                                            from datetime import datetime
+                                            dt = datetime.fromtimestamp(block_time)
+                                            entry_date = dt.strftime("%Y-%m-%d")
+                                            entry_tx_hash = tx_hash
+                                            logger.info("Found qToken entry date (recent): %s", entry_date)
+                                            break
+                            if entry_date:
+                                break
+                        if entry_date:
+                            break
+
+            # Store result in database if found
+            if entry_date and market:
+                self._store_lending_entry(
+                    wallet_address=wallet_address,
+                    token_unit=qtoken_unit,
+                    protocol="liqwid",
+                    market=market,
+                    position_type="supply",
+                    entry_date=entry_date,
+                    entry_tx_hash=entry_tx_hash
+                )
+
+            if not entry_date:
+                logger.debug("Could not find qToken receipt date for %s", qtoken_unit[:20])
+
+            return entry_date
+
+        except Exception as e:
+            logger.warning("Error finding qToken entry date: %s", e)
             return None
 
     def _parse_liqwid_loan(self, loan: Dict) -> Optional[LendingPosition]:

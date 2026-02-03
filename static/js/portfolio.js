@@ -482,24 +482,12 @@ function renderLiqwidSection(data) {
     let html = '';
 
     if (hasSupply) {
-        html += `
-            <div class="subsection-header">
-                <span class="subsection-icon" style="color: var(--sea-green);">📈</span>
-                <h6>Supplying</h6>
-            </div>
-        `;
         data.supply.forEach(pos => {
             html += renderLendingCard(pos);
         });
     }
 
     if (hasBorrow) {
-        html += `
-            <div class="subsection-header">
-                <span class="subsection-icon" style="color: var(--crimson-carrot);">📉</span>
-                <h6>Borrowing</h6>
-            </div>
-        `;
         data.borrow.forEach(pos => {
             html += renderLendingCard(pos);
         });
