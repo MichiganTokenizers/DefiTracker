@@ -798,7 +798,7 @@ def portfolio_page():
     return render_template('portfolio.html')
 
 
-@app.route('/MyPortfolio')
+@app.route('/myportfolio')
 @login_required
 def my_portfolio_page():
     """User's portfolio page with new layout - requires wallet connection"""
