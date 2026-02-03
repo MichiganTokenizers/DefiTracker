@@ -308,10 +308,8 @@ function renderPositionCard(pos, isFarm) {
     const daysHeld = pos.days_held || 0;
     const duration = formatDuration(daysHeld);
 
-    const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
-    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '--';
-    const valueDisplay = usdValue ? `${usdDisplay} <span class="small">(${adaValue})</span>` : adaValue;
+    const valueDisplay = usdValue ? `$${formatNumber(usdValue)}` : (pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--');
 
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
