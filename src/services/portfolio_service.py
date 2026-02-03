@@ -524,7 +524,7 @@ class PortfolioService:
                                 # Wallet received LP token
                                 if block_time:
                                     from datetime import datetime
-                                    dt = datetime.utcfromtimestamp(block_time)
+                                    dt = datetime.fromtimestamp(block_time)
                                     logger.info("Found LP entry date (received): %s", dt.strftime("%Y-%m-%d"))
                                     return dt.strftime("%Y-%m-%d")
 
@@ -559,7 +559,7 @@ class PortfolioService:
                                 if amount.get("unit") == asset_id:
                                     if block_time:
                                         from datetime import datetime
-                                        dt = datetime.utcfromtimestamp(block_time)
+                                        dt = datetime.fromtimestamp(block_time)
                                         logger.info("Found LP entry date (recent): %s", dt.strftime("%Y-%m-%d"))
                                         return dt.strftime("%Y-%m-%d")
 
