@@ -176,7 +176,27 @@
         padding: 1.25rem;
         margin-bottom: 0.75rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: all 0.2s ease;
     }
+    .position-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Protocol-specific hover border colors */
+    .protocol-card.minswap .position-card:hover {
+        border-color: #7fcce9;
+    }
+    .protocol-card.wingriders .position-card:hover {
+        border-color: #f5d066;
+    }
+    .protocol-card.sundaeswap .position-card:hover {
+        border-color: #c9a3f5;
+    }
+    .protocol-card.liqwid .position-card:hover {
+        border-color: #79cf55;
+    }
+
     .position-card .pool-name {
         font-weight: 700;
         font-size: 1.1rem;
