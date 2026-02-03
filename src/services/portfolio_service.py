@@ -481,30 +481,32 @@ class PortfolioService:
         wallet_prefix = wallet_address[:30] if len(wallet_address) > 30 else wallet_address
 
         try:
-            # Get asset transaction history (ordered oldest first)
-            url = f"{BLOCKFROST_API_URL}/assets/{asset_id}/transactions"
             headers = {"project_id": BLOCKFROST_API_KEY}
+
+            # Query the wallet's transactions (ordered oldest first) to find when they received this LP token
+            # This is more efficient than querying the asset's global transactions
+            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
             params = {"order": "asc", "count": 100}
 
             resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
 
             if resp.status_code != 200:
-                logger.debug("Could not fetch asset transactions: %d", resp.status_code)
+                logger.debug("Could not fetch wallet transactions: %d", resp.status_code)
                 return None
 
             transactions = resp.json()
             if not transactions:
-                logger.debug("No transactions found for asset %s", asset_id[:20])
+                logger.debug("No transactions found for wallet")
                 return None
 
-            logger.debug("Found %d transactions for LP token, checking for wallet involvement", len(transactions))
+            logger.debug("Found %d wallet transactions, checking for LP token receipt", len(transactions))
 
-            # Find the first transaction where this wallet was involved with the LP token
+            # Find the first transaction where this wallet received the LP token
             for tx_info in transactions:
                 tx_hash = tx_info.get("tx_hash", "")
                 block_time = tx_info.get("block_time")
 
-                # Get transaction UTXOs to check wallet involvement
+                # Get transaction UTXOs to check if this tx involved the LP token
                 utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
                 utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
 
@@ -526,20 +528,42 @@ class PortfolioService:
                                     logger.info("Found LP entry date (received): %s", dt.strftime("%Y-%m-%d"))
                                     return dt.strftime("%Y-%m-%d")
 
-                # Also check if wallet sent LP token from inputs (for staked positions)
-                # The first time the wallet interacted with this LP is when they got it
-                for inp in utxo_data.get("inputs", []):
-                    input_addr = inp.get("address", "")
-                    if input_addr == wallet_address or input_addr.startswith(wallet_prefix):
-                        for amount in inp.get("amount", []):
-                            if amount.get("unit") == asset_id:
-                                # Wallet sent LP token (e.g., to stake it)
-                                # This means they had it before, but we need the receive date
-                                # Continue searching for when they first received it
-                                pass
+            # Not found in oldest transactions - check recent transactions
+            # (user might have just created this position)
+            logger.debug("LP token not in oldest 100 txs, checking recent transactions")
+
+            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
+            params = {"order": "desc", "count": 50}  # Most recent 50
+
+            resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+
+            if resp.status_code == 200:
+                recent_txs = resp.json()
+                # We want to find the EARLIEST receipt, so reverse to check oldest-of-recent first
+                for tx_info in reversed(recent_txs):
+                    tx_hash = tx_info.get("tx_hash", "")
+                    block_time = tx_info.get("block_time")
+
+                    utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
+                    utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
+
+                    if utxo_resp.status_code != 200:
+                        continue
+
+                    utxo_data = utxo_resp.json()
+
+                    for output in utxo_data.get("outputs", []):
+                        output_addr = output.get("address", "")
+                        if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
+                            for amount in output.get("amount", []):
+                                if amount.get("unit") == asset_id:
+                                    if block_time:
+                                        from datetime import datetime
+                                        dt = datetime.utcfromtimestamp(block_time)
+                                        logger.info("Found LP entry date (recent): %s", dt.strftime("%Y-%m-%d"))
+                                        return dt.strftime("%Y-%m-%d")
 
             # Could not find when wallet received this LP token
-            # Return None rather than using pool creation date as fallback
             logger.debug("Could not find wallet receipt date for LP token %s", asset_id[:20])
             return None
 
