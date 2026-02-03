@@ -797,6 +797,15 @@ def portfolio_page():
         return redirect('/cardano/lps?error=wallet_required')
     return render_template('portfolio.html')
 
+
+@app.route('/MyPortfolio')
+@login_required
+def my_portfolio_page():
+    """User's portfolio page with new layout - requires wallet connection"""
+    if not current_user.wallet_address:
+        return redirect('/cardano/lps?error=wallet_required')
+    return render_template('myportfolio.html')
+
 @app.route('/reset-password/<token>')
 def reset_password_page(token):
     """Password reset page"""

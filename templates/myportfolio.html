@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+
+{% block title %}My Portfolio - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Protocol accent colors */
+    :root {
+        --minswap-color: #23a6d5;
+        --minswap-bg: rgba(35, 166, 213, 0.12);
+        --wingriders-color: #e6a700;
+        --wingriders-bg: rgba(230, 167, 0, 0.12);
+        --sundaeswap-color: #9333ea;
+        --sundaeswap-bg: rgba(147, 51, 234, 0.12);
+        --liqwid-color: var(--sea-green);
+        --liqwid-bg: rgba(14, 135, 73, 0.12);
+    }
+
+    /* Protocol section cards */
+    .protocol-card {
+        background: radial-gradient(ellipse 100% 70% at 50% 50%, var(--sand-dune) 45%, transparent 92%);
+        border-radius: 16px;
+        border: 1px solid rgba(31, 32, 31, 0.06);
+        overflow: hidden;
+        transition: box-shadow 0.2s ease;
+    }
+    .protocol-card:hover {
+        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.08);
+    }
+
+    /* Protocol headers with colored accents */
+    .protocol-header {
+        display: flex;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        margin: 0;
+        border-bottom: none;
+        position: relative;
+    }
+    .protocol-header::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+    }
+    .protocol-header h5 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--carbon-black);
+    }
+    .protocol-header .protocol-logo {
+        width: 32px;
+        height: 32px;
+        margin-right: 12px;
+        border-radius: 8px;
+        padding: 4px;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .protocol-header .section-title {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-left: auto;
+        font-weight: 600;
+    }
+
+    /* Protocol-specific header colors */
+    .protocol-card.minswap .protocol-header {
+        background: #b8e4f2;
+    }
+    .protocol-card.minswap .protocol-header::before {
+        background: #7fcce9;
+    }
+
+    .protocol-card.wingriders .protocol-header {
+        background: #faeab3;
+    }
+    .protocol-card.wingriders .protocol-header::before {
+        background: #f5d066;
+    }
+
+    .protocol-card.sundaeswap .protocol-header {
+        background: #e4d1fa;
+    }
+    .protocol-card.sundaeswap .protocol-header::before {
+        background: #c9a3f5;
+    }
+
+    .protocol-card.liqwid .protocol-header {
+        background: #c8edb8;
+    }
+    .protocol-card.liqwid .protocol-header::before {
+        background: #79cf55;
+    }
+
+    /* Protocol content area */
+    .protocol-content {
+        padding: 1.25rem 1.5rem;
+    }
+
+    /* Summary card */
+    .summary-card {
+        background: linear-gradient(135deg, var(--sand-dune) 0%, rgba(221,214,185,0.4) 100%);
+        border: 2px solid var(--moss-green);
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(14, 135, 73, 0.15),
+                    inset 0 1px 0 rgba(255,255,255,0.8);
+        position: relative;
+        overflow: hidden;
+    }
+    .summary-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--moss-green), var(--sea-green), var(--moss-green));
+    }
+    .summary-card h4 {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 700;
+        color: var(--carbon-black);
+        margin-bottom: 0.5rem;
+    }
+    .summary-card .total-value {
+        font-size: 2.75rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+    }
+    .summary-card .wallet-address {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        background: rgba(31, 32, 31, 0.06);
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+    }
+    .summary-card .total-value-usd {
+        font-size: 1.15rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    /* Position cards - new two-column layout */
+    .position-card {
+        background: var(--sand-dune);
+        border: 1px solid rgba(31, 32, 31, 0.08);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .position-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        border-color: rgba(14, 135, 73, 0.2);
+    }
+    .position-card .pool-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--carbon-black);
+    }
+
+    /* Two-column layout for position details */
+    .position-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    /* Column headers */
+    .column-header {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-secondary);
+        font-weight: 700;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        margin-bottom: 0.75rem;
+    }
+
+    /* Attribute rows */
+    .attr-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.4rem 0;
+    }
+    .attr-label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    .attr-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--carbon-black);
+        text-align: right;
+    }
+    .attr-value.small {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .attr-value.mono {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* Results column styling */
+    .result-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.4rem 0;
+    }
+    .result-label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    .result-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--carbon-black);
+    }
+    .result-value.positive {
+        color: var(--sea-green);
+    }
+    .result-value.negative {
+        color: var(--crimson-carrot);
+    }
+
+    /* Net Gain/Loss - prominent display */
+    .net-gain-row {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 2px solid rgba(0,0,0,0.08);
+    }
+    .net-gain-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--carbon-black);
+    }
+    .net-gain-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    .net-gain-value.positive {
+        color: var(--sea-green);
+    }
+    .net-gain-value.negative {
+        color: var(--crimson-carrot);
+    }
+
+    /* Token breakdown */
+    .tokens-display {
+        font-size: 0.85rem;
+        color: var(--carbon-black);
+        line-height: 1.5;
+    }
+    .tokens-display .token-line {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* Farm badge */
+    .farm-badge {
+        font-size: 0.65rem;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: linear-gradient(135deg, rgba(230, 167, 0, 0.2), rgba(255, 140, 0, 0.15));
+        color: #b58500;
+        border: 1px solid rgba(230, 167, 0, 0.3);
+        margin-left: 8px;
+    }
+
+    /* Farm position card highlight */
+    .farm-position {
+        border-left: 4px solid var(--wingriders-color);
+        background: linear-gradient(90deg, rgba(230, 167, 0, 0.03) 0%, transparent 30%);
+    }
+
+    /* Subsection headers */
+    .subsection-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        margin-top: 1.25rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .subsection-header:first-child {
+        margin-top: 0;
+    }
+    .subsection-header h6 {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .subsection-icon {
+        font-size: 1.1rem;
+        margin-right: 8px;
+    }
+
+    /* Lending position cards - simpler layout */
+    .lending-card {
+        background: var(--sand-dune);
+        border: 1px solid rgba(31, 32, 31, 0.08);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .type-badge {
+        font-size: 0.7rem;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .type-badge.supply {
+        background: linear-gradient(135deg, rgba(14, 135, 73, 0.15), rgba(121, 207, 85, 0.15));
+        color: var(--sea-green);
+        border: 1px solid rgba(14, 135, 73, 0.25);
+    }
+    .type-badge.borrow {
+        background: linear-gradient(135deg, rgba(247, 75, 3, 0.1), rgba(255, 120, 60, 0.1));
+        color: var(--crimson-carrot);
+        border: 1px solid rgba(247, 75, 3, 0.25);
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 2.5rem 2rem;
+        color: var(--text-secondary);
+    }
+    .empty-state-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+        opacity: 0.4;
+    }
+    .empty-state p {
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+    .empty-state small {
+        color: var(--text-secondary);
+        opacity: 0.7;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        text-align: center;
+        padding: 2.5rem;
+    }
+    .loading-spinner .spinner-border {
+        color: var(--sea-green) !important;
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+    .loading-spinner p {
+        margin-top: 1rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    /* Refresh button */
+    .refresh-btn {
+        background: linear-gradient(135deg, var(--moss-green) 0%, var(--sea-green) 100%);
+        border: none;
+        padding: 0.5rem 1.25rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(14, 135, 73, 0.25);
+    }
+    .refresh-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(14, 135, 73, 0.35);
+    }
+    .refresh-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* Error alert */
+    .alert-error {
+        background: linear-gradient(135deg, rgba(247, 75, 3, 0.08), rgba(255, 100, 50, 0.05));
+        border: 1px solid rgba(247, 75, 3, 0.25);
+        color: #c43b00;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        font-weight: 500;
+    }
+
+    /* Tooltip styling */
+    .tooltip-trigger {
+        cursor: help;
+        border-bottom: 1px dotted var(--text-secondary);
+    }
+    .tooltip-popup {
+        position: fixed;
+        padding: 12px 14px;
+        background: var(--carbon-black);
+        color: #fff;
+        font-size: 0.72rem;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        line-height: 1.5;
+        white-space: pre-line;
+        border-radius: 8px;
+        z-index: 10000;
+        min-width: 280px;
+        max-width: 320px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        pointer-events: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .position-columns {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Error Alert (hidden by default) -->
+    <div id="errorAlert" class="alert-error d-none">
+        <strong>Error:</strong> <span id="errorMessage"></span>
+    </div>
+
+    <!-- Portfolio Summary Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="summary-card">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h4>My Portfolio</h4>
+                        <span class="wallet-address">
+                            {{ current_user.wallet_address[:12] }}...{{ current_user.wallet_address[-8:] }}
+                        </span>
+                    </div>
+                    <div class="text-end">
+                        <div class="total-value" id="totalValue">--</div>
+                        <div id="totalValueUsd" class="total-value-usd" style="display: none;"></div>
+                        <small style="color: var(--carbon-black);">Total Portfolio Value</small>
+                        <div class="mt-3">
+                            <button class="refresh-btn" id="refreshBtn" onclick="refreshPositions()">
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Minswap Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="protocol-card minswap">
+                <div class="protocol-header">
+                    <img src="/static/minswap-logo.png" class="protocol-logo" alt="Minswap">
+                    <h5>Minswap LP Positions</h5>
+                </div>
+                <div class="protocol-content" id="minswapSection">
+                    <div class="loading-spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading Minswap positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WingRiders Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="protocol-card wingriders">
+                <div class="protocol-header">
+                    <img src="/static/wingriders-logo.svg" class="protocol-logo" alt="WingRiders">
+                    <h5>WingRiders LP Positions</h5>
+                </div>
+                <div class="protocol-content" id="wingridersSection">
+                    <div class="loading-spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading WingRiders positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SundaeSwap Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="protocol-card sundaeswap">
+                <div class="protocol-header">
+                    <img src="/static/sundaeswap-logo.ico" class="protocol-logo" alt="SundaeSwap">
+                    <h5>SundaeSwap LP Positions</h5>
+                </div>
+                <div class="protocol-content" id="sundaeswapSection">
+                    <div class="loading-spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading SundaeSwap positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liqwid Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="protocol-card liqwid">
+                <div class="protocol-header">
+                    <img src="/static/liqwid-logo.png" class="protocol-logo" alt="Liqwid">
+                    <h5>Liqwid Finance</h5>
+                </div>
+                <div class="protocol-content" id="liqwidSection">
+                    <div class="loading-spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading Liqwid positions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/myportfolio.js"></script>
+{% endblock %}
