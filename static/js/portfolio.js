@@ -310,7 +310,8 @@ function renderPositionCard(pos, isFarm) {
 
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
-    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '';
+    const usdDisplay = usdValue ? `$${formatNumber(usdValue)}` : '--';
+    const valueDisplay = usdValue ? `${usdDisplay} <span class="small">(${adaValue})</span>` : adaValue;
 
     const poolShare = pos.pool_share_percent
         ? `${(pos.pool_share_percent * 100).toFixed(4)}%`
@@ -363,11 +364,6 @@ function renderPositionCard(pos, isFarm) {
                     </div>
 
                     <div class="attr-row">
-                        <span class="attr-label">Value</span>
-                        <span class="attr-value">${adaValue}${usdDisplay ? ` <span class="small">(${usdDisplay})</span>` : ''}</span>
-                    </div>
-
-                    <div class="attr-row">
                         <span class="attr-label">Pool Share</span>
                         <span class="attr-value mono">${poolShare}</span>
                     </div>
@@ -383,6 +379,11 @@ function renderPositionCard(pos, isFarm) {
                             <div class="token-line">${tokenAAmount} ${tokenASymbol}</div>
                             <div class="token-line">${tokenBAmount} ${tokenBSymbol}</div>
                         </div>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Value</span>
+                        <span class="attr-value">${valueDisplay}</span>
                     </div>
                 </div>
 
