@@ -381,9 +381,9 @@ function renderPositionCard(pos, isFarm) {
                         </div>
                     </div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Value</span>
-                        <span class="attr-value">${valueDisplay}</span>
+                    <div class="value-row">
+                        <span class="value-label">Value</span>
+                        <span class="value-amount">${valueDisplay}</span>
                     </div>
                 </div>
 
