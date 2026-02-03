@@ -72,6 +72,35 @@ POOLS_QUERY = """
 }
 """
 
+# GraphQL query fragment for pool fields
+POOL_FIELDS = """
+  id
+  version
+  assetA {
+    ticker
+    name
+    decimals
+  }
+  assetB {
+    ticker
+    name
+    decimals
+  }
+  current {
+    tvl {
+      quantity
+    }
+    quantityA {
+      quantity
+    }
+    quantityB {
+      quantity
+    }
+  }
+  bidFee
+  askFee
+"""
+
 # Farming API URL (separate from main API)
 FARMING_API_URL = "https://api.yield.sundaeswap.finance/graphql"
 
@@ -201,9 +230,18 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 return pool
         return None
 
-    def get_all_pools(self) -> List[SundaePoolMetrics]:
-        """Get all pools meeting the TVL threshold."""
-        return self._get_pools()
+    def get_all_pools(self, tracked_pool_ids: Optional[List[str]] = None) -> List[SundaePoolMetrics]:
+        """Get all pools meeting the TVL threshold plus any tracked pools.
+
+        Args:
+            tracked_pool_ids: Optional list of pool IDs to always include,
+                              regardless of whether they're in the popular list
+                              or meet TVL threshold.
+
+        Returns:
+            List of SundaePoolMetrics for all qualifying pools.
+        """
+        return self._get_pools(tracked_pool_ids=tracked_pool_ids)
 
     def compute_apr_from_onchain(self, asset: str, lookback_days: int = 7) -> Optional[Decimal]:
         """On-chain computation not available for Cardano."""
@@ -213,18 +251,37 @@ class SundaeSwapAdapter(ProtocolAdapter):
         )
         return None
 
-    def _get_pools(self) -> List[SundaePoolMetrics]:
-        """Fetch and cache pool data from the GraphQL API."""
-        now = time.time()
-        if now - self._cache_timestamp < self._cache_ttl and self._pool_cache:
-            return self._pool_cache
+    def _get_pools(self, tracked_pool_ids: Optional[List[str]] = None) -> List[SundaePoolMetrics]:
+        """Fetch and cache pool data from the GraphQL API.
 
-        # Fetch fresh data
+        Args:
+            tracked_pool_ids: Optional list of pool IDs to always include.
+        """
+        now = time.time()
+
+        # Note: We don't use cache when tracked_pool_ids is provided
+        # because we need to merge in the tracked pools fresh each time
+        if tracked_pool_ids is None:
+            if now - self._cache_timestamp < self._cache_ttl and self._pool_cache:
+                return self._pool_cache
+
+        # Fetch fresh data from popular pools
         pools = self._fetch_pools()
+
+        # Fetch any tracked pools that weren't in the popular list
+        if tracked_pool_ids:
+            existing_ids = {p.pool_id for p in pools}
+            missing_ids = [pid for pid in tracked_pool_ids if pid not in existing_ids]
+
+            if missing_ids:
+                logger.info("Fetching %d tracked pools not in popular list", len(missing_ids))
+                tracked_pools = self._fetch_pools_by_ids(missing_ids)
+                pools.extend(tracked_pools)
+
         if pools:
             self._pool_cache = pools
             self._cache_timestamp = now
-        
+
         return self._pool_cache
 
     def _fetch_pools(self) -> List[SundaePoolMetrics]:
@@ -263,7 +320,7 @@ class SundaeSwapAdapter(ProtocolAdapter):
                     return []
 
                 raw_pools = data.get("data", {}).get("pools", {}).get("popular", [])
-                return self._parse_pools(raw_pools)
+                return self._parse_pools(raw_pools, apply_tvl_filter=True)
 
             except requests.RequestException as exc:
                 logger.error(
@@ -275,7 +332,130 @@ class SundaeSwapAdapter(ProtocolAdapter):
 
         return []
 
-    def _parse_pools(self, raw_pools: List[Dict]) -> List[SundaePoolMetrics]:
+    def _fetch_pools_by_ids(self, pool_ids: List[str]) -> List[SundaePoolMetrics]:
+        """Fetch specific pools by their IDs.
+
+        Uses the pools.byIds GraphQL query to fetch pools that may not
+        be in the popular list. These pools are returned regardless of
+        TVL threshold since they're explicitly tracked.
+
+        Args:
+            pool_ids: List of pool IDs to fetch
+
+        Returns:
+            List of SundaePoolMetrics for the requested pools
+        """
+        if not pool_ids:
+            return []
+
+        # Build the query with pool IDs as a JSON array
+        import json
+        ids_json = json.dumps(pool_ids)
+        query = f"""
+        {{
+          pools {{
+            byIds(ids: {ids_json}) {{
+              {POOL_FIELDS}
+            }}
+          }}
+        }}
+        """
+
+        backoff = 2
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                resp = self.session.post(
+                    self.graphql_url,
+                    json={"query": query},
+                    timeout=self.timeout
+                )
+
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", backoff))
+                    logger.warning(
+                        "Rate limited by SundaeSwap API (attempt %s/%s). Sleeping %ss",
+                        attempt, self.max_retries, retry_after
+                    )
+                    time.sleep(retry_after)
+                    backoff = min(backoff * 2, 30)
+                    continue
+
+                if resp.status_code >= 400:
+                    logger.error(
+                        "SundaeSwap API error %s: %s",
+                        resp.status_code, resp.text[:500]
+                    )
+                    return []
+
+                data = resp.json()
+
+                if "errors" in data and data["errors"]:
+                    logger.error("GraphQL errors fetching pools by ID: %s", data["errors"])
+                    return []
+
+                raw_pools = data.get("data", {}).get("pools", {}).get("byIds", [])
+                # Don't apply TVL filter for tracked pools
+                pools = self._parse_pools(raw_pools, apply_tvl_filter=False)
+                logger.info("Fetched %d tracked pools by ID", len(pools))
+                return pools
+
+            except requests.RequestException as exc:
+                logger.error(
+                    "Error fetching pools by ID (attempt %s/%s): %s",
+                    attempt, self.max_retries, exc
+                )
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+
+        return []
+
+    def search_pools(self, term: str) -> List[SundaePoolMetrics]:
+        """Search for pools by term (e.g., token ticker).
+
+        Useful for discovering pools that aren't in the popular list.
+
+        Args:
+            term: Search term (e.g., "iUSD")
+
+        Returns:
+            List of matching SundaePoolMetrics
+        """
+        query = f"""
+        {{
+          pools {{
+            search(term: "{term}") {{
+              {POOL_FIELDS}
+            }}
+          }}
+        }}
+        """
+
+        try:
+            resp = self.session.post(
+                self.graphql_url,
+                json={"query": query},
+                timeout=self.timeout
+            )
+
+            if resp.status_code != 200:
+                logger.warning("Search query failed: %s", resp.status_code)
+                return []
+
+            data = resp.json()
+
+            if "errors" in data and data["errors"]:
+                logger.warning("Search query errors: %s", data["errors"])
+                return []
+
+            raw_pools = data.get("data", {}).get("pools", {}).get("search", [])
+            # Don't apply TVL filter for search results
+            return self._parse_pools(raw_pools, apply_tvl_filter=False)
+
+        except Exception as e:
+            logger.warning("Error searching pools: %s", e)
+            return []
+
+    def _parse_pools(self, raw_pools: List[Dict], apply_tvl_filter: bool = True) -> List[SundaePoolMetrics]:
         """Parse raw pool data into SundaePoolMetrics objects."""
         pools = []
         seen_pairs = set()  # Track unique pairs to avoid duplicates
@@ -319,8 +499,8 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 tvl_ada = Decimal(tvl_lovelace) / Decimal(1_000_000)
                 tvl_usd = tvl_ada * Decimal(str(self.ada_price_usd))
 
-                # Filter by minimum TVL (in ADA)
-                if tvl_ada < self.min_tvl_ada:
+                # Filter by minimum TVL (in ADA) unless explicitly disabled
+                if apply_tvl_filter and tvl_ada < self.min_tvl_ada:
                     continue
 
                 # Parse fee (comes as [numerator, denominator])

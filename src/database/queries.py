@@ -269,6 +269,164 @@ class DatabaseQueries:
         finally:
             self.db.return_connection(conn)
 
+    # ============================================
+    # Tracked Pools Operations
+    # ============================================
+
+    def get_active_tracked_pools(self, protocol: str) -> List[Dict]:
+        """Get all active tracked pools for a protocol.
+
+        Args:
+            protocol: Protocol name (e.g., 'sundaeswap', 'wingriders')
+
+        Returns:
+            List of tracked pool dicts with pool_identifier, pair_name, version
+        """
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """SELECT id, pool_identifier, pair_name, version,
+                              first_tracked_date, last_above_threshold_date,
+                              consecutive_days_below
+                       FROM tracked_pools
+                       WHERE protocol = %s AND is_active = TRUE
+                       ORDER BY pair_name""",
+                    (protocol,)
+                )
+                return [dict(row) for row in cur.fetchall()]
+        finally:
+            self.db.return_connection(conn)
+
+    def upsert_tracked_pool(
+        self,
+        protocol: str,
+        pool_identifier: str,
+        pair_name: str,
+        version: Optional[str] = None,
+        above_threshold: bool = True
+    ) -> int:
+        """Add or update a tracked pool.
+
+        If pool exists and above_threshold=True, resets consecutive_days_below to 0.
+        If pool exists and above_threshold=False, increments consecutive_days_below.
+
+        Args:
+            protocol: Protocol name
+            pool_identifier: Unique pool ID for this protocol
+            pair_name: Display name (e.g., 'iUSD-ADA')
+            version: Pool version (e.g., 'V3')
+            above_threshold: Whether pool TVL is currently above threshold
+
+        Returns:
+            Tracked pool ID
+        """
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                today = date.today()
+
+                if above_threshold:
+                    # Pool is above threshold - reset counter, update last_above date
+                    cur.execute(
+                        """INSERT INTO tracked_pools
+                           (protocol, pool_identifier, pair_name, version,
+                            last_above_threshold_date, consecutive_days_below, is_active)
+                           VALUES (%s, %s, %s, %s, %s, 0, TRUE)
+                           ON CONFLICT (protocol, pool_identifier)
+                           DO UPDATE SET
+                               pair_name = EXCLUDED.pair_name,
+                               version = EXCLUDED.version,
+                               last_above_threshold_date = EXCLUDED.last_above_threshold_date,
+                               consecutive_days_below = 0,
+                               is_active = TRUE,
+                               updated_at = CURRENT_TIMESTAMP
+                           RETURNING id""",
+                        (protocol, pool_identifier, pair_name, version, today)
+                    )
+                else:
+                    # Pool is below threshold - increment counter
+                    cur.execute(
+                        """INSERT INTO tracked_pools
+                           (protocol, pool_identifier, pair_name, version,
+                            consecutive_days_below, is_active)
+                           VALUES (%s, %s, %s, %s, 1, TRUE)
+                           ON CONFLICT (protocol, pool_identifier)
+                           DO UPDATE SET
+                               consecutive_days_below = tracked_pools.consecutive_days_below + 1,
+                               updated_at = CURRENT_TIMESTAMP
+                           RETURNING id""",
+                        (protocol, pool_identifier, pair_name, version)
+                    )
+
+                pool_id = cur.fetchone()[0]
+                conn.commit()
+                return pool_id
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error upserting tracked pool {pair_name}: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+
+    def deactivate_stale_pools(self, protocol: str, grace_period_days: int = 7) -> int:
+        """Deactivate pools that have been below threshold for too long.
+
+        Args:
+            protocol: Protocol name
+            grace_period_days: Number of consecutive days below threshold before deactivation
+
+        Returns:
+            Number of pools deactivated
+        """
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE tracked_pools
+                       SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                       WHERE protocol = %s
+                         AND is_active = TRUE
+                         AND consecutive_days_below >= %s
+                       RETURNING id, pair_name""",
+                    (protocol, grace_period_days)
+                )
+                deactivated = cur.fetchall()
+                conn.commit()
+
+                for pool_id, pair_name in deactivated:
+                    logger.info(f"Deactivated tracked pool {pair_name} (id={pool_id}) after {grace_period_days} days below threshold")
+
+                return len(deactivated)
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error deactivating stale pools: {e}")
+            raise
+        finally:
+            self.db.return_connection(conn)
+
+    def get_tracked_pool_ids(self, protocol: str) -> List[str]:
+        """Get just the pool identifiers for active tracked pools.
+
+        Args:
+            protocol: Protocol name
+
+        Returns:
+            List of pool identifier strings
+        """
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT pool_identifier
+                       FROM tracked_pools
+                       WHERE protocol = %s AND is_active = TRUE""",
+                    (protocol,)
+                )
+                return [row[0] for row in cur.fetchall()]
+        finally:
+            self.db.return_connection(conn)
+
     def get_latest_aprs(self, blockchain_name: Optional[str] = None,
                        protocol_name: Optional[str] = None,
                        asset_symbol: Optional[str] = None) -> List[Dict]:

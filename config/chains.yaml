@@ -11,6 +11,8 @@ chains:
         base_url: "https://api-mainnet-prod.minswap.org"
         timeout: 10
         max_retries: 3
+        min_tvl_ada: 10000  # Track pools with TVL >= 10,000 ADA
+        ada_price_usd: 0.35  # Approximate ADA price for TVL calculation
         # Farm reward APY is now fetched automatically from /defillama/yield-server endpoint
         # LP policy ID = farm_id, LP token name = pool_id
         pairs:

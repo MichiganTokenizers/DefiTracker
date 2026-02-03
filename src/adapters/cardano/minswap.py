@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PoolMetrics:
     """Container for pool metrics (APR, TVL, fees, volume).
-    
+
     APR fields:
         apr: Minswap's trading_fee_apr (~30-day rolling average, trading fees only)
         apr_1d: Calculated total 1-day APR (trading fees + farming rewards)
@@ -28,9 +28,11 @@ class PoolMetrics:
     trading_fee_apr_1d: Optional[Decimal] = None  # 1-day trading fee APR
     farming_apr_1d: Optional[Decimal] = None      # 1-day farming APR from MIN rewards
     tvl_usd: Optional[Decimal] = None
+    tvl_ada: Optional[Decimal] = None   # TVL in ADA (calculated from tvl_usd / ada_price)
     fees_24h: Optional[Decimal] = None
     volume_24h: Optional[Decimal] = None
     swap_fee_percent: Optional[Decimal] = None  # Swap fee percentage (e.g., 0.30 for 0.30%)
+    pool_id: Optional[str] = None       # Pool identifier for tracking
 
 
 class MinswapAdapter(ProtocolAdapter):
@@ -99,7 +101,9 @@ class MinswapAdapter(ProtocolAdapter):
         self.pairs = config.get("pairs", [])
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
-        
+        self.ada_price_usd = Decimal(str(config.get("ada_price_usd", 0.35)))
+        self.min_tvl_ada = config.get("min_tvl_ada", 10000)  # 10K ADA minimum for tracking
+
         # Cache for MIN price (refreshed per collection run)
         self._min_price_cache: Optional[Decimal] = None
         self._min_price_cache_time: float = 0
@@ -247,8 +251,17 @@ class MinswapAdapter(ProtocolAdapter):
         if tvl_value is not None:
             try:
                 metrics.tvl_usd = Decimal(str(tvl_value))
+                # Calculate TVL in ADA from USD
+                if self.ada_price_usd and self.ada_price_usd > 0:
+                    metrics.tvl_ada = metrics.tvl_usd / self.ada_price_usd
             except Exception:
                 logger.error("Could not convert TVL value %s for %s", tvl_value, asset)
+
+        # Store pool identifier for tracking
+        farm_id = pair.get("farm_id")
+        pool_id = pair.get("pool_id")
+        if farm_id and pool_id:
+            metrics.pool_id = f"{farm_id}.{pool_id}"
 
         # Extract 24h fees
         fees_value = self._extract_field(payload, self.CANDIDATE_FEES_24H_KEYS)

@@ -17,7 +17,10 @@ APR Breakdown:
 - Fee APR (HRA): Trading fees returned to liquidity providers
 - Farming APR: SUNDAE token rewards distributed to eligible pools
 
-Collects pools with TVL > $10k (configurable).
+Tracked Pools:
+- Pools are tracked once discovered above TVL threshold
+- Tracked pools are fetched even if not in popular list
+- Pools only drop off after 30 consecutive days below threshold
 
 Designed to be run daily via cron.
 
@@ -107,28 +110,37 @@ def collect_and_store_sundaeswap():
             logger.info("Data already collected for sundaeswap on %s (EST), skipping", today_est)
             return 0
 
-        # Get all pools meeting TVL threshold
-        pools = sundae_adapter.get_all_pools()
+        # Get TVL threshold from config
+        min_tvl_ada = protocol_config.get("min_tvl_ada", 10000)
+
+        # Get tracked pool IDs from database
+        tracked_pool_ids = queries.get_tracked_pool_ids("sundaeswap")
+        logger.info("Found %d tracked pools in database", len(tracked_pool_ids))
+
+        # Get all pools: popular + tracked pools not in popular list
+        pools = sundae_adapter.get_all_pools(tracked_pool_ids=tracked_pool_ids)
         timestamp = datetime.utcnow()
 
-        logger.info("Found %d SundaeSwap pools with TVL >= $%s", 
-                   len(pools), protocol_config.get("min_tvl_usd", 10000))
+        logger.info("Found %d SundaeSwap pools total (popular + tracked)", len(pools))
 
         inserted = 0
         farms_count = 0
+        pools_above_threshold = 0
+        pools_below_threshold = 0
+
         for pool in pools:
             # Use total APR (trading fees + farming rewards)
             apr = pool.total_apr if pool.total_apr else Decimal(0)
-            
+
             # Calculate 1-day APR from fees only (HRA)
             # This represents the daily trading fee return, annualized
             apr_1d = pool.hra if pool.hra else None
 
             asset_id = queries.get_or_create_asset(
-                symbol=pool.pair, 
+                symbol=pool.pair,
                 name=f"SundaeSwap {pool.pair} ({pool.version})"
             )
-            
+
             queries.insert_apr_snapshot(
                 blockchain_id=blockchain_id,
                 protocol_id=protocol_id,
@@ -146,26 +158,48 @@ def collect_and_store_sundaeswap():
             inserted += 1
             if pool.has_farm:
                 farms_count += 1
-            
+
+            # Update tracked pools table
+            # A pool is above threshold if its TVL >= min_tvl_ada
+            above_threshold = pool.tvl_ada is not None and pool.tvl_ada >= min_tvl_ada
+            queries.upsert_tracked_pool(
+                protocol="sundaeswap",
+                pool_identifier=pool.pool_id,
+                pair_name=pool.pair,
+                version=pool.version,
+                above_threshold=above_threshold
+            )
+
+            if above_threshold:
+                pools_above_threshold += 1
+            else:
+                pools_below_threshold += 1
+
             # Format display strings
             tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
+            tvl_ada_str = f"{pool.tvl_ada:,.0f} ADA" if pool.tvl_ada else "N/A"
             total_str = f"{pool.total_apr:.2f}%" if pool.total_apr else "N/A"
             fee_str = f"{pool.hra:.2f}%" if pool.hra else "0%"
             farm_str = f"{pool.farming_apr:.2f}%" if pool.farming_apr else "0%"
             fees_24h_str = f"${pool.fees_24h_usd:,.2f}" if pool.fees_24h_usd else "N/A"
             vol_str = f"${pool.volume_24h_usd:,.0f}" if pool.volume_24h_usd else "N/A"
-            
+
             # Log with APR breakdown
             farm_indicator = " [FARM]" if pool.has_farm else ""
+            threshold_indicator = "" if above_threshold else " [LOW TVL]"
             logger.info(
-                "Stored %s (%s)%s: Total=%s (Fees=%s + Farm=%s), TVL=%s, Fees24h=%s, Vol24h=%s", 
-                pool.pair, pool.version, farm_indicator, total_str, fee_str, farm_str, 
-                tvl_str, fees_24h_str, vol_str
+                "Stored %s (%s)%s%s: Total=%s (Fees=%s + Farm=%s), TVL=%s (%s), Fees24h=%s, Vol24h=%s",
+                pool.pair, pool.version, farm_indicator, threshold_indicator, total_str, fee_str, farm_str,
+                tvl_str, tvl_ada_str, fees_24h_str, vol_str
             )
 
+        # Deactivate pools that have been below threshold for 30+ consecutive days
+        deactivated = queries.deactivate_stale_pools("sundaeswap", grace_period_days=30)
+
         logger.info(
-            "SundaeSwap collection complete. Snapshots inserted: %s (%s with farming rewards)", 
-            inserted, farms_count
+            "SundaeSwap collection complete. Snapshots: %s (%s with farms). "
+            "Above threshold: %s, Below threshold: %s, Deactivated: %s",
+            inserted, farms_count, pools_above_threshold, pools_below_threshold, deactivated
         )
         return 0
 

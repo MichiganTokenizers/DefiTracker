@@ -186,9 +186,17 @@ class WingRidersAdapter(ProtocolAdapter):
                 return pool
         return None
 
-    def get_all_pools(self) -> List[WingRidersPoolMetrics]:
-        """Get all pools meeting the TVL threshold."""
-        return self._get_pools()
+    def get_all_pools(self, tracked_pairs: Optional[List[str]] = None) -> List[WingRidersPoolMetrics]:
+        """Get all pools meeting the TVL threshold plus any tracked pools.
+
+        Args:
+            tracked_pairs: Optional list of pair names (e.g., ['iUSD-ADA']) to always
+                          include regardless of TVL threshold.
+
+        Returns:
+            List of WingRidersPoolMetrics for all qualifying pools.
+        """
+        return self._get_pools(tracked_pairs=tracked_pairs)
 
     def compute_apr_from_onchain(self, asset: str, lookback_days: int = 7) -> Optional[Decimal]:
         """On-chain computation not needed - API provides APR directly."""
@@ -198,21 +206,32 @@ class WingRidersAdapter(ProtocolAdapter):
         )
         return self.get_supply_apr(asset)
 
-    def _get_pools(self) -> List[WingRidersPoolMetrics]:
-        """Fetch and cache pool data from the GraphQL API."""
-        now = time.time()
-        if now - self._cache_timestamp < self._cache_ttl and self._pool_cache:
-            return self._pool_cache
+    def _get_pools(self, tracked_pairs: Optional[List[str]] = None) -> List[WingRidersPoolMetrics]:
+        """Fetch and cache pool data from the GraphQL API.
 
-        pools = self._fetch_pools()
+        Args:
+            tracked_pairs: Optional list of pair names to always include.
+        """
+        now = time.time()
+
+        # Note: We don't use cache when tracked_pairs is provided
+        if tracked_pairs is None:
+            if now - self._cache_timestamp < self._cache_ttl and self._pool_cache:
+                return self._pool_cache
+
+        pools = self._fetch_pools(tracked_pairs=tracked_pairs)
         if pools:
             self._pool_cache = pools
             self._cache_timestamp = now
-        
+
         return self._pool_cache
 
-    def _fetch_pools(self) -> List[WingRidersPoolMetrics]:
-        """Fetch pools and farms from the GraphQL API."""
+    def _fetch_pools(self, tracked_pairs: Optional[List[str]] = None) -> List[WingRidersPoolMetrics]:
+        """Fetch pools and farms from the GraphQL API.
+
+        Args:
+            tracked_pairs: Optional list of pair names to always include.
+        """
         backoff = 2
 
         for attempt in range(1, self.max_retries + 1):
@@ -250,11 +269,11 @@ class WingRidersAdapter(ProtocolAdapter):
                 result = data.get("data", {}).get("liquidityPoolsWithMetadata", {})
                 raw_pools = result.get("pools", [])
                 metadata = result.get("metadata", [])
-                
+
                 # Fetch active farms for additional APRs
                 farms_data = self._fetch_farms()
-                
-                return self._parse_pools(raw_pools, metadata, farms_data)
+
+                return self._parse_pools(raw_pools, metadata, farms_data, tracked_pairs=tracked_pairs)
 
             except requests.RequestException as exc:
                 logger.error(
@@ -320,12 +339,23 @@ class WingRidersAdapter(ProtocolAdapter):
             return {}
 
     def _parse_pools(
-        self, raw_pools: List[Dict], metadata: List[Dict], farms_data: Dict[str, Dict]
+        self, raw_pools: List[Dict], metadata: List[Dict], farms_data: Dict[str, Dict],
+        tracked_pairs: Optional[List[str]] = None
     ) -> List[WingRidersPoolMetrics]:
-        """Parse raw pool data into WingRidersPoolMetrics objects."""
+        """Parse raw pool data into WingRidersPoolMetrics objects.
+
+        Args:
+            raw_pools: Raw pool data from API
+            metadata: Token metadata from API
+            farms_data: Farm data mapping
+            tracked_pairs: Optional list of pair names to include regardless of TVL
+        """
         # Build ticker lookup from metadata
         ticker_map = self._build_ticker_map(metadata)
-        
+
+        # Convert tracked_pairs to a set for efficient lookup
+        tracked_set = set(tracked_pairs) if tracked_pairs else set()
+
         pools = []
         seen_pairs = set()
 
@@ -369,8 +399,9 @@ class WingRidersAdapter(ProtocolAdapter):
                 tvl_ada = Decimal(str(tvl_lovelace)) / Decimal(1_000_000)
                 tvl_usd = tvl_ada * Decimal(str(self.ada_price_usd))
 
-                # Filter by minimum TVL (in ADA)
-                if tvl_ada < self.min_tvl_ada:
+                # Filter by minimum TVL (in ADA) unless pool is tracked
+                is_tracked = pair in tracked_set
+                if not is_tracked and tvl_ada < self.min_tvl_ada:
                     continue
 
                 # Parse base APRs (already in percentage form)
