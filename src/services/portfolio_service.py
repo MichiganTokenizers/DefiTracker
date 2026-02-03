@@ -538,17 +538,9 @@ class PortfolioService:
                                 # Continue searching for when they first received it
                                 pass
 
-            # If we couldn't find when wallet received it directly,
-            # use the first transaction date as a fallback
-            if transactions:
-                first_tx = transactions[0]
-                block_time = first_tx.get("block_time")
-                if block_time:
-                    from datetime import datetime
-                    dt = datetime.utcfromtimestamp(block_time)
-                    logger.info("Using first LP tx date as fallback: %s", dt.strftime("%Y-%m-%d"))
-                    return dt.strftime("%Y-%m-%d")
-
+            # Could not find when wallet received this LP token
+            # Return None rather than using pool creation date as fallback
+            logger.debug("Could not find wallet receipt date for LP token %s", asset_id[:20])
             return None
 
         except Exception as e:
