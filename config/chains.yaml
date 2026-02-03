@@ -11,62 +11,49 @@ chains:
         base_url: "https://api-mainnet-prod.minswap.org"
         timeout: 10
         max_retries: 3
-        # Farming reward configuration
-        # daily_min_emission: Daily MIN tokens allocated to this pool (from yield dashboard)
-        # Last updated: 2025-01-09 from https://minswap.org/analytics/yield-dashboard
-        # NOTE: Update these values periodically as emissions change biweekly
+        # Farm reward APY is now fetched automatically from /defillama/yield-server endpoint
+        # LP policy ID = farm_id, LP token name = pool_id
         pairs:
           - name: "NIGHT-ADA"
             symbol: "NIGHT-ADA"
-            # LP policy ID = farm_id, LP token name = pool_id
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "e74c52975908a612d5ce68327040d449aae99f8b463bb6de046a1b23c5713169"
-            daily_min_emission: 5350.34  # From yield dashboard
           - name: "MIN-ADA"
             symbol: "MIN-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
-            daily_min_emission: 8131.51  # From yield dashboard
           - name: "NIGHT-USDM"
             symbol: "NIGHT-USDM"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "126bbf31110c7232ca88cfc1463ecbc7fe3256ea37876975d0dc42b8f156f6a0"
-            daily_min_emission: 2710.50  # From yield dashboard
           - name: "NIGHT-USDA"
             symbol: "NIGHT-USDA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "1f2f0d16482b653218cfdf59fd5bec105d0ddd9ae31dd4eb9ee90250f6d56378"
-            daily_min_emission: 2650.84  # From yield dashboard
           - name: "SNEK-ADA"
             symbol: "SNEK-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "2ffadbb87144e875749122e0bbb9f535eeaa7f5660c6c4a91bcc4121e477f08d"
-            daily_min_emission: 7072.93  # From yield dashboard
           - name: "USDM-ADA"
             symbol: "USDM-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171"
-            daily_min_emission: 5870.56  # From yield dashboard
           - name: "USDA-ADA"
             symbol: "USDA-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "ee5cfbc5b0dc10c873a0bcc69e49b9af21b899f59337a894874c6b596c2da136"
-            daily_min_emission: 4532.36  # From yield dashboard
           - name: "USDM-USDA"
             symbol: "USDM-USDA"
             farm_id: "5f0d38b3eb8fea72cd3cbdaa9594a74d0db79b5a27e85be5e9015bd6"
             pool_id: "5553444d2d555344412d534c50"
-            daily_min_emission: 3033.18  # From yield dashboard (Stableswap tier)
           - name: "FLDT-ADA"
             symbol: "FLDT-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "bc53f5c2a8cf3ef64081d2ec8c74333d567fc7ef271c1b97d21fdd53a2c5c889"
-            daily_min_emission: 2965.56  # From yield dashboard
           - name: "iUSD-ADA"
             symbol: "iUSD-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
             pool_id: "452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3"
-            daily_min_emission: 2837.71  # From yield dashboard
           - name: "IAG-ADA"
             symbol: "IAG-ADA"
             farm_id: "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"

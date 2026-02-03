@@ -38,9 +38,9 @@ class MinswapAdapter(ProtocolAdapter):
 
     # MIN-ADA pool LP asset for price fetching
     MIN_ADA_LP_ASSET = "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
-    
-    # MIN farming rewards are now configured per-pool using daily_min_emission
-    # Values come directly from https://minswap.org/analytics/yield-dashboard
+
+    # Yield server endpoint provides farm APY data (used by DefiLlama)
+    YIELD_SERVER_ENDPOINT = "defillama/yield-server"
 
     CANDIDATE_APR_KEYS = [
         "trading_fee_apr",  # exposed by /v1/pools/:id/metrics
@@ -105,6 +105,11 @@ class MinswapAdapter(ProtocolAdapter):
         self._min_price_cache_time: float = 0
         self._min_price_cache_ttl = 300  # 5 minutes
 
+        # Cache for yield server data (farm APY from /defillama/yield-server)
+        self._yield_data_cache: Optional[Dict[str, Dict]] = None
+        self._yield_data_cache_time: float = 0
+        self._yield_data_cache_ttl = 300  # 5 minutes
+
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "defitracker/1.0"})
 
@@ -165,6 +170,48 @@ class MinswapAdapter(ProtocolAdapter):
             logger.error("Error calculating MIN price: %s", e)
         
         return self._min_price_cache
+
+    def _get_yield_data(self) -> Dict[str, Dict]:
+        """
+        Fetch yield/farm APY data from the DefiLlama yield server endpoint.
+
+        This endpoint provides apyBase (trading fees) and apyReward (farm rewards)
+        for all Minswap pools. Results are cached for 5 minutes.
+
+        Returns:
+            Dict mapping LP asset ID to yield data, e.g.:
+            {
+                "f5808c...96b4c.a939812...efc0": {
+                    "symbol": "ADA-DJED",
+                    "tvlUsd": 405773.47,
+                    "apyBase": 15.52,
+                    "apyReward": 0.85,
+                    "rewardTokens": ["MIN"],
+                    "poolMeta": "V2"
+                }
+            }
+        """
+        now = time.time()
+        if self._yield_data_cache is not None and (now - self._yield_data_cache_time) < self._yield_data_cache_ttl:
+            return self._yield_data_cache
+
+        payload = self._get_json(self.YIELD_SERVER_ENDPOINT)
+        if not payload or not isinstance(payload, list):
+            logger.warning("Could not fetch yield server data")
+            return self._yield_data_cache or {}
+
+        # Build lookup by LP asset ID (the "pool" field)
+        yield_data = {}
+        for pool in payload:
+            pool_id = pool.get("pool")
+            if pool_id:
+                yield_data[pool_id] = pool
+
+        self._yield_data_cache = yield_data
+        self._yield_data_cache_time = now
+        logger.info("Fetched yield data for %d pools from yield server", len(yield_data))
+
+        return yield_data
 
     def get_pool_metrics(self, asset: str) -> Optional[PoolMetrics]:
         """
@@ -250,54 +297,51 @@ class MinswapAdapter(ProtocolAdapter):
 
     def _calculate_farming_apr(self, pair: Dict, tvl_usd: Optional[Decimal]) -> Optional[Decimal]:
         """
-        Calculate the farming APR from MIN token rewards.
-        
-        Uses the daily_min_emission value configured per-pool from the Minswap
-        yield dashboard (https://minswap.org/analytics/yield-dashboard).
-        
-        Formula: Farming APR = (daily_min_emission * MIN_price / TVL) * 365 * 100
-        
+        Get the farming APR from the Minswap yield server.
+
+        Fetches apyReward from the /defillama/yield-server endpoint which provides
+        pre-calculated farm reward APY for all pools.
+
         Args:
-            pair: Pool configuration dict (should include 'daily_min_emission')
-            tvl_usd: Pool's total value locked in USD
-            
+            pair: Pool configuration dict (must include 'farm_id' and 'pool_id')
+            tvl_usd: Pool's total value locked in USD (unused, kept for compatibility)
+
         Returns:
-            Farming APR as Decimal percentage, or None if cannot calculate.
+            Farming APR as Decimal percentage, or None if unavailable.
         """
-        if tvl_usd is None or tvl_usd <= 0:
+        farm_id = pair.get("farm_id")
+        pool_id = pair.get("pool_id")
+
+        if not farm_id or not pool_id:
             return None
-        
-        # Get daily MIN emission from config (set in chains.yaml, from yield dashboard)
-        daily_min_emission = pair.get("daily_min_emission")
-        if daily_min_emission is None or float(daily_min_emission) <= 0:
-            # No farming rewards configured for this pool
+
+        # Build LP asset ID to look up in yield data
+        lp_asset = f"{farm_id}.{pool_id}"
+
+        # Fetch yield data (cached)
+        yield_data = self._get_yield_data()
+        pool_yield = yield_data.get(lp_asset)
+
+        if not pool_yield:
+            logger.debug("No yield data found for %s", lp_asset)
             return None
-        
-        daily_min_emission = Decimal(str(daily_min_emission))
-        
-        # Get MIN price
-        min_price = self.get_min_price()
-        if min_price is None:
-            logger.warning("Could not get MIN price for farming APR calculation")
+
+        apy_reward = pool_yield.get("apyReward")
+        if apy_reward is None:
             return None
-        
+
         try:
-            # Daily reward value in USD
-            daily_reward_usd = daily_min_emission * min_price
-            
-            # Farming APR = (daily_reward_value / TVL) * 365 * 100
-            farming_apr = (daily_reward_usd / tvl_usd) * Decimal(365) * Decimal(100)
-            
+            farming_apr = Decimal(str(apy_reward))
+            reward_tokens = pool_yield.get("rewardTokens", [])
             logger.debug(
-                "Farming APR for pool: daily_min=%.2f, min_price=$%.6f, "
-                "daily_value=$%.2f, tvl=$%.2f, apr=%.2f%%",
-                daily_min_emission, min_price,
-                daily_reward_usd, tvl_usd, farming_apr
+                "Farming APR for %s: %.2f%% (rewards: %s)",
+                pool_yield.get("symbol", lp_asset),
+                farming_apr,
+                ", ".join(reward_tokens) if reward_tokens else "none"
             )
-            
             return farming_apr
         except Exception as e:
-            logger.error("Error calculating farming APR: %s", e)
+            logger.error("Error parsing farming APR for %s: %s", lp_asset, e)
             return None
 
     def compute_apr_from_onchain(self, asset: str, lookback_days: int = 7) -> Optional[Decimal]:
