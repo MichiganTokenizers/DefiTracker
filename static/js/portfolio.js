@@ -347,12 +347,25 @@ function renderPositionCard(pos, isFarm) {
     const farmClass = isFarm ? 'farm-position' : '';
     const farmBadge = isFarm ? '<span class="farm-badge">Farming</span>' : '';
 
+    // Split pool name for stacked display
+    const poolParts = poolName.split('/');
+    const tokenTop = poolParts[0] || poolName;
+    const tokenBottom = poolParts[1] || '';
+
     return `
         <div class="position-card ${farmClass}">
-            <div class="pool-name">${poolName}${farmBadge}</div>
-
             <div class="position-columns">
-                <!-- Left Column: Attributes -->
+                <!-- Left Column: Pool Info -->
+                <div class="pool-info-column">
+                    <div class="pool-name-stacked">
+                        <span class="token-symbol">${tokenTop}</span>
+                        ${tokenBottom ? '<span class="token-separator">/</span>' : ''}
+                        ${tokenBottom ? `<span class="token-symbol">${tokenBottom}</span>` : ''}
+                    </div>
+                    ${farmBadge}
+                </div>
+
+                <!-- Middle Column: Attributes -->
                 <div class="attributes-column">
                     <div class="column-header">Attributes</div>
 
@@ -533,18 +546,21 @@ function updateTotalValue(value) {
     const el = document.getElementById('totalValue');
     const usdEl = document.getElementById('totalValueUsd');
 
+    const usdValue = value && adaPriceUsd ? value * adaPriceUsd : null;
+
     if (el) {
-        if (value && value > 0) {
+        if (usdValue) {
+            el.textContent = `$${formatNumber(usdValue)}`;
+        } else if (value && value > 0) {
             el.textContent = `${formatNumber(value)} ADA`;
         } else {
-            el.textContent = '0 ADA';
+            el.textContent = '--';
         }
     }
 
     if (usdEl) {
-        const usdValue = value && adaPriceUsd ? value * adaPriceUsd : null;
-        if (usdValue) {
-            usdEl.textContent = `≈ $${formatNumber(usdValue)}`;
+        if (value && value > 0) {
+            usdEl.textContent = `≈ ${formatNumber(value)} ADA`;
             usdEl.style.display = 'block';
         } else {
             usdEl.style.display = 'none';
