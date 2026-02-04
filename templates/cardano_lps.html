@@ -698,7 +698,6 @@
             </div>
             
             <!-- Chart Canvas -->
-            <p class="yieldlife-title text-center mb-1">APY</p>
             <div class="chart-container" style="height: 350px;">
                 <canvas id="singleAssetChart"></canvas>
             </div>
@@ -1721,6 +1720,13 @@ async function loadSingleAssetChart() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
+                title: {
+                    display: true,
+                    text: 'APY',
+                    color: '#0e8749',
+                    font: { family: 'Poppins', size: 14, weight: '600' },
+                    padding: { bottom: 10 }
+                },
                 legend: {
                     display: true,
                     labels: {
