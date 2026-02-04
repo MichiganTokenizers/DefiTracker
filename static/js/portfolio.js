@@ -275,7 +275,7 @@ function renderProtocolSection(protocol, data) {
         return;
     }
 
-    let html = '';
+    let html = '<div class="positions-grid">';
 
     // Render farming positions first
     if (hasFarm) {
@@ -291,6 +291,7 @@ function renderProtocolSection(protocol, data) {
         });
     }
 
+    html += '</div>';
     container.innerHTML = html;
 }
 
@@ -355,7 +356,7 @@ function renderPositionCard(pos, isFarm) {
     return `
         <div class="position-card ${farmClass}">
             <div class="position-columns">
-                <!-- Left Column: Pool Info -->
+                <!-- Header: Pool Name -->
                 <div class="pool-info-column">
                     <div class="pool-name-stacked">
                         <span class="token-symbol">${tokenTop}</span>
@@ -365,66 +366,67 @@ function renderPositionCard(pos, isFarm) {
                     ${farmBadge}
                 </div>
 
-                <!-- Middle Column: Attributes -->
-                <div class="attributes-column">
-                    <div class="column-header">Attributes</div>
+                <!-- Two-column body -->
+                <div class="card-body-columns">
+                    <!-- Left: Attributes -->
+                    <div class="attributes-column">
+                        <div class="column-header">Attributes</div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Start</span>
-                        <span class="attr-value">${entryDate}</span>
-                    </div>
+                        <div class="attr-row">
+                            <span class="attr-label">Start</span>
+                            <span class="attr-value">${entryDate}</span>
+                        </div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Pool Share</span>
-                        <span class="attr-value mono">${poolShare}</span>
-                    </div>
+                        <div class="attr-row">
+                            <span class="attr-label">Pool Share</span>
+                            <span class="attr-value mono">${poolShare}</span>
+                        </div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">1d APR</span>
-                        <span class="attr-value">${apr1d}</span>
-                    </div>
+                        <div class="attr-row">
+                            <span class="attr-label">1d APR</span>
+                            <span class="attr-value">${apr1d}</span>
+                        </div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Tokens</span>
-                        <div class="tokens-display">
-                            <div class="token-line">${tokenAAmount} ${tokenASymbol}</div>
-                            <div class="token-line">${tokenBAmount} ${tokenBSymbol}</div>
+                        <div class="attr-row">
+                            <span class="attr-label">Tokens</span>
+                            <div class="tokens-display">
+                                <div class="token-line">${tokenAAmount} ${tokenASymbol}</div>
+                                <div class="token-line">${tokenBAmount} ${tokenBSymbol}</div>
+                            </div>
+                        </div>
+
+                        <div class="value-row">
+                            <span class="value-label">Value</span>
+                            <span class="value-amount">${valueDisplay}</span>
                         </div>
                     </div>
 
-                    <div class="value-row">
-                        <span class="value-label">Value</span>
-                        <span class="value-amount">${valueDisplay}</span>
-                    </div>
-                </div>
+                    <!-- Right: Results -->
+                    <div class="results-column">
+                        <div class="column-header">Results</div>
 
-                <!-- Right Column: Results -->
-                <div class="results-column">
-                    <div class="column-header">Results</div>
-
-                    <div class="result-row">
-                        <span class="result-label">Duration</span>
-                        <span class="result-value">${duration}</span>
-                    </div>
-
-                    <div class="result-row">
-                        <span class="result-label">Avg APR</span>
-                        <span class="result-value">${avgApr}</span>
-                    </div>
-
-                    <div class="result-row">
-                        <span class="result-label">Actual Yield</span>
-                        <span class="result-value ${yieldClass}">${actualYield}</span>
-                    </div>
-
-                    <div class="result-row">
-                        <span class="result-label">Impermanent Loss</span>
-                        <span class="result-value ${ilClass} tooltip-trigger" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</span>
-                    </div>
-
-                    <div class="net-gain-row">
                         <div class="result-row">
-                            <span class="net-gain-label">Net Gain/Loss</span>
+                            <span class="result-label">Duration</span>
+                            <span class="result-value">${duration}</span>
+                        </div>
+
+                        <div class="result-row">
+                            <span class="result-label">Avg APR</span>
+                            <span class="result-value">${avgApr}</span>
+                        </div>
+
+                        <div class="result-row">
+                            <span class="result-label">Actual Yield</span>
+                            <span class="result-value ${yieldClass}">${actualYield}</span>
+                        </div>
+
+                        <div class="result-row">
+                            <span class="result-label">IL</span>
+                            <span class="result-value ${ilClass} tooltip-trigger" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</span>
+                        </div>
+
+                        <div class="net-gain-row">
+                            <span class="net-gain-label">Net</span>
                             <span class="net-gain-value ${netClass} tooltip-trigger" data-tooltip="${yieldTooltip.replace(/"/g, '&quot;')}">${netGainLoss}</span>
                         </div>
                     </div>
@@ -479,7 +481,7 @@ function renderLiqwidSection(data) {
         return;
     }
 
-    let html = '';
+    let html = '<div class="positions-grid">';
 
     if (hasSupply) {
         data.supply.forEach(pos => {
@@ -493,6 +495,7 @@ function renderLiqwidSection(data) {
         });
     }
 
+    html += '</div>';
     container.innerHTML = html;
 }
 
@@ -530,59 +533,62 @@ function renderLendingCard(pos) {
     return `
         <div class="lending-card">
             <div class="position-columns">
-                <!-- Left Column: Asset Info -->
+                <!-- Header: Asset Name -->
                 <div class="lending-info-column">
                     <div class="asset-name-stacked">${market}</div>
                     <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
                 </div>
 
-                <!-- Middle Column: Attributes -->
-                <div class="attributes-column">
-                    <div class="column-header">Attributes</div>
+                <!-- Two-column body -->
+                <div class="card-body-columns">
+                    <!-- Left: Attributes -->
+                    <div class="attributes-column">
+                        <div class="column-header">Attributes</div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Start</span>
-                        <span class="attr-value">${entryDate}</span>
+                        <div class="attr-row">
+                            <span class="attr-label">Start</span>
+                            <span class="attr-value">${entryDate}</span>
+                        </div>
+
+                        <div class="attr-row">
+                            <span class="attr-label">Amount</span>
+                            <span class="attr-value">${amount} ${market}</span>
+                        </div>
+
+                        <div class="attr-row">
+                            <span class="attr-label">Current APY</span>
+                            <span class="attr-value">${currentApy}</span>
+                        </div>
+
+                        <div class="value-row">
+                            <span class="value-label">Value</span>
+                            <span class="value-amount">${valueDisplay}</span>
+                        </div>
                     </div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Amount</span>
-                        <span class="attr-value">${amount} ${market}</span>
-                    </div>
+                    <!-- Right: Results -->
+                    <div class="results-column">
+                        <div class="column-header">Results</div>
 
-                    <div class="attr-row">
-                        <span class="attr-label">Current APY</span>
-                        <span class="attr-value">${currentApy}</span>
-                    </div>
+                        <div class="result-row">
+                            <span class="result-label">Duration</span>
+                            <span class="result-value">${duration}</span>
+                        </div>
 
-                    <div class="value-row">
-                        <span class="value-label">Value</span>
-                        <span class="value-amount">${valueDisplay}</span>
-                    </div>
-                </div>
+                        <div class="result-row">
+                            <span class="result-label">Avg APY</span>
+                            <span class="result-value">${avgApy}</span>
+                        </div>
 
-                <!-- Right Column: Results -->
-                <div class="results-column">
-                    <div class="column-header">Results</div>
+                        <div class="result-row">
+                            <span class="result-label">Actual Yield</span>
+                            <span class="result-value ${yieldClass}">${actualYield}</span>
+                        </div>
 
-                    <div class="result-row">
-                        <span class="result-label">Duration</span>
-                        <span class="result-value">${duration}</span>
-                    </div>
-
-                    <div class="result-row">
-                        <span class="result-label">Avg APY</span>
-                        <span class="result-value">${avgApy}</span>
-                    </div>
-
-                    <div class="result-row">
-                        <span class="result-label">Actual Yield</span>
-                        <span class="result-value ${yieldClass}">${actualYield}</span>
-                    </div>
-
-                    <div class="net-gain-row">
-                        <span class="net-gain-label">Net Gain/Loss</span>
-                        <span class="net-gain-value ${netClass}">${netGainLoss}</span>
+                        <div class="net-gain-row">
+                            <span class="net-gain-label">Net</span>
+                            <span class="net-gain-value ${netClass}">${netGainLoss}</span>
+                        </div>
                     </div>
                 </div>
             </div>

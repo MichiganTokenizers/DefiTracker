@@ -116,6 +116,13 @@
         padding: 1.25rem 1.5rem;
     }
 
+    /* 3-column grid for position cards */
+    .positions-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
     /* Summary card */
     .summary-card {
         background: var(--sand-dune);
@@ -168,13 +175,12 @@
         font-weight: 500;
     }
 
-    /* Position cards - new two-column layout */
+    /* Position cards - grid layout */
     .position-card {
         background: var(--sand-dune);
         border: 1px solid rgba(31, 32, 31, 0.08);
         border-radius: 12px;
-        padding: 1.25rem;
-        margin-bottom: 0.75rem;
+        padding: 1rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         transition: all 0.2s ease;
     }
@@ -198,55 +204,65 @@
         border-color: #79cf55;
     }
 
-    /* Three-column layout for position details */
+    /* Card layout: header on top, two columns below */
     .position-columns {
-        display: grid;
-        grid-template-columns: auto 1fr 1fr;
-        gap: 1.5rem;
-        align-items: start;
-    }
-
-    /* Pool info column (left) */
-    .pool-info-column {
         display: flex;
         flex-direction: column;
+    }
+
+    /* Pool/Asset header row (full width across top) */
+    .pool-info-column {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        min-width: 80px;
-        padding-right: 1rem;
-        border-right: 1px solid rgba(0,0,0,0.08);
+        gap: 0.5rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
     }
     .pool-name-stacked {
-        text-align: center;
         font-weight: 700;
         font-size: 1.1rem;
         color: var(--carbon-black);
-        line-height: 1.3;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
     }
     .pool-name-stacked .token-symbol {
-        display: block;
+        display: inline;
     }
     .pool-name-stacked .token-separator {
-        display: block;
-        font-size: 0.8rem;
+        display: inline;
+        font-size: 0.9rem;
         color: var(--text-secondary);
-        line-height: 1;
     }
     .pool-info-column .farm-badge {
-        margin-left: 0;
-        margin-top: 0.5rem;
+        margin-left: auto;
+    }
+
+    /* Two-column grid for attributes and results */
+    .card-body-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .attributes-column {
+        border-right: 1px solid rgba(0,0,0,0.06);
+        padding-right: 0.75rem;
+    }
+    .results-column {
+        padding-left: 0.25rem;
     }
 
     /* Column headers */
     .column-header {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
         color: var(--text-secondary);
         font-weight: 700;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid rgba(0,0,0,0.08);
-        margin-bottom: 0.75rem;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        margin-bottom: 0.5rem;
     }
 
     /* Attribute rows */
@@ -254,21 +270,21 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        padding: 0.4rem 0;
+        padding: 0.25rem 0;
     }
     .attr-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
         font-weight: 500;
     }
     .attr-value {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         font-weight: 600;
         color: var(--carbon-black);
         text-align: right;
     }
     .attr-value.small {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
     }
     .attr-value.mono {
@@ -280,15 +296,15 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        padding: 0.4rem 0;
+        padding: 0.25rem 0;
     }
     .result-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
         font-weight: 500;
     }
     .result-value {
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         font-weight: 600;
         color: var(--carbon-black);
     }
@@ -299,39 +315,42 @@
         color: var(--crimson-carrot);
     }
 
-    /* Value - prominent display (matches net gain/loss) */
+    /* Value - prominent display */
     .value-row {
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
-        border-top: 2px solid rgba(0,0,0,0.08);
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(0,0,0,0.08);
         display: flex;
         justify-content: space-between;
         align-items: baseline;
     }
     .value-label {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 700;
         color: var(--carbon-black);
     }
     .value-amount {
-        font-size: 1.5rem;
+        font-size: 1.1rem;
         font-weight: 700;
         color: var(--carbon-black);
     }
 
     /* Net Gain/Loss - prominent display */
     .net-gain-row {
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
-        border-top: 2px solid rgba(0,0,0,0.08);
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(0,0,0,0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
     }
     .net-gain-label {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 700;
         color: var(--carbon-black);
     }
     .net-gain-value {
-        font-size: 1.5rem;
+        font-size: 1.1rem;
         font-weight: 700;
     }
     .net-gain-value.positive {
@@ -343,10 +362,10 @@
 
     /* Token breakdown */
     .tokens-display {
-        font-size: 0.9rem;
+        font-size: 0.75rem;
         font-weight: 600;
         color: var(--carbon-black);
-        line-height: 1.5;
+        line-height: 1.4;
         text-align: right;
     }
 
@@ -399,8 +418,7 @@
         background: var(--sand-dune);
         border: 1px solid rgba(31, 32, 31, 0.08);
         border-radius: 12px;
-        padding: 1.25rem;
-        margin-bottom: 0.75rem;
+        padding: 1rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         transition: all 0.2s ease;
     }
@@ -429,26 +447,22 @@
         border: 1px solid rgba(247, 75, 3, 0.25);
     }
 
-    /* Lending asset info column */
+    /* Lending asset header row (matches pool header) */
     .lending-info-column {
         display: flex;
-        flex-direction: column;
         align-items: center;
-        justify-content: center;
-        min-width: 80px;
-        padding-right: 1rem;
-        border-right: 1px solid rgba(0,0,0,0.08);
+        gap: 0.5rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
     }
     .asset-name-stacked {
-        text-align: center;
         font-weight: 700;
-        font-size: 1.3rem;
+        font-size: 1.1rem;
         color: var(--carbon-black);
-        line-height: 1.3;
-        margin-bottom: 0.5rem;
     }
     .lending-info-column .type-badge {
-        margin-top: 0.25rem;
+        margin-left: auto;
     }
 
     /* Empty state */
@@ -544,10 +558,14 @@
     }
 
     /* Responsive adjustments */
+    @media (max-width: 1200px) {
+        .positions-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
     @media (max-width: 768px) {
-        .position-columns {
+        .positions-grid {
             grid-template-columns: 1fr;
-            gap: 1rem;
         }
     }
 </style>
