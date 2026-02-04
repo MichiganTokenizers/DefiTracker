@@ -177,6 +177,13 @@
         color: #333 !important;
     }
     
+    /* YieldLife Title Style */
+    .yieldlife-title {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 700;
+        color: var(--sea-green);
+    }
+
     /* APR Toggle Button Styles */
     .apr-toggle {
         display: flex;
@@ -563,7 +570,7 @@
     <div class="col-lg-8">
         <!-- Chart Card with Filters -->
         <div class="card p-4 chart-card-dark card-top">
-            <h5 class="chart-section-title">Multi Asset Pairs, One Measure</h5>
+            <h5 class="chart-section-title yieldlife-title">Multi Asset Pairs, One Measure</h5>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
                 <div class="row g-2 align-items-end">
@@ -599,14 +606,14 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">APR Measure</label>
+                        <label class="form-label">APY Measure</label>
                         <div class="apr-toggle" role="group" id="aprToggle">
                             <input type="radio" class="btn-check" name="aprType" id="apr1d" value="1d" checked>
-                            <label class="btn" for="apr1d" title="1-day actual APR">1d</label>
+                            <label class="btn" for="apr1d" title="1-day actual APY">1d</label>
                             <input type="radio" class="btn-check" name="aprType" id="apr7d" value="7d">
-                            <label class="btn" for="apr7d" title="7-day average APR">7d Avg</label>
+                            <label class="btn" for="apr7d" title="7-day average APY">7d Avg</label>
                             <input type="radio" class="btn-check" name="aprType" id="apr30d" value="30d">
-                            <label class="btn" for="apr30d" title="30-day average APR">30d Avg</label>
+                            <label class="btn" for="apr30d" title="30-day average APY">30d Avg</label>
                         </div>
                     </div>
                     <div class="col-md-2 ms-auto d-flex align-items-end">
@@ -630,7 +637,7 @@
                     <thead>
                         <tr>
                             <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
-                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APR (30d) ↓</th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APY (30d) ↓</th>
                             <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
                             <th style="cursor: pointer;" onclick="sortTable(3)" id="th-3">Volume (1d)</th>
                         </tr>
@@ -706,7 +713,7 @@
     <div class="col-lg-4">
         <div class="card p-3 card-styled breakdown-sidebar">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0" style="color: #1a1a1a;">Yield Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APR)</small></h5>
+                <h5 class="mb-0" style="color: #1a1a1a;">Yield Breakdown <small style="font-size: 0.7rem; color: #555;">(1d APY)</small></h5>
                 <select id="breakdownDateFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;" onchange="renderBreakdownCharts()">
                     <option value="">Loading...</option>
                 </select>
@@ -1042,11 +1049,11 @@ async function loadChart() {
         return protocolA.localeCompare(protocolB);
     });
 
-    const aprTypeLabel = is1d ? '1-Day APR' : selectedAprType === '7d' ? '7-Day Avg APR' : '30-Day Avg APR';
+    const aprTypeLabel = is1d ? '1-Day APY' : selectedAprType === '7d' ? '7-Day Avg APY' : '30-Day Avg APY';
 
     // Handle empty datasets gracefully
     const noDataMessage = datasets.length === 0
-        ? (is1d ? 'No 1-day APR data available for selected assets' : 'No data available for selected assets')
+        ? (is1d ? 'No 1-day APY data available for selected assets' : 'No data available for selected assets')
         : null;
     
     const ctx = document.getElementById('aprChart').getContext('2d');
@@ -1216,19 +1223,19 @@ function applySortToTable() {
         }
     });
     
-    // Update APR column header based on toggle
+    // Update APY column header based on toggle
     const aprHeader = document.getElementById('th-1');
     if (aprHeader) {
-        let aprText = is1d ? 'APR (1d)' : is7d ? 'APR (7d)' : 'APR (30d)';
+        let aprText = is1d ? 'APY (1d)' : is7d ? 'APY (7d)' : 'APY (30d)';
         if (currentSortColumn === 1) {
             aprText += currentSortDirection === 'asc' ? ' ↑' : ' ↓';
         }
         aprHeader.textContent = aprText;
     }
-    
+
     // Update other column headers for sort indicators
     for (let i = 0; i < 4; i++) {
-        if (i === 1) continue; // APR header already updated above
+        if (i === 1) continue; // APY header already updated above
         const th = document.getElementById(`th-${i}`);
         if (th) {
             let text = th.textContent.replace(/ [↑↓]/g, '');
@@ -2328,7 +2335,7 @@ function updateBreakdownChart(index) {
             ` : ''}
             <div class="breakdown-legend-item" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.08);">
                 <span class="breakdown-legend-color" style="background: transparent"></span>
-                <span class="breakdown-legend-label"><strong>Total APR</strong></span>
+                <span class="breakdown-legend-label"><strong>Total APY</strong></span>
                 <span class="breakdown-legend-value" style="color: var(--sea-green);">${displayData.totalApr.toFixed(2)}%</span>
             </div>
         `;
