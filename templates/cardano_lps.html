@@ -186,9 +186,15 @@
 
     /* YieldLife Table Header Style */
     .yieldlife-header th {
-        font-family: 'Poppins', sans-serif;
-        font-weight: 600;
-        color: var(--sea-green);
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600 !important;
+        color: var(--sea-green) !important;
+    }
+
+    /* YieldLife Subtitle Style */
+    .yieldlife-subtitle {
+        font-size: 0.9rem;
+        margin-top: -0.5rem;
     }
 
     /* APR Toggle Button Styles */
@@ -658,7 +664,8 @@
         
         <!-- Single Asset Chart - Multiple Time Measures -->
         <div class="card p-4 chart-card-dark card-top mt-4">
-            <h5 class="chart-section-title">One Asset Pair, Multi Measures</h5>
+            <h5 class="chart-section-title yieldlife-title">One Asset Pair, Multi Measures</h5>
+            <p class="yieldlife-title yieldlife-subtitle mb-2">APY</p>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
                 <div class="row g-2 align-items-end">
