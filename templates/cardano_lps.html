@@ -184,6 +184,13 @@
         color: var(--sea-green);
     }
 
+    /* YieldLife Table Header Style */
+    .yieldlife-header th {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        color: var(--sea-green);
+    }
+
     /* APR Toggle Button Styles */
     .apr-toggle {
         display: flex;
@@ -635,7 +642,7 @@
             <div class="table-responsive">
                 <table class="table table-hover" id="aprTable">
                     <thead>
-                        <tr>
+                        <tr class="yieldlife-header">
                             <th style="cursor: pointer;" onclick="sortTable(0)" id="th-0">Asset</th>
                             <th style="cursor: pointer;" onclick="sortTable(1)" id="th-1">APY (30d) ↓</th>
                             <th style="cursor: pointer;" onclick="sortTable(2)" id="th-2">24h Change</th>
@@ -694,11 +701,11 @@
             <div class="table-responsive">
                 <table class="table table-hover" id="singleAssetTable">
                     <thead>
-                        <tr>
+                        <tr class="yieldlife-header">
                             <th>Protocol</th>
-                            <th><span style="opacity: 0.6;">●</span> 1-Day <small style="font-weight: 400; opacity: 0.7;">(solid)</small></th>
-                            <th><span style="opacity: 0.6;">▲</span> 7-Day <small style="font-weight: 400; opacity: 0.7;">(dashed)</small></th>
-                            <th><span style="opacity: 0.6;">■</span> 30-Day <small style="font-weight: 400; opacity: 0.7;">(dotted)</small></th>
+                            <th><span style="opacity: 0.6;">●</span> 1-Day APY <small style="font-weight: 400; opacity: 0.7;">(solid)</small></th>
+                            <th><span style="opacity: 0.6;">▲</span> 7-Day APY <small style="font-weight: 400; opacity: 0.7;">(dashed)</small></th>
+                            <th><span style="opacity: 0.6;">■</span> 30-Day APY <small style="font-weight: 400; opacity: 0.7;">(dotted)</small></th>
                         </tr>
                     </thead>
                     <tbody id="singleAssetTableBody">
