@@ -421,7 +421,7 @@ function renderPositionCard(pos, isFarm) {
                         </div>
 
                         <div class="result-row">
-                            <span class="result-label">IL</span>
+                            <span class="result-label">Impermanent Loss</span>
                             <span class="result-value ${ilClass} tooltip-trigger" data-tooltip="${ilTooltip.replace(/"/g, '&quot;')}">${ilDisplay}</span>
                         </div>
 

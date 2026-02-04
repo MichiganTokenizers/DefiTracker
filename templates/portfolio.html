@@ -244,6 +244,13 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
+        align-items: stretch;
+    }
+    .attributes-column,
+    .results-column {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
     }
     .attributes-column {
         border-right: 1px solid rgba(0,0,0,0.06);
@@ -251,6 +258,11 @@
     }
     .results-column {
         padding-left: 0.25rem;
+    }
+    /* Push bottom rows to align at bottom */
+    .value-row,
+    .net-gain-row {
+        margin-top: auto;
     }
 
     /* Column headers */
@@ -317,7 +329,6 @@
 
     /* Value - prominent display */
     .value-row {
-        margin-top: 0.5rem;
         padding-top: 0.5rem;
         border-top: 1px solid rgba(0,0,0,0.08);
         display: flex;
