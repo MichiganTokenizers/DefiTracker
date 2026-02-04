@@ -383,7 +383,7 @@ function renderPositionCard(pos, isFarm) {
                         </div>
 
                         <div class="attr-row">
-                            <span class="attr-label">1d APR</span>
+                            <span class="attr-label">1d APY</span>
                             <span class="attr-value">${apr1d}</span>
                         </div>
 
@@ -411,7 +411,7 @@ function renderPositionCard(pos, isFarm) {
                         </div>
 
                         <div class="result-row">
-                            <span class="result-label">Avg APR</span>
+                            <span class="result-label">Avg APY</span>
                             <span class="result-value">${avgApr}</span>
                         </div>
 
@@ -452,12 +452,26 @@ function formatEntryDate(isoDate) {
 }
 
 /**
- * Format duration in days
+ * Format duration in months and days
  */
 function formatDuration(days) {
     if (!days || days <= 0) return '--';
-    if (days === 1) return '1 day';
-    return `${days} days`;
+
+    const months = Math.floor(days / 30);
+    const remainingDays = days % 30;
+
+    if (months === 0) {
+        return remainingDays === 1 ? '1 day' : `${remainingDays} days`;
+    }
+
+    const monthStr = months === 1 ? '1 mo' : `${months} mo`;
+
+    if (remainingDays === 0) {
+        return monthStr;
+    }
+
+    const dayStr = remainingDays === 1 ? '1 day' : `${remainingDays} days`;
+    return `${monthStr}, ${dayStr}`;
 }
 
 /**
