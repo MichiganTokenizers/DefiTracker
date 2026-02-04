@@ -185,6 +185,7 @@
     }
 
     /* YieldLife Table Header Style */
+    .table thead tr.yieldlife-header th,
     .yieldlife-header th {
         font-family: 'Poppins', sans-serif !important;
         font-weight: 600 !important;
@@ -665,7 +666,6 @@
         <!-- Single Asset Chart - Multiple Time Measures -->
         <div class="card p-4 chart-card-dark card-top mt-4">
             <h5 class="chart-section-title yieldlife-title">One Asset Pair, Multi Measures</h5>
-            <p class="yieldlife-title yieldlife-subtitle mb-2">APY</p>
             <!-- Filters -->
             <div class="chart-filters-row mb-3">
                 <div class="row g-2 align-items-end">
@@ -698,11 +698,12 @@
             </div>
             
             <!-- Chart Canvas -->
+            <p class="yieldlife-title text-center mb-1">APY</p>
             <div class="chart-container" style="height: 350px;">
                 <canvas id="singleAssetChart"></canvas>
             </div>
         </div>
-        
+
         <!-- Single Asset Table -->
         <div class="card p-4 card-styled card-bottom">
             <div class="table-responsive">
