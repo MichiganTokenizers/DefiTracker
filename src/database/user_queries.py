@@ -135,12 +135,14 @@ class UserQueries:
         conn = self.db.get_connection()
         try:
             password_hash = self.hash_password(password)
+            # Set tos_accepted_at to NOW() if tos_version is provided
+            tos_accepted_at_sql = "NOW()" if tos_version else "NULL"
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     INSERT INTO users (auth_method, email, password_hash, verification_token, display_name, tos_version, tos_accepted_at)
-                    VALUES ('email', %s, %s, %s, %s, %s, CASE WHEN %s IS NOT NULL THEN NOW() ELSE NULL END)
+                    VALUES ('email', %s, %s, %s, %s, %s, {tos_accepted_at_sql})
                     RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
-                """, (email, password_hash, verification_token, display_name, tos_version, tos_version))
+                """, (email, password_hash, verification_token, display_name, tos_version))
                 row = cur.fetchone()
                 conn.commit()
                 if row:
@@ -175,12 +177,14 @@ class UserQueries:
         """Create a new user with wallet authentication"""
         conn = self.db.get_connection()
         try:
+            # Set tos_accepted_at to NOW() if tos_version is provided
+            tos_accepted_at_sql = "NOW()" if tos_version else "NULL"
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     INSERT INTO users (auth_method, wallet_address, wallet_type, display_name, tos_version, tos_accepted_at)
-                    VALUES ('wallet', %s, %s, %s, %s, CASE WHEN %s IS NOT NULL THEN NOW() ELSE NULL END)
+                    VALUES ('wallet', %s, %s, %s, %s, {tos_accepted_at_sql})
                     RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
-                """, (wallet_address, wallet_type, display_name, tos_version, tos_version))
+                """, (wallet_address, wallet_type, display_name, tos_version))
                 row = cur.fetchone()
                 conn.commit()
                 if row:
