@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, current_app, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
 
 from src.database.connection import DatabaseConnection
-from src.database.user_queries import UserQueries, ChartQueries, User
+from src.database.user_queries import UserQueries, ChartQueries, User, CURRENT_TOS_VERSION
 from src.auth.wallet import (
     generate_nonce,
     create_sign_message,
@@ -67,39 +67,45 @@ def validate_password(password: str) -> tuple:
 def register():
     """Register a new user with email and password"""
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
     display_name = data.get('display_name', '').strip() or None
-    
+    tos_accepted = data.get('tos_accepted', False)
+
+    # Validate ToS acceptance
+    if not tos_accepted:
+        return jsonify({'error': 'You must accept the Terms of Service and Privacy Policy'}), 400
+
     # Validate email
     if not email:
         return jsonify({'error': 'Email is required'}), 400
     if not validate_email(email):
         return jsonify({'error': 'Invalid email format'}), 400
-    
+
     # Validate password
     is_valid, error = validate_password(password)
     if not is_valid:
         return jsonify({'error': error}), 400
-    
+
     # Check if email already exists
     existing = user_queries.get_user_by_email(email)
     if existing:
         return jsonify({'error': 'Email already registered'}), 409
-    
+
     # Create user with verification token
     verification_token = generate_token()
-    
+
     try:
         user = user_queries.create_email_user(
             email=email,
             password=password,
             verification_token=verification_token,
-            display_name=display_name
+            display_name=display_name,
+            tos_version=CURRENT_TOS_VERSION
         )
         
         if not user:
@@ -358,8 +364,22 @@ def wallet_login():
     user = user_queries.get_user_by_wallet(wallet_address)
 
     if not user:
-        # Create new wallet user
-        user = user_queries.create_wallet_user(wallet_address, wallet_type=wallet_type)
+        # For new wallet users, require ToS acceptance
+        tos_accepted = data.get('tos_accepted', False)
+        if not tos_accepted:
+            return jsonify({
+                'error': 'tos_required',
+                'message': 'Please accept the Terms of Service to continue',
+                'tos_url': '/terms',
+                'privacy_url': '/privacy'
+            }), 400
+
+        # Create new wallet user with ToS acceptance
+        user = user_queries.create_wallet_user(
+            wallet_address,
+            wallet_type=wallet_type,
+            tos_version=CURRENT_TOS_VERSION
+        )
         if not user:
             return jsonify({'error': 'Failed to create user'}), 500
         is_new = True
@@ -453,6 +473,19 @@ def dismiss_newsletter():
         return jsonify({'message': 'Newsletter prompt dismissed'})
     else:
         return jsonify({'error': 'Failed to dismiss prompt'}), 500
+
+
+@auth_bp.route('/accept-tos', methods=['POST'])
+@login_required
+def accept_tos():
+    """Accept current Terms of Service (for re-consent flow)"""
+    if user_queries.accept_tos(current_user.user_id, CURRENT_TOS_VERSION):
+        return jsonify({
+            'message': 'Terms of Service accepted',
+            'tos_version': CURRENT_TOS_VERSION
+        })
+    else:
+        return jsonify({'error': 'Failed to record acceptance'}), 500
 
 
 @auth_bp.route('/profile', methods=['PUT'])

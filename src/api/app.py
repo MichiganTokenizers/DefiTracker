@@ -13,7 +13,7 @@ from flask_login import current_user, login_required
 from datetime import datetime, timedelta
 from src.database.connection import DatabaseConnection
 from src.database.queries import DatabaseQueries, APYQueries
-from src.database.user_queries import UserQueries
+from src.database.user_queries import UserQueries, CURRENT_TOS_VERSION
 from src.auth import login_manager
 from src.auth.routes import auth_bp, init_auth
 from src.auth.email import mail
@@ -68,6 +68,36 @@ def load_user(user_id):
 def inject_user():
     """Inject current_user into all templates"""
     return dict(current_user=current_user)
+
+
+# ============================================
+# ToS Re-consent Middleware
+# ============================================
+
+@app.before_request
+def check_tos_acceptance():
+    """Check if authenticated user needs to accept updated ToS"""
+    # Skip for static files, auth routes, and legal pages
+    if (request.path.startswith('/static') or
+        request.path.startswith('/api/auth') or
+        request.path in ['/terms', '/privacy', '/', '/health'] or
+        not current_user.is_authenticated):
+        return None
+
+    # Check if user needs to accept ToS
+    if hasattr(current_user, 'needs_tos_acceptance') and current_user.needs_tos_acceptance:
+        # For API requests, return JSON error
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'tos_update_required',
+                'message': 'Please accept the updated Terms of Service',
+                'tos_url': '/terms',
+                'privacy_url': '/privacy',
+                'current_version': CURRENT_TOS_VERSION
+            }), 403
+
+    return None
+
 
 # ============================================
 # Token Pair Normalization
@@ -810,6 +840,16 @@ def my_portfolio_page():
 def reset_password_page(token):
     """Password reset page"""
     return render_template('reset_password.html', token=token)
+
+@app.route('/terms')
+def terms_page():
+    """Terms of Service page"""
+    return render_template('terms.html')
+
+@app.route('/privacy')
+def privacy_page():
+    """Privacy Policy page"""
+    return render_template('privacy.html')
 
 # ============================================
 # Legacy endpoints

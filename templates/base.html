@@ -517,6 +517,19 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Footer -->
+    <footer class="text-center py-3 mt-4" style="background: rgba(255,255,255,0.8); border-top: 1px solid rgba(31,32,31,0.1);">
+        <div class="container">
+            <p class="mb-0" style="font-size: 0.85rem; color: var(--text-secondary);">
+                <a href="/terms" style="color: var(--text-secondary); text-decoration: none;">Terms of Service</a>
+                <span class="mx-2">|</span>
+                <a href="/privacy" style="color: var(--text-secondary); text-decoration: none;">Privacy Policy</a>
+                <span class="mx-2">|</span>
+                <span>&copy; 2024-2026 Michigan Tokenizers LLC</span>
+            </p>
+        </div>
+    </footer>
+
     <!-- Embed Modal -->
     <div class="modal fade" id="embedModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -611,6 +624,12 @@
                                     <label for="signupDisplayName" class="form-label">Display Name (optional)</label>
                                     <input type="text" class="form-control" id="signupDisplayName" maxlength="100">
                                 </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="signupTosAccept" required>
+                                    <label class="form-check-label" for="signupTosAccept" style="font-size: 0.875rem; color: var(--text-secondary);">
+                                        I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+                                    </label>
+                                </div>
                                 <button type="submit" class="btn btn-primary w-100" id="signupSubmitBtn">Create Account</button>
                             </form>
                         </div>
@@ -678,6 +697,38 @@
                     
                     <p class="mt-3 mb-0 text-center" style="font-size: 0.8rem; color: var(--text-secondary);">
                         Your email is also used for account recovery. Unsubscribe anytime.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wallet ToS Modal (for new wallet users) -->
+    <div class="modal fade auth-modal" id="walletTosModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Welcome to YieldLife!</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cancelWalletTos()"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 1.25rem;">
+                        Before creating your account, please review and accept our terms.
+                    </p>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="walletTosAccept">
+                        <label class="form-check-label" for="walletTosAccept" style="font-size: 0.875rem; color: var(--text-secondary);">
+                            I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+                        </label>
+                    </div>
+
+                    <button type="button" class="btn btn-primary w-100" id="walletTosSubmitBtn" onclick="acceptWalletTos()">
+                        Create Account
+                    </button>
+
+                    <p class="mt-3 mb-0 text-center" style="font-size: 0.8rem; color: var(--text-secondary);">
+                        Michigan Tokenizers LLC
                     </p>
                 </div>
             </div>
@@ -771,20 +822,27 @@
         async function handleSignup(event) {
             event.preventDefault();
             hideAuthAlert();
-            
+
             const email = document.getElementById('signupEmail').value;
             const password = document.getElementById('signupPassword').value;
             const displayName = document.getElementById('signupDisplayName').value;
+            const tosAccepted = document.getElementById('signupTosAccept').checked;
             const btn = document.getElementById('signupSubmitBtn');
-            
+
+            // Validate ToS acceptance
+            if (!tosAccepted) {
+                showAuthAlert('Please accept the Terms of Service and Privacy Policy');
+                return;
+            }
+
             btn.disabled = true;
             btn.textContent = 'Creating account...';
-            
+
             try {
                 const response = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, display_name: displayName || null })
+                    body: JSON.stringify({ email, password, display_name: displayName || null, tos_accepted: tosAccepted })
                 });
                 
                 const data = await response.json();

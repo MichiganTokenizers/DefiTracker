@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Terms of Service - YieldLife{% endblock %}
+
+{% block extra_css %}
+<style>
+    .legal-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .legal-card {
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 4px 20px rgba(31, 32, 31, 0.1);
+    }
+    .legal-card h1 {
+        color: var(--carbon-black);
+        margin-bottom: 0.5rem;
+    }
+    .legal-card h2 {
+        color: var(--carbon-black);
+        font-size: 1.25rem;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+    .legal-card p, .legal-card li {
+        color: var(--text-secondary);
+        line-height: 1.7;
+    }
+    .legal-card ul {
+        padding-left: 1.5rem;
+    }
+    .legal-card li {
+        margin-bottom: 0.5rem;
+    }
+    .effective-date {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 2rem;
+    }
+    .legal-footer {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(31, 32, 31, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="legal-container">
+    <div class="legal-card">
+        <h1>Terms of Service</h1>
+        <p class="effective-date">Effective Date: February 4, 2026 | Version 1.0</p>
+
+        <h2>1. Agreement to Terms</h2>
+        <p>By accessing or using YieldLife ("Service"), operated by Michigan Tokenizers LLC ("Company", "we", "us", "our"), you ("User", "you", "your") agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not access or use the Service.</p>
+
+        <h2>2. Description of Service</h2>
+        <p>YieldLife is a decentralized finance (DeFi) yield tracking platform that displays historical Annual Percentage Rate (APR) and Annual Percentage Yield (APY) data from decentralized protocols on the Cardano blockchain. The Service provides informational tools including:</p>
+        <ul>
+            <li>Historical yield data visualization for liquidity pools and lending markets</li>
+            <li>Portfolio tracking for connected wallet addresses</li>
+            <li>Saved chart configurations and user preferences</li>
+        </ul>
+        <p><strong>The Service does not:</strong></p>
+        <ul>
+            <li>Provide financial, investment, tax, or legal advice</li>
+            <li>Custody, hold, or control any user funds or digital assets</li>
+            <li>Execute transactions or interact with blockchain protocols on your behalf</li>
+            <li>Guarantee the accuracy or completeness of any displayed data</li>
+        </ul>
+
+        <h2>3. User Accounts</h2>
+        <p>You may create an account using one of the following methods:</p>
+        <ul>
+            <li><strong>Email and Password:</strong> Standard registration requiring email verification</li>
+            <li><strong>Cardano Wallet Connection:</strong> Authentication via CIP-30 compatible wallets (Nami, Eternl, Lace, Yoroi, and others)</li>
+        </ul>
+        <p>You are solely responsible for:</p>
+        <ul>
+            <li>Maintaining the confidentiality of your account credentials</li>
+            <li>Securing your wallet private keys and seed phrases</li>
+            <li>All activities that occur under your account</li>
+        </ul>
+        <p>We will never ask for your wallet seed phrase or private keys. Never share these with anyone.</p>
+
+        <h2>4. Acceptable Use</h2>
+        <p>You agree not to:</p>
+        <ul>
+            <li>Use the Service for any unlawful purpose or in violation of any applicable laws</li>
+            <li>Attempt to gain unauthorized access to any part of the Service</li>
+            <li>Interfere with or disrupt the integrity or performance of the Service</li>
+            <li>Use automated systems (bots, scrapers) to access the Service without permission</li>
+            <li>Impersonate any person or entity</li>
+            <li>Transmit malware, viruses, or other harmful code</li>
+        </ul>
+
+        <h2>5. Intellectual Property</h2>
+        <p>The Service, including its original content, features, and functionality, is owned by Michigan Tokenizers LLC and is protected by copyright, trademark, and other intellectual property laws. You may not reproduce, distribute, or create derivative works without our express written permission.</p>
+
+        <h2>6. Third-Party Services</h2>
+        <p>The Service integrates with third-party blockchain data providers and DeFi protocols. We are not responsible for the availability, accuracy, or conduct of these third-party services. Your use of third-party services is subject to their respective terms and policies.</p>
+
+        <h2>7. Disclaimer of Warranties</h2>
+        <p><strong>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.</strong></p>
+        <p>We do not warrant that:</p>
+        <ul>
+            <li>The Service will be uninterrupted, timely, secure, or error-free</li>
+            <li>APR/APY data or other information displayed is accurate, complete, or current</li>
+            <li>Any defects in the Service will be corrected</li>
+        </ul>
+        <p><strong>APR/APY data is provided for informational purposes only and should not be relied upon for making financial decisions.</strong></p>
+
+        <h2>8. Limitation of Liability</h2>
+        <p><strong>TO THE MAXIMUM EXTENT PERMITTED BY LAW, MICHIGAN TOKENIZERS LLC, ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AGENTS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, OR OTHER INTANGIBLE LOSSES, ARISING OUT OF OR RELATED TO YOUR USE OF THE SERVICE.</strong></p>
+        <p>This limitation applies regardless of the legal theory on which the claim is based, including negligence, contract, or strict liability, even if we have been advised of the possibility of such damages.</p>
+
+        <h2>9. DeFi Risk Acknowledgment</h2>
+        <p>By using the Service, you acknowledge and accept that:</p>
+        <ul>
+            <li>DeFi protocols carry inherent risks including smart contract vulnerabilities, impermanent loss, protocol failures, and market volatility</li>
+            <li>Displayed yields are historical and not indicative of future performance</li>
+            <li>You are solely responsible for your own investment decisions</li>
+            <li>YieldLife is not responsible for any losses you may incur from DeFi activities</li>
+            <li>Cryptocurrency and DeFi involve substantial risk of loss</li>
+        </ul>
+
+        <h2>10. Indemnification</h2>
+        <p>You agree to indemnify, defend, and hold harmless Michigan Tokenizers LLC and its officers, directors, employees, and agents from any claims, liabilities, damages, losses, or expenses arising out of your use of the Service or violation of these Terms.</p>
+
+        <h2>11. Modifications to Terms</h2>
+        <p>We reserve the right to modify these Terms at any time. We will notify users of material changes by updating the "Effective Date" at the top of this page and, for significant changes, may provide additional notice via email or in-app notification. Your continued use of the Service after any changes constitutes acceptance of the modified Terms.</p>
+
+        <h2>12. Termination</h2>
+        <p>We may terminate or suspend your access to the Service immediately, without prior notice or liability, for any reason, including breach of these Terms. Upon termination, your right to use the Service will immediately cease.</p>
+
+        <h2>13. Governing Law</h2>
+        <p>These Terms shall be governed by and construed in accordance with the laws of the State of Michigan, United States, without regard to its conflict of law provisions. Any legal action arising out of these Terms shall be brought exclusively in the courts located in Michigan.</p>
+
+        <h2>14. Severability</h2>
+        <p>If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary so that these Terms shall otherwise remain in full force and effect.</p>
+
+        <h2>15. Entire Agreement</h2>
+        <p>These Terms, together with our <a href="/privacy">Privacy Policy</a>, constitute the entire agreement between you and Michigan Tokenizers LLC regarding your use of the Service.</p>
+
+        <h2>16. Contact Information</h2>
+        <p>For questions about these Terms of Service, please contact us at:</p>
+        <p><strong>Michigan Tokenizers LLC</strong><br>
+        Email: legal@yieldlife.io</p>
+
+        <div class="legal-footer">
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">&copy; 2024-2026 Michigan Tokenizers LLC. All rights reserved.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
