@@ -50,6 +50,20 @@ function bytesToHex(bytes) {
 }
 
 /**
+ * Safely parse JSON response, handling HTML error pages
+ */
+async function safeJsonParse(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Server returned HTML instead of JSON (likely an error page)
+        console.error('Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server error (${response.status}): ${response.statusText || 'Unable to process request'}`);
+    }
+}
+
+/**
  * Bech32 encoding implementation for Cardano addresses
  */
 const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
@@ -274,13 +288,14 @@ async function connectWithWallet(selectedWallet) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ wallet_address: walletAddress })
         });
-        
+
+        const challengeData = await safeJsonParse(challengeResponse);
+
         if (!challengeResponse.ok) {
-            const error = await challengeResponse.json();
-            throw new Error(error.error || 'Failed to get challenge');
+            throw new Error(challengeData.error || 'Failed to get challenge');
         }
-        
-        const { nonce, message } = await challengeResponse.json();
+
+        const { nonce, message } = challengeData;
         
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sign message in wallet...';
         
@@ -318,7 +333,7 @@ async function connectWithWallet(selectedWallet) {
             })
         });
 
-        const loginData = await loginResponse.json();
+        const loginData = await safeJsonParse(loginResponse);
 
         if (loginResponse.ok) {
             // Check if we should show the newsletter prompt
@@ -472,7 +487,7 @@ async function acceptWalletTos() {
                 })
             });
 
-            const data = await response.json();
+            const data = await safeJsonParse(response);
 
             if (response.ok) {
                 // Clear pending auth
