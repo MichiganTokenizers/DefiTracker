@@ -167,6 +167,20 @@ function showWalletSelectionModal(wallets) {
 }
 
 /**
+ * Check if user has already accepted ToS (stored in localStorage)
+ */
+function hasAcceptedTos() {
+    return localStorage.getItem('tos_accepted') === 'true';
+}
+
+/**
+ * Mark ToS as accepted in localStorage
+ */
+function markTosAccepted() {
+    localStorage.setItem('tos_accepted', 'true');
+}
+
+/**
  * Connect to a Cardano wallet and authenticate
  */
 async function connectWallet() {
@@ -182,6 +196,27 @@ async function connectWallet() {
 
         if (availableWallets.length === 0) {
             throw new Error('No Cardano wallet found. Please install Nami, Eternl, or another CIP-30 wallet.');
+        }
+
+        // Check if user needs to accept ToS first
+        if (!hasAcceptedTos()) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+
+            // Store wallet info for after ToS acceptance
+            window._pendingWalletConnection = {
+                wallets: availableWallets
+            };
+
+            // Close auth modal and show ToS modal
+            const authModal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+            if (authModal) authModal.hide();
+
+            setTimeout(() => {
+                const tosModal = new bootstrap.Modal(document.getElementById('walletTosModal'));
+                tosModal.show();
+            }, 300);
+            return;
         }
 
         // If multiple wallets, show selection modal
@@ -269,8 +304,8 @@ async function connectWithWallet(selectedWallet) {
         const { signature, key } = extractSignatureAndKey(signatureData);
         
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verifying...';
-        
-        // Send to server for verification (first attempt without ToS for existing users)
+
+        // Send to server for verification (ToS already accepted before wallet connection)
         const loginResponse = await fetch('/api/auth/wallet-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -279,36 +314,11 @@ async function connectWithWallet(selectedWallet) {
                 signature: signature,
                 public_key: key,
                 wallet_type: selectedWallet.id,
-                tos_accepted: false
+                tos_accepted: true
             })
         });
 
         const loginData = await loginResponse.json();
-
-        // Handle ToS requirement for new users
-        if (loginResponse.status === 400 && loginData.error === 'tos_required') {
-            // Store credentials for retry after ToS acceptance
-            window._pendingWalletAuth = {
-                walletAddress: walletAddress,
-                signature: signature,
-                key: key,
-                walletType: selectedWallet.id
-            };
-
-            // Close auth modal first
-            const authModal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
-            if (authModal) authModal.hide();
-
-            // Show ToS modal
-            setTimeout(() => {
-                const tosModal = new bootstrap.Modal(document.getElementById('walletTosModal'));
-                tosModal.show();
-            }, 300);
-
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            return;
-        }
 
         if (loginResponse.ok) {
             // Check if we should show the newsletter prompt
@@ -404,15 +414,9 @@ function extractSignatureAndKey(signatureData) {
 }
 
 /**
- * Accept ToS and complete wallet registration
+ * Accept ToS and proceed with wallet connection
  */
 async function acceptWalletTos() {
-    const auth = window._pendingWalletAuth;
-    if (!auth) {
-        console.error('No pending wallet auth data');
-        return;
-    }
-
     const checkbox = document.getElementById('walletTosAccept');
     if (!checkbox.checked) {
         alert('Please accept the Terms of Service and Privacy Policy');
@@ -421,61 +425,91 @@ async function acceptWalletTos() {
 
     const btn = document.getElementById('walletTosSubmitBtn');
     btn.disabled = true;
-    btn.textContent = 'Creating account...';
+    btn.textContent = 'Continuing...';
 
-    try {
-        const response = await fetch('/api/auth/wallet-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                wallet_address: auth.walletAddress,
-                signature: auth.signature,
-                public_key: auth.key,
-                wallet_type: auth.walletType,
-                tos_accepted: true
-            })
-        });
+    // Mark ToS as accepted in localStorage
+    markTosAccepted();
 
-        const data = await response.json();
+    // Hide ToS modal
+    const tosModal = bootstrap.Modal.getInstance(document.getElementById('walletTosModal'));
+    if (tosModal) tosModal.hide();
 
-        if (response.ok) {
-            // Hide ToS modal
-            const tosModal = bootstrap.Modal.getInstance(document.getElementById('walletTosModal'));
-            if (tosModal) tosModal.hide();
+    // Check if we have pending wallet connection (new flow - ToS before connect)
+    const pending = window._pendingWalletConnection;
+    if (pending) {
+        window._pendingWalletConnection = null;
 
-            // Clear pending auth
-            window._pendingWalletAuth = null;
-
-            // Check if we should show newsletter prompt
-            if (data.show_email_prompt) {
-                setTimeout(() => {
-                    if (typeof showNewsletterModal === 'function') {
-                        showNewsletterModal();
-                    } else {
-                        window.location.reload();
-                    }
-                }, 300);
+        setTimeout(() => {
+            // If multiple wallets, show selection modal
+            if (pending.wallets.length > 1) {
+                showWalletSelectionModal(pending.wallets);
             } else {
-                window.location.reload();
+                // Single wallet - connect directly
+                connectWithWallet(pending.wallets[0]);
             }
-        } else {
-            alert(data.error || 'Registration failed');
-            btn.disabled = false;
-            btn.textContent = 'Create Account';
-        }
-    } catch (e) {
-        console.error('ToS acceptance error:', e);
-        alert('Connection error. Please try again.');
+        }, 300);
+
         btn.disabled = false;
-        btn.textContent = 'Create Account';
+        btn.textContent = 'Continue';
+        return;
+    }
+
+    // Legacy flow: retry wallet-login with tos_accepted (for server-side tos_required response)
+    const auth = window._pendingWalletAuth;
+    if (auth) {
+        btn.textContent = 'Creating account...';
+
+        try {
+            const response = await fetch('/api/auth/wallet-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    wallet_address: auth.walletAddress,
+                    signature: auth.signature,
+                    public_key: auth.key,
+                    wallet_type: auth.walletType,
+                    tos_accepted: true
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Clear pending auth
+                window._pendingWalletAuth = null;
+
+                // Check if we should show newsletter prompt
+                if (data.show_email_prompt) {
+                    setTimeout(() => {
+                        if (typeof showNewsletterModal === 'function') {
+                            showNewsletterModal();
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 300);
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                alert(data.error || 'Registration failed');
+                btn.disabled = false;
+                btn.textContent = 'Continue';
+            }
+        } catch (e) {
+            console.error('ToS acceptance error:', e);
+            alert('Connection error. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Continue';
+        }
     }
 }
 
 /**
- * Cancel wallet ToS and clear pending auth
+ * Cancel wallet ToS and clear pending data
  */
 function cancelWalletTos() {
     window._pendingWalletAuth = null;
+    window._pendingWalletConnection = null;
     // Reset checkbox
     const checkbox = document.getElementById('walletTosAccept');
     if (checkbox) checkbox.checked = false;

@@ -50,7 +50,15 @@ class User:
 
     @property
     def needs_tos_acceptance(self) -> bool:
-        """Check if user needs to accept current Terms of Service"""
+        """Check if user needs to accept current Terms of Service.
+
+        Only returns True if user previously accepted a ToS version that is now outdated.
+        Users who never accepted (tos_version = None) are grandfathered in.
+        """
+        # Existing users without ToS version are grandfathered - don't require re-consent
+        if self.tos_version is None:
+            return False
+        # Only require re-consent if they have an outdated version
         return self.tos_version != CURRENT_TOS_VERSION
 
     def get_id(self) -> str:
