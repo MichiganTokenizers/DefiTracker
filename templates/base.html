@@ -486,14 +486,14 @@
                             </span>
                             {% else %}
                             <span class="user-avatar">
-                                {{ (current_user.display_name or current_user.email or 'U')[0].upper() }}
+                                {{ (current_user.email or 'U')[0].upper() }}
                             </span>
                             {% endif %}
                             <span class="d-none d-md-inline">
                                 {% if current_user.wallet_address %}
                                 {{ current_user.wallet_address[:8] }}...{{ current_user.wallet_address[-6:] }}
                                 {% else %}
-                                {{ current_user.display_name or current_user.email or 'User' }}
+                                {{ current_user.email or 'User' }}
                                 {% endif %}
                             </span>
                         </a>
@@ -619,10 +619,6 @@
                                     <label for="signupPassword" class="form-label">Password</label>
                                     <input type="password" class="form-control" id="signupPassword" required minlength="8">
                                     <div class="form-text">At least 8 characters with letters and numbers</div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="signupDisplayName" class="form-label">Display Name (optional)</label>
-                                    <input type="text" class="form-control" id="signupDisplayName" maxlength="100">
                                 </div>
                                 <div class="mb-3 form-check">
                                     <input type="checkbox" class="form-check-input" id="signupTosAccept" required>
@@ -821,7 +817,6 @@
 
             const email = document.getElementById('signupEmail').value;
             const password = document.getElementById('signupPassword').value;
-            const displayName = document.getElementById('signupDisplayName').value;
             const tosAccepted = document.getElementById('signupTosAccept').checked;
             const btn = document.getElementById('signupSubmitBtn');
 
@@ -838,7 +833,7 @@
                 const response = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, display_name: displayName || null, tos_accepted: tosAccepted })
+                    body: JSON.stringify({ email, password, tos_accepted: tosAccepted })
                 });
                 
                 const data = await response.json();

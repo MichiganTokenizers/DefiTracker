@@ -21,12 +21,11 @@ class User:
     email_verified: bool = False
     wallet_address: Optional[str] = None
     wallet_type: Optional[str] = None  # e.g., 'nami', 'eternl', 'lace'
-    display_name: Optional[str] = None
     newsletter_subscribed: bool = False
     tos_version: Optional[str] = None
     tos_accepted_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -36,7 +35,6 @@ class User:
             'email_verified': self.email_verified,
             'wallet_address': self.wallet_address,
             'wallet_type': self.wallet_type,
-            'display_name': self.display_name,
             'newsletter_subscribed': self.newsletter_subscribed,
             'tos_version': self.tos_version,
             'tos_accepted_at': self.tos_accepted_at.isoformat() if self.tos_accepted_at else None,
@@ -128,7 +126,6 @@ class UserQueries:
         email: str,
         password: str,
         verification_token: str,
-        display_name: Optional[str] = None,
         tos_version: Optional[str] = None
     ) -> Optional[User]:
         """Create a new user with email/password authentication"""
@@ -139,10 +136,10 @@ class UserQueries:
             tos_accepted_at_sql = "NOW()" if tos_version else "NULL"
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    INSERT INTO users (auth_method, email, password_hash, verification_token, display_name, tos_version, tos_accepted_at)
-                    VALUES ('email', %s, %s, %s, %s, %s, {tos_accepted_at_sql})
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
-                """, (email, password_hash, verification_token, display_name, tos_version))
+                    INSERT INTO users (auth_method, email, password_hash, verification_token, tos_version, tos_accepted_at)
+                    VALUES ('email', %s, %s, %s, %s, {tos_accepted_at_sql})
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                """, (email, password_hash, verification_token, tos_version))
                 row = cur.fetchone()
                 conn.commit()
                 if row:
@@ -153,11 +150,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         except Exception as e:
             conn.rollback()
@@ -170,7 +166,6 @@ class UserQueries:
     def create_wallet_user(
         self,
         wallet_address: str,
-        display_name: Optional[str] = None,
         wallet_type: Optional[str] = None,
         tos_version: Optional[str] = None
     ) -> Optional[User]:
@@ -181,10 +176,10 @@ class UserQueries:
             tos_accepted_at_sql = "NOW()" if tos_version else "NULL"
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    INSERT INTO users (auth_method, wallet_address, wallet_type, display_name, tos_version, tos_accepted_at)
-                    VALUES ('wallet', %s, %s, %s, %s, {tos_accepted_at_sql})
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
-                """, (wallet_address, wallet_type, display_name, tos_version))
+                    INSERT INTO users (auth_method, wallet_address, wallet_type, tos_version, tos_accepted_at)
+                    VALUES ('wallet', %s, %s, %s, {tos_accepted_at_sql})
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                """, (wallet_address, wallet_type, tos_version))
                 row = cur.fetchone()
                 conn.commit()
                 if row:
@@ -195,11 +190,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         except Exception as e:
             conn.rollback()
@@ -215,7 +209,7 @@ class UserQueries:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                    SELECT user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
                     FROM users WHERE user_id = %s
                 """, (user_id,))
                 row = cur.fetchone()
@@ -227,11 +221,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         finally:
             self.db.return_connection(conn)
@@ -244,7 +237,7 @@ class UserQueries:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT user_id, auth_method, email, email_verified, wallet_address, wallet_type,
-                           display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at, password_hash
+                           newsletter_subscribed, tos_version, tos_accepted_at, created_at, password_hash
                     FROM users WHERE email = %s
                 """, (email,))
                 row = cur.fetchone()
@@ -256,13 +249,12 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
-                    return (user, row[11])  # Return user and password_hash
+                    return (user, row[10])  # Return user and password_hash
         finally:
             self.db.return_connection(conn)
         return None
@@ -273,7 +265,7 @@ class UserQueries:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                    SELECT user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
                     FROM users WHERE wallet_address = %s
                 """, (wallet_address,))
                 row = cur.fetchone()
@@ -285,11 +277,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         finally:
             self.db.return_connection(conn)
@@ -304,7 +295,7 @@ class UserQueries:
                     UPDATE users
                     SET email_verified = TRUE, verification_token = NULL
                     WHERE verification_token = %s
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
                 """, (token,))
                 row = cur.fetchone()
                 conn.commit()
@@ -316,11 +307,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         except Exception as e:
             conn.rollback()
@@ -361,7 +351,7 @@ class UserQueries:
                     UPDATE users
                     SET password_hash = %s, reset_token = NULL, reset_token_expires = NULL
                     WHERE reset_token = %s AND reset_token_expires > NOW()
-                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, display_name, newsletter_subscribed, tos_version, tos_accepted_at, created_at
+                    RETURNING user_id, auth_method, email, email_verified, wallet_address, wallet_type, newsletter_subscribed, tos_version, tos_accepted_at, created_at
                 """, (password_hash, token))
                 row = cur.fetchone()
                 conn.commit()
@@ -373,11 +363,10 @@ class UserQueries:
                         email_verified=row[3],
                         wallet_address=row[4],
                         wallet_type=row[5],
-                        display_name=row[6],
-                        newsletter_subscribed=row[7],
-                        tos_version=row[8],
-                        tos_accepted_at=row[9],
-                        created_at=row[10]
+                        newsletter_subscribed=row[6],
+                        tos_version=row[7],
+                        tos_accepted_at=row[8],
+                        created_at=row[9]
                     )
         except Exception as e:
             conn.rollback()
@@ -436,25 +425,6 @@ class UserQueries:
             self.db.return_connection(conn)
         return False
     
-    def update_display_name(self, user_id: int, display_name: str) -> bool:
-        """Update user display name"""
-        conn = self.db.get_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE users SET display_name = %s WHERE user_id = %s
-                    RETURNING user_id
-                """, (display_name, user_id))
-                row = cur.fetchone()
-                conn.commit()
-                return row is not None
-        except Exception as e:
-            conn.rollback()
-            print(f"Error updating display name: {e}")
-        finally:
-            self.db.return_connection(conn)
-        return False
-
     def update_wallet_type(self, user_id: int, wallet_type: str) -> bool:
         """Update wallet type for a user"""
         conn = self.db.get_connection()
@@ -709,7 +679,7 @@ class ChartQueries:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    DELETE FROM saved_charts 
+                    DELETE FROM saved_charts
                     WHERE chart_id = %s AND user_id = %s
                     RETURNING chart_id
                 """, (chart_id, user_id))
@@ -719,6 +689,50 @@ class ChartQueries:
         except Exception as e:
             conn.rollback()
             print(f"Error deleting chart: {e}")
+        finally:
+            self.db.return_connection(conn)
+        return False
+
+    def create_default_charts(self, user_id: int) -> bool:
+        """Create default saved charts for a new user"""
+        default_charts = [
+            {
+                "name": "NIGHT 1d",
+                "filters": {
+                    "chain": "cardano",
+                    "chart_type": "multi_asset",
+                    "days": 1,
+                    "assets": ["NIGHT-ADA", "NIGHT-USDM", "NIGHT-USDA"],
+                    "yield_type": "lp",
+                    "apr_type": "1d"
+                }
+            },
+            {
+                "name": "Stables 30d",
+                "filters": {
+                    "chain": "cardano",
+                    "chart_type": "multi_asset",
+                    "days": 30,
+                    "assets": ["USDM-USDA", "DJED-USDM", "USDM-iUSD", "USDC-iUSD", "USDT-iUSD"],
+                    "yield_type": "lp",
+                    "apr_type": "1d"
+                }
+            }
+        ]
+
+        conn = self.db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                for chart in default_charts:
+                    cur.execute("""
+                        INSERT INTO saved_charts (user_id, name, filters)
+                        VALUES (%s, %s, %s)
+                    """, (user_id, chart["name"], json.dumps(chart["filters"])))
+                conn.commit()
+                return True
+        except Exception as e:
+            conn.rollback()
+            print(f"Error creating default charts: {e}")
         finally:
             self.db.return_connection(conn)
         return False

@@ -73,7 +73,6 @@ def register():
 
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
-    display_name = data.get('display_name', '').strip() or None
     tos_accepted = data.get('tos_accepted', False)
 
     # Validate ToS acceptance
@@ -104,17 +103,19 @@ def register():
             email=email,
             password=password,
             verification_token=verification_token,
-            display_name=display_name,
             tos_version=CURRENT_TOS_VERSION
         )
-        
+
         if not user:
             return jsonify({'error': 'Failed to create user'}), 500
-        
+
+        # Create default saved charts for new user
+        chart_queries.create_default_charts(user.user_id)
+
         # Send verification email
         base_url = get_base_url()
         email_sent = send_verification_email(email, verification_token, base_url)
-        
+
         return jsonify({
             'message': 'Registration successful. Please check your email to verify your account.',
             'user': user.to_dict(),
@@ -382,6 +383,9 @@ def wallet_login():
         )
         if not user:
             return jsonify({'error': 'Failed to create user'}), 500
+
+        # Create default saved charts for new user
+        chart_queries.create_default_charts(user.user_id)
         is_new = True
     else:
         # Update wallet_type if provided and different
@@ -486,29 +490,6 @@ def accept_tos():
         })
     else:
         return jsonify({'error': 'Failed to record acceptance'}), 500
-
-
-@auth_bp.route('/profile', methods=['PUT'])
-@login_required
-def update_profile():
-    """Update user profile"""
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-    
-    display_name = data.get('display_name', '').strip()
-    
-    if display_name:
-        if len(display_name) > 100:
-            return jsonify({'error': 'Display name too long (max 100 characters)'}), 400
-        
-        if user_queries.update_display_name(current_user.user_id, display_name):
-            return jsonify({'message': 'Profile updated'})
-        else:
-            return jsonify({'error': 'Failed to update profile'}), 500
-    
-    return jsonify({'error': 'No changes provided'}), 400
 
 
 # ==========================================
