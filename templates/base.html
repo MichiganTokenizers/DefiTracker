@@ -445,11 +445,18 @@
                     {% if current_user.is_authenticated %}
                     {% if current_user.wallet_address %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/portfolio">My Portfolio</a>
+                        <a class="nav-link" href="/portfolio">Portfolio</a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/my-charts">My Charts</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" id="myChartsDropdown">
+                            Saved Charts
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" id="myChartsMenu">
+                            <li><span class="dropdown-item text-muted">Loading...</span></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/my-charts">Manage Charts</a></li>
+                        </ul>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
@@ -917,6 +924,51 @@
             } else if (params.get('verified') === 'false') {
                 alert('Email verification failed. Please try again or request a new link.');
                 window.history.replaceState({}, '', window.location.pathname);
+            }
+
+            // Load saved charts into My Charts dropdown
+            const chartsDropdown = document.getElementById('myChartsDropdown');
+            if (chartsDropdown) {
+                let chartsLoaded = false;
+                chartsDropdown.addEventListener('show.bs.dropdown', async function() {
+                    if (chartsLoaded) return;
+
+                    try {
+                        const response = await fetch('/api/auth/charts');
+                        if (!response.ok) throw new Error('Failed to load charts');
+
+                        const charts = await response.json();
+                        const menu = document.getElementById('myChartsMenu');
+
+                        // Build chart items
+                        let html = '';
+                        if (charts.length === 0) {
+                            html = '<li><span class="dropdown-item text-muted">No saved charts</span></li>';
+                        } else {
+                            charts.slice(0, 10).forEach(chart => {
+                                const filters = chart.filters || {};
+                                let chartUrl = '/';
+                                if (filters.chain && filters.yield_type === 'lp') {
+                                    chartUrl = `/${filters.chain}/lps`;
+                                } else if (filters.chain && filters.yield_type === 'lending') {
+                                    chartUrl = `/${filters.chain}/lending`;
+                                }
+                                chartUrl += `?chart_id=${chart.chart_id}`;
+                                html += `<li><a class="dropdown-item" href="${chartUrl}">${chart.name}</a></li>`;
+                            });
+                            if (charts.length > 10) {
+                                html += '<li><span class="dropdown-item text-muted">... and ${charts.length - 10} more</span></li>';
+                            }
+                        }
+                        html += '<li><hr class="dropdown-divider"></li>';
+                        html += '<li><a class="dropdown-item" href="/my-charts">Manage Charts</a></li>';
+
+                        menu.innerHTML = html;
+                        chartsLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading charts:', e);
+                    }
+                });
             }
         });
     </script>
