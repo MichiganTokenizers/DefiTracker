@@ -1278,7 +1278,7 @@ function applySortToTable() {
         
         row.innerHTML = `
             <td>
-                <img src="${logo}" alt="${item.protocol}" title="${item.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
+                <img src="${logo}" alt="${item.protocol}" title="${item.protocol}" loading="lazy" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${item.symbol}${versionStr}</strong>
             </td>
             <td><span style="color: var(--carbon-black); font-size: 1.1rem; font-weight: 600;">${aprDisplay}</span></td>
@@ -1889,7 +1889,7 @@ function updateSingleAssetTable(data) {
         return `
         <tr>
             <td>
-                <img src="${logo}" alt="${row.protocol}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
+                <img src="${logo}" alt="${row.protocol}" loading="lazy" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border-radius: 4px;" onerror="this.style.display='none'">
                 <strong>${row.protocol}</strong>
             </td>
             <td style="color: var(--carbon-black); font-weight: 600;">
@@ -2246,7 +2246,7 @@ function renderBreakdownCharts() {
         html += `
             <div class="breakdown-card-wrapper mb-3">
                 <div class="breakdown-card-header">
-                    <img src="${logo}" alt="${data.protocol}" onerror="this.style.display='none'">
+                    <img src="${logo}" alt="${data.protocol}" loading="lazy" onerror="this.style.display='none'">
                     <h5>${data.protocol}</h5>
                     <span class="breakdown-card-meta">${data.poolCount} pools</span>
                 </div>
