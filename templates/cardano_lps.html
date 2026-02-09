@@ -635,11 +635,6 @@
                             Save Chart
                         </button>
                     </div>
-                    <div class="col-md-auto d-flex align-items-end">
-                        <button type="button" class="btn btn-outline-secondary" id="exportChartBtn" onclick="exportMultiAssetChart()">
-                            Download PNG
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -697,11 +692,6 @@
                     <div class="col-md-2 ms-auto d-flex align-items-end">
                         <button type="button" class="btn btn-login w-100" id="saveSingleAssetChartBtn" onclick="saveSingleAssetChart()">
                             Save Chart
-                        </button>
-                    </div>
-                    <div class="col-md-auto d-flex align-items-end">
-                        <button type="button" class="btn btn-outline-secondary" id="exportSingleAssetChartBtn" onclick="exportSingleAssetChart()">
-                            Download PNG
                         </button>
                     </div>
                 </div>
@@ -2479,55 +2469,6 @@ function updateBreakdownChart(index) {
         }
     });
 }
-
-// Image export functionality
-function downloadChartImage(chartInstance, filename) {
-    if (!chartInstance) {
-        alert('No chart available to export');
-        return;
-    }
-    const imageData = chartInstance.toBase64Image('image/png', 1);
-    const link = document.createElement('a');
-    link.download = filename;
-    link.href = imageData;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function exportMultiAssetChart() {
-    const date = new Date().toISOString().slice(0, 10);
-    const filename = `yieldlife-lp-chart-${date}.png`;
-    downloadChartImage(chart, filename);
-}
-
-function exportSingleAssetChart() {
-    const asset = document.getElementById('singleAssetSelect').value || 'asset';
-    const date = new Date().toISOString().slice(0, 10);
-    const filename = `yieldlife-${asset.replace(/[^a-zA-Z0-9-]/g, '-')}-${date}.png`;
-    downloadChartImage(singleAssetChart, filename);
-}
-
-// Auto-export if requested via URL parameter
-(function checkAutoExport() {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('export') === 'true') {
-        // Wait for chart to fully render
-        setTimeout(() => {
-            const chartType = urlParams.get('chart_type');
-            if (chartType === 'single_asset') {
-                exportSingleAssetChart();
-            } else {
-                exportMultiAssetChart();
-            }
-            // Remove export param from URL to prevent re-export on refresh
-            urlParams.delete('export');
-            const newUrl = window.location.pathname +
-                (urlParams.toString() ? '?' + urlParams.toString() : '');
-            history.replaceState(null, '', newUrl);
-        }, 1000);
-    }
-})();
 </script>
 {% endblock %}
 

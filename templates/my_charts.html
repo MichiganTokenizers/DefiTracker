@@ -224,7 +224,6 @@ function renderChartCard(chart) {
     
     // Add chart_id as query parameter to load saved settings
     const chartUrlWithId = `${chartUrl}?chart_id=${chart.chart_id}`;
-    const exportUrl = `${chartUrlWithId}&export=true&chart_type=${filters.chart_type || 'multi_asset'}`;
 
     return `
         <div class="chart-card" data-chart-id="${chart.chart_id}">
@@ -234,7 +233,6 @@ function renderChartCard(chart) {
             <div class="chart-meta">Created: ${created}</div>
             <div class="chart-actions">
                 <a href="${chartUrlWithId}" class="btn btn-sm btn-primary">View</a>
-                <a href="${exportUrl}" class="btn btn-sm btn-outline-success" title="View chart and download as PNG">Export</a>
                 <button class="btn btn-sm btn-outline-secondary" onclick="editChart(${chart.chart_id})">Edit</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteChart(${chart.chart_id})">Delete</button>
             </div>
