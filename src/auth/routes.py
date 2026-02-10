@@ -15,7 +15,8 @@ from src.auth.email import (
     generate_token,
     send_verification_email,
     send_password_reset_email,
-    send_email_added_notification
+    send_email_added_notification,
+    send_welcome_newsletter_email
 )
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -74,6 +75,7 @@ def register():
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
     tos_accepted = data.get('tos_accepted', False)
+    subscribe_newsletter = data.get('subscribe_newsletter', True)
 
     # Validate ToS acceptance
     if not tos_accepted:
@@ -115,6 +117,10 @@ def register():
         # Send verification email
         base_url = get_base_url()
         email_sent = send_verification_email(email, verification_token, base_url)
+
+        # Send welcome newsletter email if subscribed
+        if subscribe_newsletter:
+            send_welcome_newsletter_email(email, base_url)
 
         return jsonify({
             'message': 'Registration successful. Please check your email to verify your account.',
@@ -464,6 +470,8 @@ def add_email():
     ):
         base_url = get_base_url()
         send_verification_email(email, verification_token, base_url)
+        if subscribe_newsletter:
+            send_welcome_newsletter_email(email, base_url)
         return jsonify({'message': 'Email added. Please check your inbox to verify.'})
     else:
         return jsonify({'error': 'Failed to add email'}), 500

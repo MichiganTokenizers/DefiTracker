@@ -159,6 +159,77 @@ If you didn't request a password reset, you can safely ignore this email. Your p
         return False
 
 
+def send_welcome_newsletter_email(to_email: str, base_url: str) -> bool:
+    """
+    Send welcome email when a user subscribes to the monthly newsletter.
+
+    Args:
+        to_email: Recipient email address
+        base_url: Base URL of the application
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    try:
+        msg = Message(
+            subject="Welcome to the YieldLife Newsletter!",
+            recipients=[to_email],
+            body=f"""Welcome to the YieldLife Newsletter!
+
+Thanks for subscribing to our monthly newsletter. Here's what you can expect:
+
+- Monthly updates on Cardano DeFi yields and trends
+- New protocol listings and feature announcements
+- Tips for optimizing your DeFi portfolio
+
+Visit YieldLife anytime at {base_url}
+
+If you didn't subscribe, you can ignore this email.
+
+- The YieldLife Team
+""",
+            html=f"""
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #0e8749;">YieldLife</h1>
+    </div>
+
+    <h2>Welcome to the YieldLife Newsletter!</h2>
+
+    <p>Thanks for subscribing to our monthly newsletter. Here's what you can expect:</p>
+
+    <ul style="line-height: 1.8;">
+        <li>Monthly updates on Cardano DeFi yields and trends</li>
+        <li>New protocol listings and feature announcements</li>
+        <li>Tips for optimizing your DeFi portfolio</li>
+    </ul>
+
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{base_url}"
+           style="background: #0e8749; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">
+            Visit YieldLife
+        </a>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+    <p style="color: #999; font-size: 12px;">
+        If you didn't subscribe to the YieldLife newsletter, you can ignore this email.
+    </p>
+</body>
+</html>
+"""
+        )
+
+        mail.send(msg)
+        return True
+
+    except Exception as e:
+        print(f"Failed to send welcome newsletter email: {e}")
+        return False
+
+
 def send_email_added_notification(to_email: str, base_url: str) -> bool:
     """
     Send notification when email is added to a wallet account.
