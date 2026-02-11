@@ -601,7 +601,8 @@ class PortfolioService:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT entry_date, entry_price_ratio, entry_tx_hash,
-                           token_a_symbol, token_b_symbol, protocol, pool_name
+                           token_a_symbol, token_b_symbol, protocol, pool_name,
+                           lp_amount
                     FROM user_lp_entries
                     WHERE wallet_address = %s
                       AND policy_id = %s
@@ -618,6 +619,7 @@ class PortfolioService:
                         "token_b_symbol": row[4],
                         "protocol": row[5],
                         "pool_name": row[6],
+                        "lp_amount": int(row[7]) if row[7] is not None else None,
                     }
                 return None
 
@@ -631,7 +633,7 @@ class PortfolioService:
         self, wallet_address: str, policy_id: str, asset_name: str,
         protocol: str, pool_name: str, entry_date: str,
         entry_price_ratio: float, token_a_symbol: str, token_b_symbol: str,
-        entry_tx_hash: Optional[str] = None
+        entry_tx_hash: Optional[str] = None, lp_amount: Optional[int] = None
     ) -> bool:
         """
         Store LP entry data in database for future IL calculations.
@@ -647,6 +649,7 @@ class PortfolioService:
             token_a_symbol: Token A symbol
             token_b_symbol: Token B symbol
             entry_tx_hash: Transaction hash (optional)
+            lp_amount: LP token quantity (optional)
 
         Returns:
             True if stored successfully
@@ -658,14 +661,18 @@ class PortfolioService:
                     INSERT INTO user_lp_entries (
                         wallet_address, policy_id, asset_name, protocol,
                         pool_name, entry_date, entry_price_ratio,
-                        token_a_symbol, token_b_symbol, entry_tx_hash
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        token_a_symbol, token_b_symbol, entry_tx_hash,
+                        lp_amount, last_amount_check
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (wallet_address, policy_id, asset_name)
-                    DO NOTHING
+                    DO UPDATE SET
+                        lp_amount = COALESCE(user_lp_entries.lp_amount, EXCLUDED.lp_amount),
+                        last_amount_check = CURRENT_TIMESTAMP
                 """, (
                     wallet_address, policy_id, asset_name, protocol,
                     pool_name, entry_date, entry_price_ratio,
-                    token_a_symbol, token_b_symbol, entry_tx_hash
+                    token_a_symbol, token_b_symbol, entry_tx_hash,
+                    lp_amount
                 ))
                 conn.commit()
                 return cur.rowcount > 0
@@ -676,6 +683,162 @@ class PortfolioService:
             return False
         finally:
             self._db.return_connection(conn)
+
+    def _update_lp_entry_for_amount_change(
+        self, wallet_address: str, policy_id: str, asset_name: str,
+        current_lp_amount: int, current_price_ratio: float
+    ) -> Optional[Dict]:
+        """
+        Detect deposit/withdrawal by comparing current LP amount with stored amount.
+
+        Deposits: weighted-average entry_date and entry_price_ratio.
+        Withdrawals: update stored amount only, keep entry_date and ratio.
+        Complete exit (amount=0): delete the entry row.
+        Pre-migration (stored amount NULL): seed with current amount.
+
+        Returns:
+            Updated entry dict, or None if entry was deleted or not found.
+        """
+        stored_entry = self._get_lp_entry_from_db(wallet_address, policy_id, asset_name)
+        if not stored_entry:
+            return None
+
+        stored_amount = stored_entry.get("lp_amount")
+
+        # Complete withdrawal - delete entry so re-entry creates a fresh record
+        if current_lp_amount == 0:
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        DELETE FROM user_lp_entries
+                        WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                    """, (wallet_address, policy_id, asset_name))
+                    conn.commit()
+                logger.info(
+                    "Deleted LP entry for %s (complete withdrawal)",
+                    stored_entry.get("pool_name")
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error deleting LP entry: %s", e)
+            finally:
+                self._db.return_connection(conn)
+            return None
+
+        # Pre-migration entry (no stored amount) - seed with current amount
+        if stored_amount is None:
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE user_lp_entries
+                        SET lp_amount = %s, last_amount_check = CURRENT_TIMESTAMP
+                        WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                    """, (current_lp_amount, wallet_address, policy_id, asset_name))
+                    conn.commit()
+                logger.info(
+                    "Seeded LP amount=%d for %s (first check after migration)",
+                    current_lp_amount, stored_entry.get("pool_name")
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error seeding LP amount: %s", e)
+            finally:
+                self._db.return_connection(conn)
+            stored_entry["lp_amount"] = current_lp_amount
+            return stored_entry
+
+        # No change in amount
+        if current_lp_amount == stored_amount:
+            return stored_entry
+
+        # Deposit detected - weighted average entry_date and entry_price_ratio
+        if current_lp_amount > stored_amount:
+            delta = current_lp_amount - stored_amount
+            entry_date_str = stored_entry.get("entry_date")
+            old_ratio = stored_entry.get("entry_price_ratio")
+
+            if entry_date_str and old_ratio:
+                from datetime import date, datetime, timedelta
+
+                if isinstance(entry_date_str, str):
+                    entry_dt = datetime.strptime(entry_date_str, "%Y-%m-%d").date()
+                else:
+                    entry_dt = entry_date_str
+
+                old_days = (date.today() - entry_dt).days
+
+                # Weighted average: new capital has 0 days held at detection time
+                weighted_days = (stored_amount * old_days) / current_lp_amount
+                new_entry_date = date.today() - timedelta(days=round(weighted_days))
+
+                # Weighted average price ratio
+                new_ratio = (
+                    stored_amount * old_ratio + delta * current_price_ratio
+                ) / current_lp_amount
+
+                conn = self._db.get_connection()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE user_lp_entries
+                            SET entry_date = %s,
+                                entry_price_ratio = %s,
+                                lp_amount = %s,
+                                last_amount_check = CURRENT_TIMESTAMP
+                            WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                        """, (
+                            new_entry_date.isoformat(), new_ratio,
+                            current_lp_amount, wallet_address, policy_id, asset_name
+                        ))
+                        conn.commit()
+                    logger.info(
+                        "Deposit detected for %s: %d -> %d (+%d). "
+                        "Entry date %s -> %s, ratio %.6f -> %.6f",
+                        stored_entry.get("pool_name"),
+                        stored_amount, current_lp_amount, delta,
+                        entry_date_str, new_entry_date.isoformat(),
+                        old_ratio, new_ratio
+                    )
+                except Exception as e:
+                    conn.rollback()
+                    logger.warning("Error updating LP entry for deposit: %s", e)
+                finally:
+                    self._db.return_connection(conn)
+
+                stored_entry["entry_date"] = new_entry_date.isoformat()
+                stored_entry["entry_price_ratio"] = new_ratio
+
+            stored_entry["lp_amount"] = current_lp_amount
+            return stored_entry
+
+        # Partial withdrawal - update amount only, keep entry_date and ratio
+        if current_lp_amount < stored_amount:
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE user_lp_entries
+                        SET lp_amount = %s, last_amount_check = CURRENT_TIMESTAMP
+                        WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                    """, (current_lp_amount, wallet_address, policy_id, asset_name))
+                    conn.commit()
+                logger.info(
+                    "Withdrawal detected for %s: %d -> %d (-%d). "
+                    "Keeping entry date and ratio.",
+                    stored_entry.get("pool_name"),
+                    stored_amount, current_lp_amount, stored_amount - current_lp_amount
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error updating LP entry for withdrawal: %s", e)
+            finally:
+                self._db.return_connection(conn)
+            stored_entry["lp_amount"] = current_lp_amount
+            return stored_entry
+
+        return stored_entry
 
     def _calculate_current_price_ratio(self, lp_value_info: Dict) -> Optional[float]:
         """
@@ -785,6 +948,7 @@ class PortfolioService:
         protocol: str,
         pool_name: str,
         lp_value_info: Dict,
+        lp_amount: Optional[int] = None,
     ) -> Dict[str, any]:
         """
         Calculate impermanent loss data for a farm position.
@@ -843,7 +1007,19 @@ class PortfolioService:
             )
 
             if stored_entry and stored_entry.get("entry_price_ratio"):
-                # Use stored entry data
+                # Detect deposit/withdrawal and update entry if needed
+                if lp_amount is not None and current_ratio:
+                    updated = self._update_lp_entry_for_amount_change(
+                        wallet_address, policy_id, asset_name_hex,
+                        lp_amount, current_ratio
+                    )
+                    if updated is None:
+                        stored_entry = None
+                    else:
+                        stored_entry = updated
+
+            if stored_entry and stored_entry.get("entry_price_ratio"):
+                # Use stored entry data (potentially updated by amount change)
                 il_data["entry_date"] = stored_entry["entry_date"]
                 il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
 
@@ -861,7 +1037,7 @@ class PortfolioService:
                         stored_entry["entry_date"],
                         stored_entry["entry_price_ratio"], current_ratio
                     )
-            else:
+            elif not stored_entry or not stored_entry.get("entry_price_ratio"):
                 # First time seeing this position - get entry date and store
                 logger.info("No stored entry for farm %s, fetching creation date...", pool_name)
                 entry_date = self._get_lp_token_creation_date(
@@ -913,6 +1089,7 @@ class PortfolioService:
                         entry_price_ratio=entry_ratio,
                         token_a_symbol=token_a_symbol,
                         token_b_symbol=token_b_symbol,
+                        lp_amount=lp_amount,
                     )
                     il_data["entry_date"] = entry_date
                     il_data["entry_price_ratio"] = round(entry_ratio, 6)
@@ -1766,7 +1943,20 @@ class PortfolioService:
                     logger.info("DB lookup for %s: stored_entry=%s, current_ratio=%s", pool_name, stored_entry, current_ratio)
 
                     if stored_entry and stored_entry.get("entry_price_ratio"):
-                        # Use stored entry data
+                        # Detect deposit/withdrawal and update entry if needed
+                        if current_ratio:
+                            updated = self._update_lp_entry_for_amount_change(
+                                wallet_address, policy_id, asset_name_hex,
+                                int(quantity), current_ratio
+                            )
+                            if updated is None:
+                                # Complete withdrawal - entry deleted
+                                stored_entry = None
+                            else:
+                                stored_entry = updated
+
+                    if stored_entry and stored_entry.get("entry_price_ratio"):
+                        # Use stored entry data (potentially updated by amount change)
                         il_data["entry_date"] = stored_entry["entry_date"]
                         il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
 
@@ -1784,7 +1974,7 @@ class PortfolioService:
                                 stored_entry["entry_date"],
                                 stored_entry["entry_price_ratio"], current_ratio
                             )
-                    else:
+                    elif not stored_entry or not stored_entry.get("entry_price_ratio"):
                         # First time seeing this position - get entry date and store
                         logger.info("No stored entry for %s, fetching creation date...", pool_name)
                         entry_date = self._get_lp_token_creation_date(
@@ -1805,6 +1995,7 @@ class PortfolioService:
                                 entry_price_ratio=current_ratio,
                                 token_a_symbol=token_a_symbol,
                                 token_b_symbol=token_b_symbol,
+                                lp_amount=int(quantity),
                             )
                             il_data["entry_date"] = entry_date
                             il_data["entry_price_ratio"] = round(current_ratio, 6)
@@ -2050,7 +2241,8 @@ class PortfolioService:
                         # Calculate IL for farm position
                         il_data = self._calculate_farm_position_il(
                             wallet_address, policy_id, asset_name_hex,
-                            "wingriders", pool_name, lp_value_info
+                            "wingriders", pool_name, lp_value_info,
+                            lp_amount=int(quantity),
                         )
 
                         # Calculate yield metrics
@@ -2289,7 +2481,8 @@ class PortfolioService:
                 # Calculate IL for farm position
                 il_data = self._calculate_farm_position_il(
                     wallet_address, policy_id, asset_name_hex,
-                    "sundaeswap", pool_name, lp_value_info
+                    "sundaeswap", pool_name, lp_value_info,
+                    lp_amount=int(lp_amount),
                 )
 
                 # Calculate yield metrics
@@ -2518,7 +2711,8 @@ class PortfolioService:
                 final_pool_name = pool_name or f"{lp_info['protocol'].upper()} LP"
                 il_data = self._calculate_farm_position_il(
                     wallet_address, lp_info["policy_id"], lp_info["asset_name_hex"],
-                    lp_info["protocol"], final_pool_name, lp_value_info
+                    lp_info["protocol"], final_pool_name, lp_value_info,
+                    lp_amount=int(lp_info["amount"]),
                 )
 
                 # Calculate yield metrics
