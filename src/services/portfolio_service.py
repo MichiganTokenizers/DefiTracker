@@ -477,13 +477,13 @@ class PortfolioService:
 
             if use_segments:
                 sorted_events = sorted(
-                    deposit_history, key=lambda e: e["detected_at"]
+                    deposit_history, key=lambda e: e["date"]
                 )
 
                 # Build segments: each runs from one event to the next
                 segments = []
                 for i, event in enumerate(sorted_events):
-                    seg_start = event["detected_at"]
+                    seg_start = event["date"]
                     if isinstance(seg_start, str):
                         seg_start_dt = datetime.strptime(
                             seg_start[:10], "%Y-%m-%d"
@@ -494,7 +494,7 @@ class PortfolioService:
                         seg_start_dt = seg_start
 
                     if i + 1 < len(sorted_events):
-                        seg_end = sorted_events[i + 1]["detected_at"]
+                        seg_end = sorted_events[i + 1]["date"]
                         if isinstance(seg_end, str):
                             seg_end_dt = datetime.strptime(
                                 seg_end[:10], "%Y-%m-%d"

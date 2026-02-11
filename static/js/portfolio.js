@@ -132,14 +132,24 @@ function generateDepositHistoryTooltip(pos) {
 
     let lines = ['Position History:'];
 
-    if (originalDate) {
+    if (history.length) {
+        // Use history as the source of truth
+        for (let i = 0; i < history.length; i++) {
+            const event = history[i];
+            const date = event.date ? formatEntryDate(event.date) : '?';
+            let label;
+            if (i === 0 && event.event_type === 'deposit') {
+                label = 'Initial deposit';
+            } else if (event.event_type === 'deposit') {
+                label = 'Added to position';
+            } else {
+                label = 'Partial withdrawal';
+            }
+            lines.push(`${date} - ${label}`);
+        }
+    } else if (originalDate) {
+        // Pre-migration: no history events, fall back to original_entry_date
         lines.push(`${originalDate} - Initial deposit`);
-    }
-
-    for (const event of history) {
-        const date = event.date ? formatEntryDate(event.date) : '?';
-        const type = event.event_type === 'deposit' ? 'Added to position' : 'Partial withdrawal';
-        lines.push(`${date} - ${type}`);
     }
 
     return lines.join('\n');
