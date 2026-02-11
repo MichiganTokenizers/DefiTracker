@@ -118,6 +118,34 @@ Result: ${ilPercent.toFixed(2)}%`;
 }
 
 /**
+ * Generate deposit history tooltip text
+ */
+function generateDepositHistoryTooltip(pos) {
+    const originalDate = pos.original_entry_date
+        ? formatEntryDate(pos.original_entry_date)
+        : null;
+    const history = pos.deposit_history || [];
+
+    if (!history.length && !originalDate) {
+        return '';
+    }
+
+    let lines = ['Position History:'];
+
+    if (originalDate) {
+        lines.push(`${originalDate} - Initial deposit`);
+    }
+
+    for (const event of history) {
+        const date = event.date ? formatEntryDate(event.date) : '?';
+        const type = event.event_type === 'deposit' ? 'Added to position' : 'Partial withdrawal';
+        lines.push(`${date} - ${type}`);
+    }
+
+    return lines.join('\n');
+}
+
+/**
  * Generate yield tooltip text
  */
 function generateYieldTooltip(pos) {
@@ -303,10 +331,12 @@ function renderPositionCard(pos, isFarm) {
     // Extract data
     const poolName = pos.pool || 'Unknown Pool';
 
-    // Left column values
-    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : '--';
+    // Left column values - show original start date, use weighted date for calculations
+    const displayDate = pos.original_entry_date || pos.entry_date;
+    const entryDate = displayDate ? formatEntryDate(displayDate) : '--';
     const daysHeld = pos.days_held || 0;
     const duration = formatDuration(daysHeld);
+    const depositTooltip = generateDepositHistoryTooltip(pos);
 
     const adaValue = pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--';
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
@@ -359,7 +389,7 @@ function renderPositionCard(pos, isFarm) {
 
                     <div class="attr-row">
                         <span class="attr-label">Start</span>
-                        <span class="attr-value">${entryDate}</span>
+                        <span class="attr-value${depositTooltip ? ' tooltip-trigger' : ''}"${depositTooltip ? ` data-tooltip="${depositTooltip.replace(/"/g, '&quot;')}"` : ''}>${entryDate}</span>
                     </div>
 
                     <div class="attr-row">

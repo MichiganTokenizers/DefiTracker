@@ -96,6 +96,9 @@ class LPPosition:
     net_gain_loss: Optional[float] = None  # actual_yield + il_percent
     days_held: Optional[int] = None  # Days since entry
     apr_data_points: Optional[int] = None  # Number of daily APR snapshots available
+    # Display fields for deposit history tooltip
+    original_entry_date: Optional[str] = None  # True first deposit date
+    deposit_history: Optional[List[Dict]] = None  # List of deposit/withdrawal events
 
     def to_dict(self) -> Dict:
         return {
@@ -118,6 +121,8 @@ class LPPosition:
             "net_gain_loss": self.net_gain_loss,
             "days_held": self.days_held,
             "apr_data_points": self.apr_data_points,
+            "original_entry_date": self.original_entry_date,
+            "deposit_history": self.deposit_history,
         }
 
 
@@ -147,6 +152,9 @@ class FarmPosition:
     net_gain_loss: Optional[float] = None  # actual_yield + il_percent
     days_held: Optional[int] = None  # Days since entry
     apr_data_points: Optional[int] = None  # Number of daily APR snapshots available
+    # Display fields for deposit history tooltip
+    original_entry_date: Optional[str] = None
+    deposit_history: Optional[List[Dict]] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -171,6 +179,8 @@ class FarmPosition:
             "net_gain_loss": self.net_gain_loss,
             "days_held": self.days_held,
             "apr_data_points": self.apr_data_points,
+            "original_entry_date": self.original_entry_date,
+            "deposit_history": self.deposit_history,
         }
 
 
@@ -363,17 +373,69 @@ class PortfolioService:
         finally:
             self._db.return_connection(conn)
 
-    def _calculate_yield_metrics(
-        self, pool_name: str, protocol: str, entry_date: str, il_percent: Optional[float]
-    ) -> Dict:
+    def _get_average_apr_for_period(
+        self, pool_name: str, protocol: str, start_date: str, end_date: str
+    ) -> Optional[float]:
         """
-        Calculate actual yield and net gain/loss for a position.
+        Get average APR for a specific date range.
 
         Args:
             pool_name: Pool pair name
             protocol: Protocol name
-            entry_date: ISO date string of entry
-            il_percent: Impermanent loss percentage (negative = loss)
+            start_date: ISO date string for period start (inclusive)
+            end_date: ISO date string for period end (inclusive)
+
+        Returns:
+            Average APR as float, or None if no data found
+        """
+        if not start_date or not end_date:
+            return None
+
+        db_pool_name = pool_name.replace("/", "-")
+        parts = db_pool_name.split("-")
+        if len(parts) == 2:
+            reversed_pool_name = f"{parts[1]}-{parts[0]}"
+        else:
+            reversed_pool_name = db_pool_name
+
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT AVG(s.apr_1d) as avg_apr
+                    FROM apr_snapshots s
+                    JOIN assets a ON s.asset_id = a.asset_id
+                    JOIN protocols p ON s.protocol_id = p.protocol_id
+                    WHERE (LOWER(a.symbol) = LOWER(%s) OR LOWER(a.symbol) = LOWER(%s))
+                      AND LOWER(p.name) = LOWER(%s)
+                      AND s.timestamp::date >= %s::date
+                      AND s.timestamp::date <= %s::date
+                      AND s.yield_type = 'lp'
+                      AND s.apr_1d IS NOT NULL
+                """, (db_pool_name, reversed_pool_name, protocol, start_date, end_date))
+
+                row = cur.fetchone()
+                if row and row[0] is not None:
+                    return float(row[0])
+                return None
+        except Exception as e:
+            logger.debug("Error looking up average APR for %s/%s (%s to %s): %s",
+                        pool_name, protocol, start_date, end_date, e)
+            return None
+        finally:
+            self._db.return_connection(conn)
+
+    def _calculate_yield_metrics(
+        self, pool_name: str, protocol: str, entry_date: str, il_percent: Optional[float],
+        deposit_history: Optional[List[Dict]] = None,
+        current_lp_amount: Optional[int] = None
+    ) -> Dict:
+        """
+        Calculate actual yield and net gain/loss for a position.
+
+        When deposit_history has multiple events, calculates yield per
+        time-segment between deposits, each with its own APR average and
+        capital amount, then combines into a total yield percentage.
 
         Returns:
             Dict with actual_apr, actual_yield, net_gain_loss, days_held, apr_data_points
@@ -398,30 +460,124 @@ class PortfolioService:
             else:
                 entry_dt = entry_date
 
-            days_held = (date.today() - entry_dt).days
+            today = date.today()
+            days_held = (today - entry_dt).days
             if days_held < 0:
                 days_held = 0
 
             result["days_held"] = days_held
 
-            # Get average APR since entry
-            apr_history = self._get_average_apr_since_entry(pool_name, protocol, entry_date)
+            # Use per-segment calculation when we have multiple deposit events
+            use_segments = (
+                deposit_history
+                and len(deposit_history) > 1
+                and current_lp_amount
+                and current_lp_amount > 0
+            )
 
-            if apr_history and apr_history.get("avg_apr"):
-                avg_apr = apr_history["avg_apr"]
-                result["actual_apr"] = round(avg_apr, 2)
-                result["apr_data_points"] = apr_history.get("data_points", 0)
+            if use_segments:
+                sorted_events = sorted(
+                    deposit_history, key=lambda e: e["detected_at"]
+                )
 
-                # Calculate actual yield: APR * (days_held / 365)
-                # APR is in percentage form (e.g., 52.0 for 52%)
-                actual_yield = avg_apr * (days_held / 365)
+                # Build segments: each runs from one event to the next
+                segments = []
+                for i, event in enumerate(sorted_events):
+                    seg_start = event["detected_at"]
+                    if isinstance(seg_start, str):
+                        seg_start_dt = datetime.strptime(
+                            seg_start[:10], "%Y-%m-%d"
+                        ).date()
+                    elif hasattr(seg_start, "date"):
+                        seg_start_dt = seg_start.date()
+                    else:
+                        seg_start_dt = seg_start
+
+                    if i + 1 < len(sorted_events):
+                        seg_end = sorted_events[i + 1]["detected_at"]
+                        if isinstance(seg_end, str):
+                            seg_end_dt = datetime.strptime(
+                                seg_end[:10], "%Y-%m-%d"
+                            ).date()
+                        elif hasattr(seg_end, "date"):
+                            seg_end_dt = seg_end.date()
+                        else:
+                            seg_end_dt = seg_end
+                    else:
+                        seg_end_dt = today
+
+                    segments.append({
+                        "start": seg_start_dt,
+                        "end": seg_end_dt,
+                        "days": (seg_end_dt - seg_start_dt).days,
+                        "capital": int(event["lp_amount_after"]),
+                    })
+
+                # Calculate per-segment yields
+                total_weighted_yield = 0
+                total_data_points = 0
+
+                for seg in segments:
+                    if seg["days"] <= 0 or seg["capital"] <= 0:
+                        continue
+
+                    if seg["end"] == today:
+                        # Last segment: use unbounded query (includes today)
+                        apr_data = self._get_average_apr_since_entry(
+                            pool_name, protocol, str(seg["start"])
+                        )
+                        seg_apr = apr_data["avg_apr"] if apr_data else None
+                        if apr_data:
+                            total_data_points += apr_data.get("data_points", 0)
+                    else:
+                        seg_apr = self._get_average_apr_for_period(
+                            pool_name, protocol,
+                            str(seg["start"]), str(seg["end"])
+                        )
+
+                    if seg_apr is not None:
+                        seg_yield = seg_apr * (seg["days"] / 365)
+                        total_weighted_yield += seg_yield * seg["capital"]
+                    else:
+                        logger.debug(
+                            "No APR data for segment %s to %s in %s/%s",
+                            seg["start"], seg["end"], pool_name, protocol
+                        )
+
+                # Convert weighted yield to percentage of current capital
+                actual_yield = total_weighted_yield / current_lp_amount
                 result["actual_yield"] = round(actual_yield, 2)
+                result["apr_data_points"] = (
+                    total_data_points if total_data_points else None
+                )
 
-                # Calculate net gain/loss: yield + IL
-                # IL is already negative when it's a loss
+                # Derive actual_apr: annualized rate
+                if days_held > 0:
+                    actual_apr = actual_yield / (days_held / 365)
+                    result["actual_apr"] = round(actual_apr, 2)
+
+                # Net gain/loss: yield + IL
                 if il_percent is not None:
                     net_gain_loss = actual_yield + il_percent
                     result["net_gain_loss"] = round(net_gain_loss, 2)
+
+            else:
+                # Simple calculation: single deposit or no history
+                apr_history = self._get_average_apr_since_entry(
+                    pool_name, protocol, entry_date
+                )
+
+                if apr_history and apr_history.get("avg_apr"):
+                    avg_apr = apr_history["avg_apr"]
+                    result["actual_apr"] = round(avg_apr, 2)
+                    result["apr_data_points"] = apr_history.get("data_points", 0)
+
+                    actual_yield = avg_apr * (days_held / 365)
+                    result["actual_yield"] = round(actual_yield, 2)
+
+                    if il_percent is not None:
+                        net_gain_loss = actual_yield + il_percent
+                        result["net_gain_loss"] = round(net_gain_loss, 2)
 
         except Exception as e:
             logger.debug("Error calculating yield metrics: %s", e)
@@ -602,7 +758,7 @@ class PortfolioService:
                 cur.execute("""
                     SELECT entry_date, entry_price_ratio, entry_tx_hash,
                            token_a_symbol, token_b_symbol, protocol, pool_name,
-                           lp_amount
+                           lp_amount, original_entry_date
                     FROM user_lp_entries
                     WHERE wallet_address = %s
                       AND policy_id = %s
@@ -620,6 +776,7 @@ class PortfolioService:
                         "protocol": row[5],
                         "pool_name": row[6],
                         "lp_amount": int(row[7]) if row[7] is not None else None,
+                        "original_entry_date": row[8].isoformat() if row[8] else None,
                     }
                 return None
 
@@ -662,20 +819,36 @@ class PortfolioService:
                         wallet_address, policy_id, asset_name, protocol,
                         pool_name, entry_date, entry_price_ratio,
                         token_a_symbol, token_b_symbol, entry_tx_hash,
-                        lp_amount, last_amount_check
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        lp_amount, last_amount_check, original_entry_date
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
                     ON CONFLICT (wallet_address, policy_id, asset_name)
                     DO UPDATE SET
                         lp_amount = COALESCE(user_lp_entries.lp_amount, EXCLUDED.lp_amount),
-                        last_amount_check = CURRENT_TIMESTAMP
+                        last_amount_check = CURRENT_TIMESTAMP,
+                        original_entry_date = COALESCE(user_lp_entries.original_entry_date, EXCLUDED.original_entry_date)
                 """, (
                     wallet_address, policy_id, asset_name, protocol,
                     pool_name, entry_date, entry_price_ratio,
                     token_a_symbol, token_b_symbol, entry_tx_hash,
-                    lp_amount
+                    lp_amount, entry_date
                 ))
+                is_new = cur.rowcount > 0
+
+                # Log initial deposit to history for per-segment yield calculation
+                if is_new and lp_amount:
+                    cur.execute("""
+                        INSERT INTO user_lp_deposit_history (
+                            wallet_address, policy_id, asset_name,
+                            event_type, lp_amount_change, lp_amount_after,
+                            price_ratio_at_event, detected_at
+                        ) VALUES (%s, %s, %s, 'deposit', %s, %s, %s, %s::date)
+                    """, (
+                        wallet_address, policy_id, asset_name,
+                        lp_amount, lp_amount, entry_price_ratio, entry_date
+                    ))
+
                 conn.commit()
-                return cur.rowcount > 0
+                return is_new
 
         except Exception as e:
             logger.debug("Error storing LP entry: %s", e)
@@ -696,6 +869,9 @@ class PortfolioService:
         Complete exit (amount=0): delete the entry row.
         Pre-migration (stored amount NULL): seed with current amount.
 
+        Also recovers original_entry_date via Blockfrost if missing,
+        and logs deposit/withdrawal events to user_lp_deposit_history.
+
         Returns:
             Updated entry dict, or None if entry was deleted or not found.
         """
@@ -704,6 +880,33 @@ class PortfolioService:
             return None
 
         stored_amount = stored_entry.get("lp_amount")
+
+        # Recover original_entry_date if missing (pre-migration entries)
+        if not stored_entry.get("original_entry_date"):
+            original_date = self._get_lp_token_creation_date(
+                wallet_address, policy_id, asset_name
+            )
+            if original_date:
+                conn = self._db.get_connection()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE user_lp_entries
+                            SET original_entry_date = %s
+                            WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                              AND original_entry_date IS NULL
+                        """, (original_date, wallet_address, policy_id, asset_name))
+                        conn.commit()
+                    stored_entry["original_entry_date"] = original_date
+                    logger.info(
+                        "Recovered original_entry_date=%s for %s via Blockfrost",
+                        original_date, stored_entry.get("pool_name")
+                    )
+                except Exception as e:
+                    conn.rollback()
+                    logger.warning("Error recovering original_entry_date: %s", e)
+                finally:
+                    self._db.return_connection(conn)
 
         # Complete withdrawal - delete entry so re-entry creates a fresh record
         if current_lp_amount == 0:
@@ -753,27 +956,13 @@ class PortfolioService:
         if current_lp_amount == stored_amount:
             return stored_entry
 
-        # Deposit detected - weighted average entry_date and entry_price_ratio
+        # Deposit detected - weighted average entry_price_ratio, keep entry_date as-is
         if current_lp_amount > stored_amount:
             delta = current_lp_amount - stored_amount
-            entry_date_str = stored_entry.get("entry_date")
             old_ratio = stored_entry.get("entry_price_ratio")
 
-            if entry_date_str and old_ratio:
-                from datetime import date, datetime, timedelta
-
-                if isinstance(entry_date_str, str):
-                    entry_dt = datetime.strptime(entry_date_str, "%Y-%m-%d").date()
-                else:
-                    entry_dt = entry_date_str
-
-                old_days = (date.today() - entry_dt).days
-
-                # Weighted average: new capital has 0 days held at detection time
-                weighted_days = (stored_amount * old_days) / current_lp_amount
-                new_entry_date = date.today() - timedelta(days=round(weighted_days))
-
-                # Weighted average price ratio
+            if old_ratio:
+                # Weighted average price ratio (still needed for IL calculation)
                 new_ratio = (
                     stored_amount * old_ratio + delta * current_price_ratio
                 ) / current_lp_amount
@@ -783,22 +972,30 @@ class PortfolioService:
                     with conn.cursor() as cur:
                         cur.execute("""
                             UPDATE user_lp_entries
-                            SET entry_date = %s,
-                                entry_price_ratio = %s,
+                            SET entry_price_ratio = %s,
                                 lp_amount = %s,
                                 last_amount_check = CURRENT_TIMESTAMP
                             WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
                         """, (
-                            new_entry_date.isoformat(), new_ratio,
-                            current_lp_amount, wallet_address, policy_id, asset_name
+                            new_ratio, current_lp_amount,
+                            wallet_address, policy_id, asset_name
+                        ))
+                        # Log deposit event
+                        cur.execute("""
+                            INSERT INTO user_lp_deposit_history (
+                                wallet_address, policy_id, asset_name,
+                                event_type, lp_amount_change, lp_amount_after,
+                                price_ratio_at_event
+                            ) VALUES (%s, %s, %s, 'deposit', %s, %s, %s)
+                        """, (
+                            wallet_address, policy_id, asset_name,
+                            delta, current_lp_amount, current_price_ratio
                         ))
                         conn.commit()
                     logger.info(
-                        "Deposit detected for %s: %d -> %d (+%d). "
-                        "Entry date %s -> %s, ratio %.6f -> %.6f",
+                        "Deposit detected for %s: %d -> %d (+%d). ratio %.6f -> %.6f",
                         stored_entry.get("pool_name"),
                         stored_amount, current_lp_amount, delta,
-                        entry_date_str, new_entry_date.isoformat(),
                         old_ratio, new_ratio
                     )
                 except Exception as e:
@@ -807,7 +1004,6 @@ class PortfolioService:
                 finally:
                     self._db.return_connection(conn)
 
-                stored_entry["entry_date"] = new_entry_date.isoformat()
                 stored_entry["entry_price_ratio"] = new_ratio
 
             stored_entry["lp_amount"] = current_lp_amount
@@ -815,6 +1011,7 @@ class PortfolioService:
 
         # Partial withdrawal - update amount only, keep entry_date and ratio
         if current_lp_amount < stored_amount:
+            delta = stored_amount - current_lp_amount
             conn = self._db.get_connection()
             try:
                 with conn.cursor() as cur:
@@ -823,12 +1020,23 @@ class PortfolioService:
                         SET lp_amount = %s, last_amount_check = CURRENT_TIMESTAMP
                         WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
                     """, (current_lp_amount, wallet_address, policy_id, asset_name))
+                    # Log withdrawal event
+                    cur.execute("""
+                        INSERT INTO user_lp_deposit_history (
+                            wallet_address, policy_id, asset_name,
+                            event_type, lp_amount_change, lp_amount_after,
+                            price_ratio_at_event
+                        ) VALUES (%s, %s, %s, 'withdrawal', %s, %s, %s)
+                    """, (
+                        wallet_address, policy_id, asset_name,
+                        -delta, current_lp_amount, current_price_ratio
+                    ))
                     conn.commit()
                 logger.info(
                     "Withdrawal detected for %s: %d -> %d (-%d). "
                     "Keeping entry date and ratio.",
                     stored_entry.get("pool_name"),
-                    stored_amount, current_lp_amount, stored_amount - current_lp_amount
+                    stored_amount, current_lp_amount, delta
                 )
             except Exception as e:
                 conn.rollback()
@@ -839,6 +1047,44 @@ class PortfolioService:
             return stored_entry
 
         return stored_entry
+
+    def _get_lp_deposit_history(
+        self, wallet_address: str, policy_id: str, asset_name: str
+    ) -> List[Dict]:
+        """
+        Fetch deposit/withdrawal history for an LP position.
+
+        Returns:
+            List of dicts with event_type, lp_amount_change, detected_at.
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT event_type, lp_amount_change, lp_amount_after,
+                           detected_at
+                    FROM user_lp_deposit_history
+                    WHERE wallet_address = %s
+                      AND policy_id = %s
+                      AND asset_name = %s
+                    ORDER BY detected_at ASC
+                """, (wallet_address, policy_id, asset_name))
+
+                rows = cur.fetchall()
+                return [
+                    {
+                        "event_type": row[0],
+                        "lp_amount_change": int(row[1]),
+                        "lp_amount_after": int(row[2]),
+                        "date": row[3].strftime("%Y-%m-%d") if row[3] else None,
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.debug("Error fetching LP deposit history: %s", e)
+            return []
+        finally:
+            self._db.return_connection(conn)
 
     def _calculate_current_price_ratio(self, lp_value_info: Dict) -> Optional[float]:
         """
@@ -1022,6 +1268,7 @@ class PortfolioService:
                 # Use stored entry data (potentially updated by amount change)
                 il_data["entry_date"] = stored_entry["entry_date"]
                 il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
+                il_data["original_entry_date"] = stored_entry.get("original_entry_date")
 
                 # Calculate IL from ratios
                 if current_ratio:
@@ -1093,6 +1340,7 @@ class PortfolioService:
                     )
                     il_data["entry_date"] = entry_date
                     il_data["entry_price_ratio"] = round(entry_ratio, 6)
+                    il_data["original_entry_date"] = entry_date
 
                     # Calculate IL if we have historical data
                     if historical_ratio:
@@ -1959,6 +2207,7 @@ class PortfolioService:
                         # Use stored entry data (potentially updated by amount change)
                         il_data["entry_date"] = stored_entry["entry_date"]
                         il_data["entry_price_ratio"] = stored_entry["entry_price_ratio"]
+                        il_data["original_entry_date"] = stored_entry.get("original_entry_date")
 
                         # Calculate IL from ratios
                         if current_ratio:
@@ -1999,6 +2248,7 @@ class PortfolioService:
                             )
                             il_data["entry_date"] = entry_date
                             il_data["entry_price_ratio"] = round(current_ratio, 6)
+                            il_data["original_entry_date"] = entry_date
                             # IL is 0% for newly stored positions
                             il_data["il_percent"] = 0.0
                             logger.info(
@@ -2008,12 +2258,21 @@ class PortfolioService:
 
             logger.info("Final il_data for %s: %s", pool_name, il_data)
 
+            # Fetch deposit history for tooltip display
+            deposit_history = []
+            if wallet_address:
+                deposit_history = self._get_lp_deposit_history(
+                    wallet_address, policy_id, asset_name_hex
+                )
+
             # Calculate yield metrics (avg APR since entry, actual yield, net gain/loss)
             yield_data = self._calculate_yield_metrics(
                 pool_name or f"{protocol.upper()} LP",
                 protocol,
-                il_data.get("entry_date"),
-                il_data.get("il_percent")
+                il_data.get("original_entry_date") or il_data.get("entry_date"),
+                il_data.get("il_percent"),
+                deposit_history=deposit_history,
+                current_lp_amount=int(quantity),
             )
             if yield_data.get("actual_apr"):
                 logger.info(
@@ -2045,6 +2304,8 @@ class PortfolioService:
                 net_gain_loss=yield_data.get("net_gain_loss"),
                 days_held=yield_data.get("days_held"),
                 apr_data_points=yield_data.get("apr_data_points"),
+                original_entry_date=il_data.get("original_entry_date"),
+                deposit_history=deposit_history if deposit_history else None,
             )
         except Exception as e:
             logger.warning("Error creating LP position: %s", e)
@@ -2245,13 +2506,18 @@ class PortfolioService:
                             lp_amount=int(quantity),
                         )
 
+                        farm_deposit_history = self._get_lp_deposit_history(
+                            wallet_address, policy_id, asset_name_hex
+                        )
+
                         # Calculate yield metrics
                         yield_data = self._calculate_yield_metrics(
                             pool_name, "wingriders",
-                            il_data.get("entry_date"),
-                            il_data.get("il_percent")
+                            il_data.get("original_entry_date") or il_data.get("entry_date"),
+                            il_data.get("il_percent"),
+                            deposit_history=farm_deposit_history,
+                            current_lp_amount=int(quantity),
                         )
-
                         position = FarmPosition(
                             protocol="wingriders",
                             pool=pool_name,
@@ -2273,6 +2539,8 @@ class PortfolioService:
                             net_gain_loss=yield_data.get("net_gain_loss"),
                             days_held=yield_data.get("days_held"),
                             apr_data_points=yield_data.get("apr_data_points"),
+                            original_entry_date=il_data.get("original_entry_date"),
+                            deposit_history=farm_deposit_history if farm_deposit_history else None,
                         )
                         positions.append(position)
                         logger.debug(
@@ -2485,13 +2753,18 @@ class PortfolioService:
                     lp_amount=int(lp_amount),
                 )
 
+                farm_deposit_history = self._get_lp_deposit_history(
+                    wallet_address, policy_id, asset_name_hex
+                )
+
                 # Calculate yield metrics
                 yield_data = self._calculate_yield_metrics(
                     pool_name, "sundaeswap",
-                    il_data.get("entry_date"),
-                    il_data.get("il_percent")
+                    il_data.get("original_entry_date") or il_data.get("entry_date"),
+                    il_data.get("il_percent"),
+                    deposit_history=farm_deposit_history,
+                    current_lp_amount=int(lp_amount),
                 )
-
                 position = FarmPosition(
                     protocol="sundaeswap",
                     pool=pool_name,
@@ -2514,6 +2787,8 @@ class PortfolioService:
                     net_gain_loss=yield_data.get("net_gain_loss"),
                     days_held=yield_data.get("days_held"),
                     apr_data_points=yield_data.get("apr_data_points"),
+                    original_entry_date=il_data.get("original_entry_date"),
+                    deposit_history=farm_deposit_history if farm_deposit_history else None,
                 )
                 positions.append(position)
 
@@ -2715,13 +2990,18 @@ class PortfolioService:
                     lp_amount=int(lp_info["amount"]),
                 )
 
+                farm_deposit_history = self._get_lp_deposit_history(
+                    wallet_address, lp_info["policy_id"], lp_info["asset_name_hex"]
+                )
+
                 # Calculate yield metrics
                 yield_data = self._calculate_yield_metrics(
                     final_pool_name, lp_info["protocol"],
-                    il_data.get("entry_date"),
-                    il_data.get("il_percent")
+                    il_data.get("original_entry_date") or il_data.get("entry_date"),
+                    il_data.get("il_percent"),
+                    deposit_history=farm_deposit_history,
+                    current_lp_amount=int(lp_info["amount"]),
                 )
-
                 position = FarmPosition(
                     protocol=lp_info["protocol"],
                     pool=final_pool_name,
@@ -2744,6 +3024,8 @@ class PortfolioService:
                     net_gain_loss=yield_data.get("net_gain_loss"),
                     days_held=yield_data.get("days_held"),
                     apr_data_points=yield_data.get("apr_data_points"),
+                    original_entry_date=il_data.get("original_entry_date"),
+                    deposit_history=farm_deposit_history if farm_deposit_history else None,
                 )
                 positions.append(position)
 
