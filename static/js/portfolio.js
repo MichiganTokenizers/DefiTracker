@@ -347,7 +347,6 @@ function renderPositionCard(pos, isFarm) {
     const entryDate = displayDate ? formatEntryDate(displayDate) : '--';
     const daysHeld = pos.days_held || 0;
     const duration = formatDuration(daysHeld);
-    const depositTooltip = generateDepositHistoryTooltip(pos);
 
     const usdValue = pos.usd_value ? adaToUsd(pos.usd_value) : null;
     const valueDisplay = usdValue ? `$${formatNumber(usdValue)}` : (pos.usd_value ? `${formatNumber(pos.usd_value)} ADA` : '--');
@@ -388,6 +387,23 @@ function renderPositionCard(pos, isFarm) {
     const farmClass = isFarm ? 'farm-position' : '';
     const farmBadge = isFarm ? '<span class="farm-badge">Farming</span>' : '';
 
+    // Build history column content
+    const history = pos.deposit_history || [];
+    let historyHtml = '';
+    if (history.length) {
+        const reversedHistory = [...history].reverse();
+        for (let i = 0; i < reversedHistory.length; i++) {
+            const event = reversedHistory[i];
+            const date = event.date ? formatEntryDate(event.date) : '?';
+            const isDeposit = event.event_type === 'deposit';
+            const label = isDeposit ? 'Deposit' : 'Withdrawal';
+            const cssClass = isDeposit ? 'deposit' : 'withdrawal';
+            historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}</span></li>`;
+        }
+    } else {
+        historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start</span></li>`;
+    }
+
     // Split pool name for stacked display
     const poolParts = poolName.split('/');
     const tokenTop = poolParts[0] || poolName;
@@ -406,15 +422,15 @@ function renderPositionCard(pos, isFarm) {
                     ${farmBadge}
                 </div>
 
-                <!-- Two-column body -->
+                <!-- Three-column body -->
                 <div class="card-body-columns">
-                    <!-- Left: Attributes -->
+                    <!-- Left: Current -->
                     <div class="attributes-column">
-                        <div class="column-header">Attributes</div>
+                        <div class="column-header">Current Attributes</div>
 
                         <div class="attr-row">
                             <span class="attr-label">Start</span>
-                            <span class="attr-value${depositTooltip ? ' tooltip-trigger' : ''}"${depositTooltip ? ` data-tooltip="${depositTooltip.replace(/"/g, '&quot;')}"` : ''}>${entryDate}</span>
+                            <span class="attr-value">${entryDate}</span>
                         </div>
 
                         <div class="attr-row">
@@ -439,6 +455,14 @@ function renderPositionCard(pos, isFarm) {
                             <span class="value-label">Value</span>
                             <span class="value-amount">${valueDisplay}</span>
                         </div>
+                    </div>
+
+                    <!-- Middle: History -->
+                    <div class="history-column">
+                        <div class="column-header">History</div>
+                        <ul class="history-list">
+                            ${historyHtml}
+                        </ul>
                     </div>
 
                     <!-- Right: Results -->
@@ -595,9 +619,9 @@ function renderLendingCard(pos) {
 
                 <!-- Two-column body -->
                 <div class="card-body-columns">
-                    <!-- Left: Attributes -->
+                    <!-- Left: Current -->
                     <div class="attributes-column">
-                        <div class="column-header">Attributes</div>
+                        <div class="column-header">Current Attributes</div>
 
                         <div class="attr-row">
                             <span class="attr-label">Start</span>

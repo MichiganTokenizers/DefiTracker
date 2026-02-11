@@ -116,10 +116,10 @@
         padding: 1.25rem 1.5rem;
     }
 
-    /* 3-column grid for position cards */
+    /* 2-column grid for position cards (wider cards for 3-col internal layout) */
     .positions-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
     }
 
@@ -239,12 +239,16 @@
         margin-left: auto;
     }
 
-    /* Two-column grid for attributes and results */
+    /* Two-column grid for attributes and results (lending cards) */
     .card-body-columns {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
         align-items: stretch;
+    }
+    /* LP/farm cards: 3-column with history in middle */
+    .position-card .card-body-columns {
+        grid-template-columns: 1fr auto 1fr;
     }
     .attributes-column,
     .results-column {
@@ -258,6 +262,45 @@
     }
     .results-column {
         padding-left: 0.25rem;
+    }
+    /* History column */
+    .history-column {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        border-right: 1px solid rgba(0,0,0,0.06);
+        padding-right: 0.75rem;
+        min-width: 110px;
+    }
+    .history-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 120px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .history-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.2rem 0;
+        font-size: 0.7rem;
+    }
+    .history-date {
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .history-event {
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .history-event.deposit {
+        color: var(--sea-green);
+    }
+    .history-event.withdrawal {
+        color: var(--crimson-carrot);
     }
     /* Push bottom rows to align at bottom */
     .value-row,
@@ -571,7 +614,7 @@
     /* Responsive adjustments */
     @media (max-width: 1200px) {
         .positions-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr;
         }
     }
     @media (max-width: 768px) {
