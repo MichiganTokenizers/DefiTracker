@@ -192,10 +192,10 @@ If you didn't subscribe, you can ignore this email.
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="text-align: center; margin-bottom: 30px;">
-        <h1 style="color: #0e8749;">YieldLife</h1>
+        <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="200" height="200">
     </div>
 
-    <h2>Welcome to the YieldLife Newsletter!</h2>
+    <h2 style="text-align: center;">Welcome to YieldLife!</h2>
 
     <p>Thanks for subscribing to our monthly newsletter. Here's what you can expect:</p>
 
