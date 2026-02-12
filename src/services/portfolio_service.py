@@ -929,29 +929,6 @@ class PortfolioService:
                 self._db.return_connection(conn)
             return None
 
-        # Pre-migration entry (no stored amount) - seed with current amount
-        if stored_amount is None:
-            conn = self._db.get_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE user_lp_entries
-                        SET lp_amount = %s, last_amount_check = CURRENT_TIMESTAMP
-                        WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
-                    """, (current_lp_amount, wallet_address, policy_id, asset_name))
-                    conn.commit()
-                logger.info(
-                    "Seeded LP amount=%d for %s (first check after migration)",
-                    current_lp_amount, stored_entry.get("pool_name")
-                )
-            except Exception as e:
-                conn.rollback()
-                logger.warning("Error seeding LP amount: %s", e)
-            finally:
-                self._db.return_connection(conn)
-            stored_entry["lp_amount"] = current_lp_amount
-            return stored_entry
-
         # No change in amount
         if current_lp_amount == stored_amount:
             return stored_entry
