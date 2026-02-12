@@ -116,10 +116,10 @@
         padding: 1.25rem 1.5rem;
     }
 
-    /* 2-column grid for position cards (wider cards for 3-col internal layout) */
+    /* 3-column grid for position cards */
     .positions-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 1rem;
     }
 
@@ -614,7 +614,7 @@
     /* Responsive adjustments */
     @media (max-width: 1200px) {
         .positions-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, 1fr);
         }
     }
     @media (max-width: 768px) {
