@@ -403,10 +403,11 @@ function renderPositionCard(pos, isFarm) {
             if (event.lp_amount_change != null && event.lp_amount_after != null) {
                 const before = event.lp_amount_after - event.lp_amount_change;
                 if (before === 0) {
-                    pctText = ' (100%)';
+                    pctText = ' (+100%)';
                 } else if (before > 0) {
                     const pct = Math.round(Math.abs(event.lp_amount_change) / before * 100);
-                    pctText = ` (${pct}%)`;
+                    const sign = isDeposit ? '+' : '-';
+                    pctText = ` (${sign}${pct}%)`;
                 }
             }
             historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}${pctText}</span></li>`;
@@ -630,10 +631,24 @@ function renderLendingCard(pos) {
                 const isDeposit = event.event_type === 'deposit';
                 const label = isDeposit ? 'Deposit' : 'Withdrawal';
                 const cssClass = isDeposit ? 'deposit' : 'withdrawal';
-                historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}</span></li>`;
+                // Calculate % change for this event
+                let pctText = '';
+                const change = event.qtoken_amount_change;
+                const after = event.qtoken_amount_after;
+                if (change != null && after != null) {
+                    const before = after - change;
+                    if (before === 0) {
+                        pctText = ' (100%)';
+                    } else if (before > 0) {
+                        const pct = Math.round(Math.abs(change) / before * 100);
+                        const sign = isDeposit ? '+' : '-';
+                        pctText = ` (${sign}${pct}%)`;
+                    }
+                }
+                historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}${pctText}</span></li>`;
             }
         } else {
-            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start</span></li>`;
+            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start (100%)</span></li>`;
         }
     }
 
