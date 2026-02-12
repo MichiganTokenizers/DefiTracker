@@ -413,7 +413,7 @@ function renderPositionCard(pos, isFarm) {
             historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}${pctText}</span></li>`;
         }
     } else {
-        historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start (100%)</span></li>`;
+        historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Deposit (+100%)</span></li>`;
     }
 
     // Split pool name for stacked display
@@ -648,7 +648,7 @@ function renderLendingCard(pos) {
                 historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}${pctText}</span></li>`;
             }
         } else {
-            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start (100%)</span></li>`;
+            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Deposit (+100%)</span></li>`;
         }
     }
 
