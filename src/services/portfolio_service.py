@@ -707,6 +707,106 @@ class PortfolioService:
             logger.warning("Error fetching LP token creation date: %s", e)
             return None
 
+    def _scan_lp_token_history(
+        self, wallet_address: str, policy_id: str, asset_name: str,
+        max_pages: int = 10, order: str = "asc", count: int = 100
+    ) -> List[Dict]:
+        """
+        Scan Blockfrost transaction history for all LP token movement events.
+
+        Full scan (defaults): oldest-first, up to 1000 txs — for first visit.
+        Shallow scan (order="desc", count=50, max_pages=1): last 50 txs — for returning visits.
+
+        Returns:
+            List of events sorted chronologically, each with:
+            {date, received, sent, net, tx_hash, block_time}
+            Only events where received > 0 or sent > 0 are included.
+        """
+        if not BLOCKFROST_API_KEY:
+            return []
+
+        asset_id = f"{policy_id}{asset_name}"
+        wallet_prefix = wallet_address[:30] if len(wallet_address) > 30 else wallet_address
+        events = []
+
+        try:
+            from datetime import datetime
+            headers = {"project_id": BLOCKFROST_API_KEY}
+            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
+
+            logger.info(
+                "Scanning LP token history: order=%s, count=%d, max_pages=%d",
+                order, count, max_pages
+            )
+
+            for page in range(1, max_pages + 1):
+                params = {"order": order, "count": count, "page": page}
+                resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+
+                if resp.status_code != 200:
+                    logger.debug("Could not fetch wallet transactions page %d: %d", page, resp.status_code)
+                    break
+
+                transactions = resp.json()
+                if not transactions:
+                    break
+
+                for tx_info in transactions:
+                    tx_hash = tx_info.get("tx_hash", "")
+                    block_time = tx_info.get("block_time")
+
+                    utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
+                    utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
+
+                    if utxo_resp.status_code != 200:
+                        continue
+
+                    utxo_data = utxo_resp.json()
+
+                    # Count LP tokens received (outputs to wallet)
+                    received = 0
+                    for output in utxo_data.get("outputs", []):
+                        output_addr = output.get("address", "")
+                        if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
+                            for amt in output.get("amount", []):
+                                if amt.get("unit") == asset_id:
+                                    received += int(amt.get("quantity", 0))
+
+                    # Count LP tokens sent (inputs from wallet)
+                    sent = 0
+                    for inp in utxo_data.get("inputs", []):
+                        inp_addr = inp.get("address", "")
+                        if inp_addr == wallet_address or inp_addr.startswith(wallet_prefix):
+                            for amt in inp.get("amount", []):
+                                if amt.get("unit") == asset_id:
+                                    sent += int(amt.get("quantity", 0))
+
+                    if received > 0 or sent > 0:
+                        net = received - sent
+                        dt = datetime.fromtimestamp(block_time) if block_time else None
+                        events.append({
+                            "date": dt.strftime("%Y-%m-%d") if dt else None,
+                            "received": received,
+                            "sent": sent,
+                            "net": net,
+                            "tx_hash": tx_hash,
+                            "block_time": block_time,
+                        })
+
+                if len(transactions) < count:
+                    break  # Last page
+
+            # Always return in chronological order
+            if order == "desc":
+                events.reverse()
+
+            logger.info("LP token history scan found %d events", len(events))
+            return events
+
+        except Exception as e:
+            logger.warning("Error scanning LP token history: %s", e)
+            return []
+
     def _get_lp_entry_from_db(
         self, wallet_address: str, policy_id: str, asset_name: str
     ) -> Optional[Dict]:
@@ -759,7 +859,8 @@ class PortfolioService:
         self, wallet_address: str, policy_id: str, asset_name: str,
         protocol: str, pool_name: str, entry_date: str,
         entry_price_ratio: float, token_a_symbol: str, token_b_symbol: str,
-        entry_tx_hash: Optional[str] = None, lp_amount: Optional[int] = None
+        entry_tx_hash: Optional[str] = None, lp_amount: Optional[int] = None,
+        skip_initial_history: bool = False
     ) -> bool:
         """
         Store LP entry data in database for future IL calculations.
@@ -804,7 +905,7 @@ class PortfolioService:
                 is_new = cur.rowcount > 0
 
                 # Log initial deposit to history for per-segment yield calculation
-                if is_new and lp_amount:
+                if is_new and lp_amount and not skip_initial_history:
                     cur.execute("""
                         INSERT INTO user_lp_deposit_history (
                             wallet_address, policy_id, asset_name,
@@ -823,6 +924,102 @@ class PortfolioService:
             logger.debug("Error storing LP entry: %s", e)
             conn.rollback()
             return False
+        finally:
+            self._db.return_connection(conn)
+
+    def _insert_historical_deposit_events(
+        self, wallet_address: str, policy_id: str, asset_name: str,
+        events: List[Dict], is_farmed: bool
+    ) -> int:
+        """
+        Process Blockfrost scan events into deposit_history entries.
+
+        For farmed positions: only events where received > 0 count as deposits
+        (LP minted to wallet = new capital, even if net=0 from same-tx stake).
+
+        For unfarmed positions: net > 0 = deposit, net < 0 = withdrawal.
+
+        Returns count of events inserted.
+        """
+        from datetime import datetime
+
+        # Filter and classify events
+        deposit_events = []
+        for ev in events:
+            if is_farmed:
+                # Farm: any LP receipt = new capital from DEX
+                if ev.get("received", 0) > 0:
+                    deposit_events.append({
+                        "event_type": "deposit",
+                        "amount": ev["received"],
+                        "date": ev["date"],
+                        "block_time": ev.get("block_time"),
+                    })
+            else:
+                # Unfarmed: use net amount
+                net = ev.get("net", 0)
+                if net > 0:
+                    deposit_events.append({
+                        "event_type": "deposit",
+                        "amount": net,
+                        "date": ev["date"],
+                        "block_time": ev.get("block_time"),
+                    })
+                elif net < 0:
+                    deposit_events.append({
+                        "event_type": "withdrawal",
+                        "amount": net,
+                        "date": ev["date"],
+                        "block_time": ev.get("block_time"),
+                    })
+
+        if not deposit_events:
+            return 0
+
+        # Calculate running lp_amount_after
+        running_total = 0
+        for de in deposit_events:
+            running_total += de["amount"]
+            de["lp_amount_after"] = max(running_total, 0)
+
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                for de in deposit_events:
+                    # Use actual block_time as detected_at
+                    if de.get("block_time"):
+                        detected_at = datetime.fromtimestamp(de["block_time"])
+                    elif de.get("date"):
+                        detected_at = de["date"]
+                    else:
+                        detected_at = None
+
+                    cur.execute("""
+                        INSERT INTO user_lp_deposit_history (
+                            wallet_address, policy_id, asset_name,
+                            event_type, lp_amount_change, lp_amount_after,
+                            price_ratio_at_event, detected_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, NULL, %s)
+                    """, (
+                        wallet_address, policy_id, asset_name,
+                        de["event_type"],
+                        abs(de["amount"]) if de["event_type"] == "deposit" else -abs(de["amount"]),
+                        de["lp_amount_after"],
+                        detected_at,
+                    ))
+
+                conn.commit()
+
+            logger.info(
+                "Inserted %d historical deposit events (final running_total=%d)",
+                len(deposit_events), running_total
+            )
+            return len(deposit_events)
+
+        except Exception as e:
+            conn.rollback()
+            logger.warning("Error inserting historical deposit events: %s", e)
+            return 0
         finally:
             self._db.return_connection(conn)
 
@@ -902,6 +1099,25 @@ class PortfolioService:
         if current_lp_amount == stored_amount:
             return stored_entry
 
+        # Shallow scan: check last 50 transactions for the exact event date
+        event_date = None
+        if current_lp_amount != stored_amount:
+            recent_events = self._scan_lp_token_history(
+                wallet_address, policy_id, asset_name,
+                max_pages=1, order="desc", count=50
+            )
+            # Find the most recent matching event (list is chronological, search from end)
+            if current_lp_amount > stored_amount:
+                for ev in reversed(recent_events):
+                    if ev.get("net", 0) > 0:
+                        event_date = ev.get("date")
+                        break
+            else:
+                for ev in reversed(recent_events):
+                    if ev.get("net", 0) < 0:
+                        event_date = ev.get("date")
+                        break
+
         # Deposit detected - weighted average entry_price_ratio, keep entry_date as-is
         if current_lp_amount > stored_amount:
             delta = current_lp_amount - stored_amount
@@ -926,23 +1142,36 @@ class PortfolioService:
                             new_ratio, current_lp_amount,
                             wallet_address, policy_id, asset_name
                         ))
-                        # Log deposit event
-                        cur.execute("""
-                            INSERT INTO user_lp_deposit_history (
+                        # Log deposit event with accurate date from shallow scan
+                        if event_date:
+                            cur.execute("""
+                                INSERT INTO user_lp_deposit_history (
+                                    wallet_address, policy_id, asset_name,
+                                    event_type, lp_amount_change, lp_amount_after,
+                                    price_ratio_at_event, detected_at
+                                ) VALUES (%s, %s, %s, 'deposit', %s, %s, %s, %s::date)
+                            """, (
                                 wallet_address, policy_id, asset_name,
-                                event_type, lp_amount_change, lp_amount_after,
-                                price_ratio_at_event
-                            ) VALUES (%s, %s, %s, 'deposit', %s, %s, %s)
-                        """, (
-                            wallet_address, policy_id, asset_name,
-                            delta, current_lp_amount, current_price_ratio
-                        ))
+                                delta, current_lp_amount, current_price_ratio,
+                                event_date
+                            ))
+                        else:
+                            cur.execute("""
+                                INSERT INTO user_lp_deposit_history (
+                                    wallet_address, policy_id, asset_name,
+                                    event_type, lp_amount_change, lp_amount_after,
+                                    price_ratio_at_event
+                                ) VALUES (%s, %s, %s, 'deposit', %s, %s, %s)
+                            """, (
+                                wallet_address, policy_id, asset_name,
+                                delta, current_lp_amount, current_price_ratio
+                            ))
                         conn.commit()
                     logger.info(
-                        "Deposit detected for %s: %d -> %d (+%d). ratio %.6f -> %.6f",
+                        "Deposit detected for %s: %d -> %d (+%d). ratio %.6f -> %.6f (event_date=%s)",
                         stored_entry.get("pool_name"),
                         stored_amount, current_lp_amount, delta,
-                        old_ratio, new_ratio
+                        old_ratio, new_ratio, event_date or "now"
                     )
                 except Exception as e:
                     conn.rollback()
@@ -966,23 +1195,37 @@ class PortfolioService:
                         SET lp_amount = %s, last_amount_check = CURRENT_TIMESTAMP
                         WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
                     """, (current_lp_amount, wallet_address, policy_id, asset_name))
-                    # Log withdrawal event
-                    cur.execute("""
-                        INSERT INTO user_lp_deposit_history (
+                    # Log withdrawal event with accurate date from shallow scan
+                    if event_date:
+                        cur.execute("""
+                            INSERT INTO user_lp_deposit_history (
+                                wallet_address, policy_id, asset_name,
+                                event_type, lp_amount_change, lp_amount_after,
+                                price_ratio_at_event, detected_at
+                            ) VALUES (%s, %s, %s, 'withdrawal', %s, %s, %s, %s::date)
+                        """, (
                             wallet_address, policy_id, asset_name,
-                            event_type, lp_amount_change, lp_amount_after,
-                            price_ratio_at_event
-                        ) VALUES (%s, %s, %s, 'withdrawal', %s, %s, %s)
-                    """, (
-                        wallet_address, policy_id, asset_name,
-                        -delta, current_lp_amount, current_price_ratio
-                    ))
+                            -delta, current_lp_amount, current_price_ratio,
+                            event_date
+                        ))
+                    else:
+                        cur.execute("""
+                            INSERT INTO user_lp_deposit_history (
+                                wallet_address, policy_id, asset_name,
+                                event_type, lp_amount_change, lp_amount_after,
+                                price_ratio_at_event
+                            ) VALUES (%s, %s, %s, 'withdrawal', %s, %s, %s)
+                        """, (
+                            wallet_address, policy_id, asset_name,
+                            -delta, current_lp_amount, current_price_ratio
+                        ))
                     conn.commit()
                 logger.info(
                     "Withdrawal detected for %s: %d -> %d (-%d). "
-                    "Keeping entry date and ratio.",
+                    "Keeping entry date and ratio. (event_date=%s)",
                     stored_entry.get("pool_name"),
-                    stored_amount, current_lp_amount, delta
+                    stored_amount, current_lp_amount, delta,
+                    event_date or "now"
                 )
             except Exception as e:
                 conn.rollback()
@@ -1231,25 +1474,41 @@ class PortfolioService:
                         stored_entry["entry_price_ratio"], current_ratio
                     )
             elif not stored_entry or not stored_entry.get("entry_price_ratio"):
-                # First time seeing this position - get entry date and store
-                logger.info("No stored entry for farm %s, fetching creation date...", pool_name)
-                entry_date = self._get_lp_token_creation_date(
+                # First time seeing this position - scan full transaction history
+                logger.info("No stored entry for farm %s, scanning history...", pool_name)
+
+                # Check if deposit history already exists (prevents duplicate insertion)
+                existing_history = self._get_lp_deposit_history(
                     wallet_address, policy_id, asset_name_hex
                 )
-                logger.info("Got entry_date=%s for farm %s", entry_date, pool_name)
+
+                # Full scan only if no existing history
+                scan_events = []
+                if not existing_history:
+                    scan_events = self._scan_lp_token_history(
+                        wallet_address, policy_id, asset_name_hex
+                    )
+
+                if scan_events:
+                    entry_date = scan_events[0]["date"]
+                    logger.info("History scan found %d events, entry_date=%s for farm %s",
+                                len(scan_events), entry_date, pool_name)
+                else:
+                    # Fallback: single-date lookup
+                    entry_date = self._get_lp_token_creation_date(
+                        wallet_address, policy_id, asset_name_hex
+                    )
+                    logger.info("Fallback entry_date=%s for farm %s", entry_date, pool_name)
 
                 if entry_date and current_ratio:
                     # Try to fetch historical price ratio at entry date
                     historical_ratio = None
 
                     if protocol == "minswap":
-                        # Direct lookup for Minswap positions
                         historical_ratio = self._get_minswap_historical_price_ratio(
                             policy_id, asset_name_hex, entry_date
                         )
                     else:
-                        # For SundaeSwap/WingRiders, search Minswap by token symbols
-                        # (price ratios should be similar across DEXes due to arbitrage)
                         logger.info(
                             "Searching Minswap for historical price: %s/%s at %s",
                             token_a_symbol, token_b_symbol, entry_date
@@ -1268,7 +1527,6 @@ class PortfolioService:
                                 protocol, pool_name
                             )
 
-                    # Use historical ratio if available, otherwise use current
                     entry_ratio = historical_ratio if historical_ratio else current_ratio
                     ratio_source = "historical" if historical_ratio else "current"
 
@@ -1283,12 +1541,20 @@ class PortfolioService:
                         token_a_symbol=token_a_symbol,
                         token_b_symbol=token_b_symbol,
                         lp_amount=lp_amount,
+                        skip_initial_history=bool(scan_events),
                     )
+
+                    # Insert historical events from scan (replaces single initial deposit)
+                    if scan_events:
+                        self._insert_historical_deposit_events(
+                            wallet_address, policy_id, asset_name_hex,
+                            scan_events, is_farmed=True
+                        )
+
                     il_data["entry_date"] = entry_date
                     il_data["entry_price_ratio"] = round(entry_ratio, 6)
                     il_data["original_entry_date"] = entry_date
 
-                    # Calculate IL if we have historical data
                     if historical_ratio:
                         il_result = self._calculate_il_from_ratios(
                             entry_ratio, current_ratio, lp_value_info.get("ada_value")
@@ -1300,7 +1566,6 @@ class PortfolioService:
                             il_result.get("il_percent", 0)
                         )
                     else:
-                        # No historical data - IL starts at 0%
                         il_data["il_percent"] = 0.0
                         logger.info(
                             "Stored new farm LP entry for %s (no historical data): date=%s, ratio=%.4f",
@@ -2170,16 +2435,31 @@ class PortfolioService:
                                 stored_entry["entry_price_ratio"], current_ratio
                             )
                     elif not stored_entry or not stored_entry.get("entry_price_ratio"):
-                        # First time seeing this position - get entry date and store
-                        logger.info("No stored entry for %s, fetching creation date...", pool_name)
-                        entry_date = self._get_lp_token_creation_date(
+                        # First time seeing this position - scan full transaction history
+                        logger.info("No stored entry for %s, scanning history...", pool_name)
+
+                        # Check if deposit history already exists
+                        existing_history = self._get_lp_deposit_history(
                             wallet_address, policy_id, asset_name_hex
                         )
-                        logger.info("Got entry_date=%s for %s", entry_date, pool_name)
+
+                        scan_events = []
+                        if not existing_history:
+                            scan_events = self._scan_lp_token_history(
+                                wallet_address, policy_id, asset_name_hex
+                            )
+
+                        if scan_events:
+                            entry_date = scan_events[0]["date"]
+                            logger.info("History scan found %d events, entry_date=%s for %s",
+                                        len(scan_events), entry_date, pool_name)
+                        else:
+                            entry_date = self._get_lp_token_creation_date(
+                                wallet_address, policy_id, asset_name_hex
+                            )
+                            logger.info("Fallback entry_date=%s for %s", entry_date, pool_name)
 
                         if entry_date and current_ratio:
-                            # Store the current ratio as entry ratio (best we can do)
-                            # This will be accurate for new positions
                             self._store_lp_entry(
                                 wallet_address=wallet_address,
                                 policy_id=policy_id,
@@ -2191,11 +2471,19 @@ class PortfolioService:
                                 token_a_symbol=token_a_symbol,
                                 token_b_symbol=token_b_symbol,
                                 lp_amount=int(quantity),
+                                skip_initial_history=bool(scan_events),
                             )
+
+                            # Insert historical events from scan
+                            if scan_events:
+                                self._insert_historical_deposit_events(
+                                    wallet_address, policy_id, asset_name_hex,
+                                    scan_events, is_farmed=False
+                                )
+
                             il_data["entry_date"] = entry_date
                             il_data["entry_price_ratio"] = round(current_ratio, 6)
                             il_data["original_entry_date"] = entry_date
-                            # IL is 0% for newly stored positions
                             il_data["il_percent"] = 0.0
                             logger.info(
                                 "Stored new LP entry for %s: date=%s, ratio=%.4f",
