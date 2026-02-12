@@ -398,10 +398,21 @@ function renderPositionCard(pos, isFarm) {
             const isDeposit = event.event_type === 'deposit';
             const label = isDeposit ? 'Deposit' : 'Withdrawal';
             const cssClass = isDeposit ? 'deposit' : 'withdrawal';
-            historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}</span></li>`;
+            // Calculate % change for this event
+            let pctText = '';
+            if (event.lp_amount_change != null && event.lp_amount_after != null) {
+                const before = event.lp_amount_after - event.lp_amount_change;
+                if (before === 0) {
+                    pctText = ' (100%)';
+                } else if (before > 0) {
+                    const pct = Math.round(Math.abs(event.lp_amount_change) / before * 100);
+                    pctText = ` (${pct}%)`;
+                }
+            }
+            historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}${pctText}</span></li>`;
         }
     } else {
-        historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start</span></li>`;
+        historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start (100%)</span></li>`;
     }
 
     // Split pool name for stacked display
