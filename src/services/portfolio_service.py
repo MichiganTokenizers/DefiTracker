@@ -650,64 +650,27 @@ class PortfolioService:
         try:
             headers = {"project_id": BLOCKFROST_API_KEY}
 
-            # Query the wallet's transactions (ordered oldest first) to find when they received this LP token
-            # This is more efficient than querying the asset's global transactions
+            # Paginate through wallet transactions (oldest first) to find
+            # the first time the wallet received this LP token.
             url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
-            params = {"order": "asc", "count": 100}
+            max_pages = 10  # Up to 1000 transactions
 
-            resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+            for page in range(1, max_pages + 1):
+                params = {"order": "asc", "count": 100, "page": page}
+                resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
 
-            if resp.status_code != 200:
-                logger.debug("Could not fetch wallet transactions: %d", resp.status_code)
-                return None
+                if resp.status_code != 200:
+                    logger.debug("Could not fetch wallet transactions page %d: %d", page, resp.status_code)
+                    break
 
-            transactions = resp.json()
-            if not transactions:
-                logger.debug("No transactions found for wallet")
-                return None
+                transactions = resp.json()
+                if not transactions:
+                    break  # No more pages
 
-            logger.debug("Found %d wallet transactions, checking for LP token receipt", len(transactions))
+                if page == 1:
+                    logger.debug("Scanning wallet transactions for LP token receipt (up to %d pages)", max_pages)
 
-            # Find the first transaction where this wallet received the LP token
-            for tx_info in transactions:
-                tx_hash = tx_info.get("tx_hash", "")
-                block_time = tx_info.get("block_time")
-
-                # Get transaction UTXOs to check if this tx involved the LP token
-                utxo_url = f"{BLOCKFROST_API_URL}/txs/{tx_hash}/utxos"
-                utxo_resp = self.session.get(utxo_url, headers=headers, timeout=self.timeout)
-
-                if utxo_resp.status_code != 200:
-                    continue
-
-                utxo_data = utxo_resp.json()
-
-                # Check if wallet received LP token in outputs
-                for output in utxo_data.get("outputs", []):
-                    output_addr = output.get("address", "")
-                    if output_addr == wallet_address or output_addr.startswith(wallet_prefix):
-                        for amount in output.get("amount", []):
-                            if amount.get("unit") == asset_id:
-                                # Wallet received LP token
-                                if block_time:
-                                    from datetime import datetime
-                                    dt = datetime.fromtimestamp(block_time)
-                                    logger.info("Found LP entry date (received): %s", dt.strftime("%Y-%m-%d"))
-                                    return dt.strftime("%Y-%m-%d")
-
-            # Not found in oldest transactions - check recent transactions
-            # (user might have just created this position)
-            logger.debug("LP token not in oldest 100 txs, checking recent transactions")
-
-            url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
-            params = {"order": "desc", "count": 50}  # Most recent 50
-
-            resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
-
-            if resp.status_code == 200:
-                recent_txs = resp.json()
-                # We want to find the EARLIEST receipt, so reverse to check oldest-of-recent first
-                for tx_info in reversed(recent_txs):
+                for tx_info in transactions:
                     tx_hash = tx_info.get("tx_hash", "")
                     block_time = tx_info.get("block_time")
 
@@ -727,8 +690,14 @@ class PortfolioService:
                                     if block_time:
                                         from datetime import datetime
                                         dt = datetime.fromtimestamp(block_time)
-                                        logger.info("Found LP entry date (recent): %s", dt.strftime("%Y-%m-%d"))
+                                        logger.info(
+                                            "Found LP entry date on page %d: %s",
+                                            page, dt.strftime("%Y-%m-%d")
+                                        )
                                         return dt.strftime("%Y-%m-%d")
+
+                if len(transactions) < 100:
+                    break  # Last page
 
             # Could not find when wallet received this LP token
             logger.debug("Could not find wallet receipt date for LP token %s", asset_id[:20])
