@@ -3726,10 +3726,16 @@ class PortfolioService:
             if underlying_amount <= 0:
                 return None
 
-            # Calculate USD value
+            # Calculate ADA value (Liqwid asset.price is in USD, convert to ADA
+            # for consistency with LP positions — frontend does ADA→USD conversion)
             asset_data = market_data.get("asset", {})
-            price = float(asset_data.get("price", 0))
-            usd_value = underlying_amount * price if price > 0 else None
+            price_usd = float(asset_data.get("price", 0))
+            ada_market = self._get_liqwid_market_data("Ada")
+            ada_usd = float(ada_market.get("asset", {}).get("price", 0)) if ada_market else 0
+            if price_usd > 0 and ada_usd > 0:
+                usd_value = underlying_amount * (price_usd / ada_usd)
+            else:
+                usd_value = None
 
             # Convert APY to percentage
             apy_percent = supply_apy * 100
@@ -4266,9 +4272,15 @@ class PortfolioService:
             if amount <= 0:
                 return None
 
-            # Calculate USD value
-            price = float(asset.get("price", 0))
-            usd_value = amount * price if price > 0 else None
+            # Calculate ADA value (Liqwid asset.price is in USD, convert to ADA
+            # for consistency with LP positions — frontend does ADA→USD conversion)
+            price_usd = float(asset.get("price", 0))
+            ada_market = self._get_liqwid_market_data("Ada")
+            ada_usd = float(ada_market.get("asset", {}).get("price", 0)) if ada_market else 0
+            if price_usd > 0 and ada_usd > 0:
+                usd_value = amount * (price_usd / ada_usd)
+            else:
+                usd_value = None
 
             # APY from loan is already a decimal
             apy_percent = borrow_apy * 100
