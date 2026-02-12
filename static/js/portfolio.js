@@ -441,11 +441,6 @@ function renderPositionCard(pos, isFarm) {
                         <div class="column-header">Current Attributes</div>
 
                         <div class="attr-row">
-                            <span class="attr-label">Start</span>
-                            <span class="attr-value">${entryDate}</span>
-                        </div>
-
-                        <div class="attr-row">
                             <span class="attr-label">Pool Share</span>
                             <span class="attr-value mono">${poolShare}</span>
                         </div>
@@ -674,11 +669,6 @@ function renderLendingCard(pos) {
                     <!-- Left: Current -->
                     <div class="attributes-column">
                         <div class="column-header">Current Attributes</div>
-
-                        <div class="attr-row">
-                            <span class="attr-label">Start</span>
-                            <span class="attr-value">${entryDate}</span>
-                        </div>
 
                         <div class="attr-row">
                             <span class="attr-label">Amount</span>
