@@ -566,26 +566,114 @@ function renderLiqwidSection(data) {
 function renderLendingCard(pos) {
     const isSupply = pos.type === 'supply';
     const typeBadgeClass = isSupply ? 'supply' : 'borrow';
+    const typeLabel = isSupply ? 'Supply' : 'Borrow';
+
+    const entryDate = pos.entry_date ? formatEntryDate(pos.entry_date) : '--';
+    const daysHeld = pos.days_held || 0;
+    const duration = formatDuration(daysHeld);
+    const amount = pos.amount ? formatNumber(pos.amount) : '0';
+    const market = pos.market || '?';
 
     const usdValue = pos.usd_value ? `$${formatNumber(pos.usd_value)}` : '--';
     const apy = pos.current_apy ? `${formatNumber(pos.current_apy)}%` : '--';
-    const amount = pos.amount ? formatNumber(pos.amount) : '0';
+    const avgApy = pos.avg_apy ? `${formatNumber(pos.avg_apy)}%` : apy;
+
+    const actualYield = pos.actual_yield !== null && pos.actual_yield !== undefined
+        ? `${pos.actual_yield >= 0 ? '+' : ''}${pos.actual_yield.toFixed(2)}%` : '--';
+    const yieldClass = pos.actual_yield !== null
+        ? (pos.actual_yield >= 0 ? 'positive' : 'negative') : '';
+
+    const netGainLoss = pos.net_gain_loss !== null && pos.net_gain_loss !== undefined
+        ? `${pos.net_gain_loss >= 0 ? '+' : ''}${pos.net_gain_loss.toFixed(2)}%` : '--';
+    const netClass = pos.net_gain_loss !== null
+        ? (pos.net_gain_loss >= 0 ? 'positive' : 'negative') : '';
+
+    // Build history column for supply positions
+    let historyHtml = '';
+    if (isSupply) {
+        const history = pos.deposit_history || [];
+        if (history.length) {
+            const reversedHistory = [...history].reverse();
+            for (const event of reversedHistory) {
+                const date = event.date ? formatEntryDate(event.date) : '?';
+                const isDeposit = event.event_type === 'deposit';
+                const label = isDeposit ? 'Deposit' : 'Withdrawal';
+                const cssClass = isDeposit ? 'deposit' : 'withdrawal';
+                historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}</span></li>`;
+            }
+        } else {
+            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start</span></li>`;
+        }
+    }
+
+    const historyColumn = isSupply ? `
+                <!-- Middle Column: History -->
+                <div class="history-column">
+                    <div class="column-header">History</div>
+                    <ul class="history-list">
+                        ${historyHtml}
+                    </ul>
+                </div>` : '';
 
     return `
-        <div class="lending-card">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="pool-name">${pos.market || '?'}</span>
-                    <span class="type-badge ${typeBadgeClass}">${isSupply ? 'Supply' : 'Borrow'}</span>
-                </div>
-                <div class="text-end">
-                    <div style="font-size: 1.1rem; font-weight: 600;">${amount} ${pos.market || ''}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${usdValue}</div>
-                </div>
+        <div class="lending-card ${typeBadgeClass}">
+            <div class="lending-info-column">
+                <div class="asset-name-stacked">${market}</div>
+                <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
             </div>
-            <div class="mt-3">
-                <span class="attr-label">${isSupply ? 'Earn APY' : 'Borrow APY'}</span>
-                <span class="result-value ${isSupply ? 'positive' : 'negative'}" style="margin-left: 0.5rem;">${apy}</span>
+
+            <div class="position-columns">
+                <!-- Left Column: Current -->
+                <div class="attributes-column">
+                    <div class="column-header">Current Attributes</div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Start</span>
+                        <span class="attr-value">${entryDate}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Amount</span>
+                        <span class="attr-value">${amount} ${market}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Current APY</span>
+                        <span class="attr-value">${apy}</span>
+                    </div>
+
+                    <div class="attr-row">
+                        <span class="attr-label">Value</span>
+                        <span class="attr-value">${usdValue}</span>
+                    </div>
+                </div>
+
+                ${historyColumn}
+
+                <!-- Right Column: Results -->
+                <div class="results-column">
+                    <div class="column-header">Results</div>
+
+                    <div class="result-row">
+                        <span class="result-label">Duration</span>
+                        <span class="result-value">${duration}</span>
+                    </div>
+
+                    <div class="result-row">
+                        <span class="result-label">Avg APY</span>
+                        <span class="result-value">${avgApy}</span>
+                    </div>
+
+                    <div class="result-row">
+                        <span class="result-label">Actual Yield</span>
+                        <span class="result-value ${yieldClass}">${actualYield}</span>
+                    </div>
+
+                    <div class="net-gain-row">
+                        <span class="net-gain-label">Net</span>
+                        <span class="net-gain-value ${netClass}">${netGainLoss}</span>
+                    </div>
+                </div>
             </div>
         </div>
     `;

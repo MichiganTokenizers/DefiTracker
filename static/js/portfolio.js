@@ -608,8 +608,35 @@ function renderLendingCard(pos) {
     const netClass = pos.net_gain_loss !== null
         ? (pos.net_gain_loss >= 0 ? 'positive' : 'negative') : '';
 
+    // Build history column for supply positions
+    let historyHtml = '';
+    if (isSupply) {
+        const history = pos.deposit_history || [];
+        if (history.length) {
+            const reversedHistory = [...history].reverse();
+            for (const event of reversedHistory) {
+                const date = event.date ? formatEntryDate(event.date) : '?';
+                const isDeposit = event.event_type === 'deposit';
+                const label = isDeposit ? 'Deposit' : 'Withdrawal';
+                const cssClass = isDeposit ? 'deposit' : 'withdrawal';
+                historyHtml += `<li class="history-item"><span class="history-date">${date}</span><span class="history-event ${cssClass}">${label}</span></li>`;
+            }
+        } else {
+            historyHtml = `<li class="history-item"><span class="history-date">${entryDate}</span><span class="history-event deposit">Start</span></li>`;
+        }
+    }
+
+    const historyColumn = isSupply ? `
+                    <!-- Middle: History -->
+                    <div class="history-column">
+                        <div class="column-header">History</div>
+                        <ul class="history-list">
+                            ${historyHtml}
+                        </ul>
+                    </div>` : '';
+
     return `
-        <div class="lending-card">
+        <div class="lending-card ${typeBadgeClass}">
             <div class="position-columns">
                 <!-- Header: Asset Name -->
                 <div class="lending-info-column">
@@ -617,7 +644,6 @@ function renderLendingCard(pos) {
                     <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
                 </div>
 
-                <!-- Two-column body -->
                 <div class="card-body-columns">
                     <!-- Left: Current -->
                     <div class="attributes-column">
@@ -643,6 +669,8 @@ function renderLendingCard(pos) {
                             <span class="value-amount">${valueDisplay}</span>
                         </div>
                     </div>
+
+                    ${historyColumn}
 
                     <!-- Right: Results -->
                     <div class="results-column">

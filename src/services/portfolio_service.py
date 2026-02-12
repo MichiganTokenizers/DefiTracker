@@ -199,6 +199,7 @@ class LendingPosition:
     avg_apy: Optional[float] = None  # Average APY since entry
     actual_yield: Optional[float] = None  # Yield % earned to date
     net_gain_loss: Optional[float] = None  # Net gain/loss percentage
+    deposit_history: Optional[List[Dict]] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -213,6 +214,7 @@ class LendingPosition:
             "avg_apy": self.avg_apy,
             "actual_yield": self.actual_yield,
             "net_gain_loss": self.net_gain_loss,
+            "deposit_history": self.deposit_history,
         }
 
 
@@ -1023,6 +1025,87 @@ class PortfolioService:
         finally:
             self._db.return_connection(conn)
 
+    def _insert_historical_lending_events(
+        self, wallet_address: str, token_unit: str,
+        events: List[Dict]
+    ) -> int:
+        """
+        Process Blockfrost scan events into lending deposit_history entries.
+
+        qTokens stay in wallet, so use net > 0 = deposit, net < 0 = withdrawal
+        (same as unfarmed LP logic).
+
+        Returns count of events inserted.
+        """
+        from datetime import datetime
+
+        deposit_events = []
+        for ev in events:
+            net = ev.get("net", 0)
+            if net > 0:
+                deposit_events.append({
+                    "event_type": "deposit",
+                    "amount": net,
+                    "date": ev["date"],
+                    "block_time": ev.get("block_time"),
+                })
+            elif net < 0:
+                deposit_events.append({
+                    "event_type": "withdrawal",
+                    "amount": net,
+                    "date": ev["date"],
+                    "block_time": ev.get("block_time"),
+                })
+
+        if not deposit_events:
+            return 0
+
+        # Calculate running qtoken_amount_after
+        running_total = 0
+        for de in deposit_events:
+            running_total += de["amount"]
+            de["qtoken_amount_after"] = max(running_total, 0)
+
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                for de in deposit_events:
+                    if de.get("block_time"):
+                        detected_at = datetime.fromtimestamp(de["block_time"])
+                    elif de.get("date"):
+                        detected_at = de["date"]
+                    else:
+                        detected_at = None
+
+                    cur.execute("""
+                        INSERT INTO user_lending_deposit_history (
+                            wallet_address, token_unit,
+                            event_type, qtoken_amount_change, qtoken_amount_after,
+                            detected_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        wallet_address, token_unit,
+                        de["event_type"],
+                        abs(de["amount"]) if de["event_type"] == "deposit" else -abs(de["amount"]),
+                        de["qtoken_amount_after"],
+                        detected_at,
+                    ))
+
+                conn.commit()
+
+            logger.info(
+                "Inserted %d historical lending deposit events (final running_total=%d)",
+                len(deposit_events), running_total
+            )
+            return len(deposit_events)
+
+        except Exception as e:
+            conn.rollback()
+            logger.warning("Error inserting historical lending deposit events: %s", e)
+            return 0
+        finally:
+            self._db.return_connection(conn)
+
     def _update_lp_entry_for_amount_change(
         self, wallet_address: str, policy_id: str, asset_name: str,
         current_lp_amount: int, current_price_ratio: float
@@ -1271,6 +1354,43 @@ class PortfolioService:
                 ]
         except Exception as e:
             logger.debug("Error fetching LP deposit history: %s", e)
+            return []
+        finally:
+            self._db.return_connection(conn)
+
+    def _get_lending_deposit_history(
+        self, wallet_address: str, token_unit: str
+    ) -> List[Dict]:
+        """
+        Fetch deposit/withdrawal history for a lending position.
+
+        Returns:
+            List of dicts with event_type, qtoken_amount_change, detected_at.
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT event_type, qtoken_amount_change, qtoken_amount_after,
+                           detected_at
+                    FROM user_lending_deposit_history
+                    WHERE wallet_address = %s
+                      AND token_unit = %s
+                    ORDER BY detected_at ASC
+                """, (wallet_address, token_unit))
+
+                rows = cur.fetchall()
+                return [
+                    {
+                        "event_type": row[0],
+                        "qtoken_amount_change": int(row[1]),
+                        "qtoken_amount_after": int(row[2]),
+                        "date": row[3].strftime("%Y-%m-%d") if row[3] else None,
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.debug("Error fetching lending deposit history: %s", e)
             return []
         finally:
             self._db.return_connection(conn)
@@ -3614,19 +3734,60 @@ class PortfolioService:
             # Convert APY to percentage
             apy_percent = supply_apy * 100
 
-            # Look up entry date from wallet transaction history
+            # Look up entry date via full/shallow scan approach
             entry_date = None
             days_held = None
             actual_yield = None
             net_gain_loss = None
+            deposit_history = None
 
             if wallet_address and qtoken_unit:
-                entry_date = self._get_qtoken_entry_date(wallet_address, qtoken_unit, market=symbol)
+                from datetime import datetime
+
+                stored_entry = self._get_lending_entry_from_db(wallet_address, qtoken_unit)
+
+                if stored_entry:
+                    # Returning visit: detect amount changes
+                    updated = self._update_lending_entry_for_amount_change(
+                        wallet_address, qtoken_unit, int(qtoken_amount)
+                    )
+                    entry_date = (updated or stored_entry).get("entry_date")
+                else:
+                    # First visit: full scan for history
+                    policy_id = qtoken_unit[:56]
+                    asset_name_hex = qtoken_unit[56:]
+                    existing_history = self._get_lending_deposit_history(wallet_address, qtoken_unit)
+
+                    if not existing_history:
+                        scan_events = self._scan_lp_token_history(
+                            wallet_address, policy_id, asset_name_hex
+                        )
+                    else:
+                        scan_events = []
+
+                    if scan_events:
+                        entry_date = scan_events[0]["date"]
+                        self._store_lending_entry(
+                            wallet_address, qtoken_unit, "liqwid", symbol,
+                            "supply", entry_date,
+                            qtoken_amount=int(qtoken_amount),
+                            skip_initial_history=True
+                        )
+                        self._insert_historical_lending_events(
+                            wallet_address, qtoken_unit, scan_events
+                        )
+                    else:
+                        # Fallback: use existing _get_qtoken_entry_date()
+                        entry_date = self._get_qtoken_entry_date(
+                            wallet_address, qtoken_unit, market=symbol
+                        )
+
+                # Fetch deposit history for display
+                deposit_history = self._get_lending_deposit_history(wallet_address, qtoken_unit) or None
+
                 if entry_date:
-                    from datetime import datetime
                     entry_dt = datetime.strptime(entry_date, "%Y-%m-%d")
                     days_held = (datetime.now() - entry_dt).days
-                    # Calculate actual yield: APY * days / 365
                     if apy_percent > 0 and days_held > 0:
                         actual_yield = round((apy_percent * days_held) / 365, 2)
                         net_gain_loss = actual_yield  # No IL for lending
@@ -3640,9 +3801,10 @@ class PortfolioService:
                 current_apy=round(apy_percent, 2) if apy_percent > 0 else None,
                 entry_date=entry_date,
                 days_held=days_held,
-                avg_apy=round(apy_percent, 2) if apy_percent > 0 else None,  # Use current as avg for now
+                avg_apy=round(apy_percent, 2) if apy_percent > 0 else None,
                 actual_yield=actual_yield,
                 net_gain_loss=net_gain_loss,
+                deposit_history=deposit_history,
             )
 
         except Exception as e:
@@ -3666,7 +3828,8 @@ class PortfolioService:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT entry_date, entry_tx_hash, protocol, market, position_type
+                    SELECT entry_date, entry_tx_hash, protocol, market, position_type,
+                           qtoken_amount, last_amount_check, original_entry_date
                     FROM user_lending_entries
                     WHERE wallet_address = %s
                       AND token_unit = %s
@@ -3680,6 +3843,9 @@ class PortfolioService:
                         "protocol": row[2],
                         "market": row[3],
                         "position_type": row[4],
+                        "qtoken_amount": int(row[5]) if row[5] is not None else None,
+                        "last_amount_check": row[6],
+                        "original_entry_date": row[7].isoformat() if row[7] else None,
                     }
                 return None
         except Exception as e:
@@ -3691,7 +3857,9 @@ class PortfolioService:
     def _store_lending_entry(
         self, wallet_address: str, token_unit: str, protocol: str,
         market: str, position_type: str, entry_date: str,
-        entry_tx_hash: Optional[str] = None
+        entry_tx_hash: Optional[str] = None,
+        qtoken_amount: Optional[int] = None,
+        skip_initial_history: bool = False
     ) -> bool:
         """
         Store lending entry data in database.
@@ -3704,6 +3872,8 @@ class PortfolioService:
             position_type: 'supply' or 'borrow'
             entry_date: ISO date string (YYYY-MM-DD)
             entry_tx_hash: Optional transaction hash
+            qtoken_amount: qToken quantity (optional)
+            skip_initial_history: If True, skip auto-logging initial deposit
 
         Returns:
             True if stored successfully
@@ -3714,16 +3884,36 @@ class PortfolioService:
                 cur.execute("""
                     INSERT INTO user_lending_entries (
                         wallet_address, token_unit, protocol, market,
-                        position_type, entry_date, entry_tx_hash
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        position_type, entry_date, entry_tx_hash,
+                        qtoken_amount, last_amount_check, original_entry_date
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
                     ON CONFLICT (wallet_address, token_unit)
                     DO UPDATE SET
                         entry_date = LEAST(user_lending_entries.entry_date, EXCLUDED.entry_date),
+                        qtoken_amount = COALESCE(user_lending_entries.qtoken_amount, EXCLUDED.qtoken_amount),
+                        last_amount_check = CURRENT_TIMESTAMP,
+                        original_entry_date = COALESCE(user_lending_entries.original_entry_date, EXCLUDED.original_entry_date),
                         updated_at = CURRENT_TIMESTAMP
                 """, (
                     wallet_address, token_unit, protocol, market,
-                    position_type, entry_date, entry_tx_hash
+                    position_type, entry_date, entry_tx_hash,
+                    qtoken_amount, entry_date
                 ))
+                is_new = cur.rowcount > 0
+
+                # Log initial deposit to history
+                if is_new and qtoken_amount and not skip_initial_history:
+                    cur.execute("""
+                        INSERT INTO user_lending_deposit_history (
+                            wallet_address, token_unit,
+                            event_type, qtoken_amount_change, qtoken_amount_after,
+                            detected_at
+                        ) VALUES (%s, %s, 'deposit', %s, %s, %s::date)
+                    """, (
+                        wallet_address, token_unit,
+                        qtoken_amount, qtoken_amount, entry_date
+                    ))
+
             conn.commit()
             logger.info("Stored lending entry for %s: %s on %s",
                        wallet_address[:20], market, entry_date)
@@ -3734,6 +3924,193 @@ class PortfolioService:
             return False
         finally:
             self._db.return_connection(conn)
+
+    def _update_lending_entry_for_amount_change(
+        self, wallet_address: str, token_unit: str,
+        current_qtoken_amount: int
+    ) -> Optional[Dict]:
+        """
+        Detect deposit/withdrawal by comparing current qToken amount with stored amount.
+
+        Deposits/withdrawals: update stored amount and log event.
+        Complete exit (amount=0): delete the entry row.
+        Pre-migration (stored amount NULL): seed with current amount.
+
+        Returns:
+            Updated entry dict, or None if entry was deleted or not found.
+        """
+        stored_entry = self._get_lending_entry_from_db(wallet_address, token_unit)
+        if not stored_entry:
+            return None
+
+        stored_amount = stored_entry.get("qtoken_amount")
+
+        # Complete withdrawal - delete entry so re-entry creates a fresh record
+        if current_qtoken_amount == 0:
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        DELETE FROM user_lending_entries
+                        WHERE wallet_address = %s AND token_unit = %s
+                    """, (wallet_address, token_unit))
+                    conn.commit()
+                logger.info(
+                    "Deleted lending entry for %s (complete withdrawal)",
+                    stored_entry.get("market")
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error deleting lending entry: %s", e)
+            finally:
+                self._db.return_connection(conn)
+            return None
+
+        # Pre-migration entry or first time seeing amount: seed it
+        if stored_amount is None:
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE user_lending_entries
+                        SET qtoken_amount = %s, last_amount_check = CURRENT_TIMESTAMP
+                        WHERE wallet_address = %s AND token_unit = %s
+                    """, (current_qtoken_amount, wallet_address, token_unit))
+                    conn.commit()
+                stored_entry["qtoken_amount"] = current_qtoken_amount
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error seeding lending qtoken_amount: %s", e)
+            finally:
+                self._db.return_connection(conn)
+            return stored_entry
+
+        # No change in amount
+        if current_qtoken_amount == stored_amount:
+            return stored_entry
+
+        # Shallow scan: check last 50 transactions for the exact event date
+        policy_id = token_unit[:56]
+        asset_name = token_unit[56:]
+        event_date = None
+
+        recent_events = self._scan_lp_token_history(
+            wallet_address, policy_id, asset_name,
+            max_pages=1, order="desc", count=50
+        )
+        if current_qtoken_amount > stored_amount:
+            for ev in reversed(recent_events):
+                if ev.get("net", 0) > 0:
+                    event_date = ev.get("date")
+                    break
+        else:
+            for ev in reversed(recent_events):
+                if ev.get("net", 0) < 0:
+                    event_date = ev.get("date")
+                    break
+
+        # Deposit detected
+        if current_qtoken_amount > stored_amount:
+            delta = current_qtoken_amount - stored_amount
+
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE user_lending_entries
+                        SET qtoken_amount = %s,
+                            last_amount_check = CURRENT_TIMESTAMP
+                        WHERE wallet_address = %s AND token_unit = %s
+                    """, (current_qtoken_amount, wallet_address, token_unit))
+
+                    if event_date:
+                        cur.execute("""
+                            INSERT INTO user_lending_deposit_history (
+                                wallet_address, token_unit,
+                                event_type, qtoken_amount_change, qtoken_amount_after,
+                                detected_at
+                            ) VALUES (%s, %s, 'deposit', %s, %s, %s::date)
+                        """, (
+                            wallet_address, token_unit,
+                            delta, current_qtoken_amount, event_date
+                        ))
+                    else:
+                        cur.execute("""
+                            INSERT INTO user_lending_deposit_history (
+                                wallet_address, token_unit,
+                                event_type, qtoken_amount_change, qtoken_amount_after
+                            ) VALUES (%s, %s, 'deposit', %s, %s)
+                        """, (
+                            wallet_address, token_unit,
+                            delta, current_qtoken_amount
+                        ))
+                    conn.commit()
+                logger.info(
+                    "Lending deposit detected for %s: %d -> %d (+%d) (event_date=%s)",
+                    stored_entry.get("market"),
+                    stored_amount, current_qtoken_amount, delta,
+                    event_date or "now"
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error updating lending entry for deposit: %s", e)
+            finally:
+                self._db.return_connection(conn)
+
+            stored_entry["qtoken_amount"] = current_qtoken_amount
+            return stored_entry
+
+        # Partial withdrawal
+        if current_qtoken_amount < stored_amount:
+            delta = stored_amount - current_qtoken_amount
+
+            conn = self._db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE user_lending_entries
+                        SET qtoken_amount = %s, last_amount_check = CURRENT_TIMESTAMP
+                        WHERE wallet_address = %s AND token_unit = %s
+                    """, (current_qtoken_amount, wallet_address, token_unit))
+
+                    if event_date:
+                        cur.execute("""
+                            INSERT INTO user_lending_deposit_history (
+                                wallet_address, token_unit,
+                                event_type, qtoken_amount_change, qtoken_amount_after,
+                                detected_at
+                            ) VALUES (%s, %s, 'withdrawal', %s, %s, %s::date)
+                        """, (
+                            wallet_address, token_unit,
+                            -delta, current_qtoken_amount, event_date
+                        ))
+                    else:
+                        cur.execute("""
+                            INSERT INTO user_lending_deposit_history (
+                                wallet_address, token_unit,
+                                event_type, qtoken_amount_change, qtoken_amount_after
+                            ) VALUES (%s, %s, 'withdrawal', %s, %s)
+                        """, (
+                            wallet_address, token_unit,
+                            -delta, current_qtoken_amount
+                        ))
+                    conn.commit()
+                logger.info(
+                    "Lending withdrawal detected for %s: %d -> %d (-%d) (event_date=%s)",
+                    stored_entry.get("market"),
+                    stored_amount, current_qtoken_amount, delta,
+                    event_date or "now"
+                )
+            except Exception as e:
+                conn.rollback()
+                logger.warning("Error updating lending entry for withdrawal: %s", e)
+            finally:
+                self._db.return_connection(conn)
+
+            stored_entry["qtoken_amount"] = current_qtoken_amount
+            return stored_entry
+
+        return stored_entry
 
     def _get_qtoken_entry_date(
         self, wallet_address: str, qtoken_unit: str,

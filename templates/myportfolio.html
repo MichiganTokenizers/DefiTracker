@@ -181,6 +181,10 @@
     .position-card .position-columns {
         grid-template-columns: 1fr auto 1fr;
     }
+    /* Lending supply cards: 3-column with history in middle */
+    .lending-card.supply .position-columns {
+        grid-template-columns: 1fr auto 1fr;
+    }
     /* History column */
     .history-column {
         display: flex;
@@ -385,6 +389,24 @@
         background: linear-gradient(135deg, rgba(247, 75, 3, 0.1), rgba(255, 120, 60, 0.1));
         color: var(--crimson-carrot);
         border: 1px solid rgba(247, 75, 3, 0.25);
+    }
+
+    /* Lending asset header row */
+    .lending-info-column {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .asset-name-stacked {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--carbon-black);
+    }
+    .lending-info-column .type-badge {
+        margin-left: auto;
     }
 
     /* Empty state */
