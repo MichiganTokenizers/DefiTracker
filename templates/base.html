@@ -305,6 +305,23 @@
         .supported-wallets img:hover {
             opacity: 1;
         }
+        .wallet-security-note {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(14, 135, 73, 0.06);
+            border: 1px solid rgba(14, 135, 73, 0.15);
+            border-radius: 8px;
+            font-size: 0.78rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        .wallet-security-note svg {
+            flex-shrink: 0;
+            margin-top: 1px;
+            color: var(--sea-green);
+        }
         .divider {
             display: flex;
             align-items: center;
@@ -577,6 +594,11 @@
                         <img src="/static/wallet-begin-logo.png" alt="Begin" title="Begin">
                         <img src="/static/wallet-typhon-logo.png" alt="Typhon" title="Typhon">
                         <img src="/static/wallet-gerowallet-logo.png" alt="GeroWallet" title="GeroWallet">
+                    </div>
+
+                    <div class="wallet-security-note">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm-2.5 4a2.5 2.5 0 0 1 5 0v2h-5V5z"/></svg>
+                        <span>No transactions. You'll sign a message to prove wallet ownership — this is not a transaction and cannot move funds. YieldLife will never request spending approval.</span>
                     </div>
 
                     <div class="divider"><span>or use email</span></div>
