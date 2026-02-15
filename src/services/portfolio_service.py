@@ -517,6 +517,7 @@ class PortfolioService:
 
                 # Calculate per-segment yields
                 total_weighted_yield = 0
+                total_capital_days = 0
                 total_data_points = 0
 
                 for seg in segments:
@@ -540,6 +541,7 @@ class PortfolioService:
                     if seg_apr is not None:
                         seg_yield = seg_apr * (seg["days"] / 365)
                         total_weighted_yield += seg_yield * seg["capital"]
+                        total_capital_days += seg["days"] * seg["capital"]
                     else:
                         logger.debug(
                             "No APR data for segment %s to %s in %s/%s",
@@ -553,9 +555,9 @@ class PortfolioService:
                     total_data_points if total_data_points else None
                 )
 
-                # Derive actual_apr: annualized rate
-                if days_held > 0:
-                    actual_apr = actual_yield / (days_held / 365)
+                # Derive actual_apr: capital-time-weighted average
+                if total_capital_days > 0:
+                    actual_apr = (total_weighted_yield * 365) / total_capital_days
                     result["actual_apr"] = round(actual_apr, 2)
 
                 # Net gain/loss: yield + IL
