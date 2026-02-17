@@ -9,37 +9,6 @@ A Python-based system for tracking APR/APY data across Cardano DeFi protocols. T
 - **WingRiders** - Liquidity pool farming APRs
 - **Liqwid** - Lending supply/borrow rates
 
-## Quick Start
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/DefiTracker.git
-   cd DefiTracker
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure database:**
-   ```bash
-   # Copy the template
-   cp config/database.yaml.template config/database.yaml
-   # Edit config/database.yaml with your PostgreSQL credentials
-   ```
-
-4. **Set up database:**
-   ```bash
-   python src/database/setup.py
-   ```
-
-5. **Start the web app:**
-   ```bash
-   python src/api/app.py
-   ```
-
-See [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md) for detailed database setup instructions.
 
 ## Architecture
 
@@ -104,4 +73,4 @@ Each protocol provides APR data via their APIs. The system normalizes and stores
 
 ## License
 
-MIT
+Michigan Tokenizers LLC
