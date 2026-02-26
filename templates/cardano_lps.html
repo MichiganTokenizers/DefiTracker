@@ -1163,15 +1163,17 @@ function updateCurrentAprs(data) {
 
         if (apr30d == null) return null;
         
-        // Calculate 24h change based on 30d APR
-        let change24h = null;
+        // Calculate 24h change for each APR type
+        let change1d = null;
+        let change7d = null;
+        let change30d = null;
         if (relevantData.length > 1) {
             const now = new Date(latest.timestamp);
             const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
-            
+
             let closest = relevantData[0];
             let minDiff = Math.abs(new Date(closest.timestamp) - oneDayAgo);
-            
+
             for (let point of relevantData) {
                 const diff = Math.abs(new Date(point.timestamp) - oneDayAgo);
                 if (diff < minDiff) {
@@ -1179,12 +1181,21 @@ function updateCurrentAprs(data) {
                     closest = point;
                 }
             }
-            
+
+            // 30d change: today's 30d APR vs yesterday's 30d APR
             if (closest.apr != null) {
-                change24h = apr30d - closest.apr;
+                change30d = apr30d - closest.apr;
+            }
+            // 1d change: today's 1d APR vs yesterday's 1d APR
+            if (apr1d != null && closest.apr_1d != null) {
+                change1d = apr1d - closest.apr_1d;
+            }
+            // 7d change: today's 7d avg vs yesterday's 7d avg
+            if (smoothed7d.length >= 2) {
+                change7d = smoothed7d[smoothed7d.length - 1].apr_avg - smoothed7d[smoothed7d.length - 2].apr_avg;
             }
         }
-        
+
         return {
             symbol: assetData.symbol,
             protocol: assetData.protocol,
@@ -1193,7 +1204,9 @@ function updateCurrentAprs(data) {
             apr7d: apr7d,
             apr30d: apr30d,
             tvl_usd: latest.tvl_usd,
-            change24h: change24h,
+            change1d: change1d,
+            change7d: change7d,
+            change30d: change30d,
             volume24h: volume24h
         };
     }).filter(x => x !== null);
@@ -1225,8 +1238,8 @@ function applySortToTable() {
                 bVal = is1d ? (b.apr1d ?? -Infinity) : is7d ? (b.apr7d ?? -Infinity) : (b.apr30d ?? -Infinity);
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             case 2:
-                aVal = a.change24h ?? -Infinity;
-                bVal = b.change24h ?? -Infinity;
+                aVal = is1d ? (a.change1d ?? -Infinity) : is7d ? (a.change7d ?? -Infinity) : (a.change30d ?? -Infinity);
+                bVal = is1d ? (b.change1d ?? -Infinity) : is7d ? (b.change7d ?? -Infinity) : (b.change30d ?? -Infinity);
                 return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
             case 3:
                 aVal = a.volume24h ?? -Infinity;
@@ -1263,11 +1276,12 @@ function applySortToTable() {
     sorted.forEach(item => {
         const row = document.createElement('tr');
         
+        const change = is1d ? item.change1d : is7d ? item.change7d : item.change30d;
         let changeHtml = '<span style="color: #555;">-</span>';
-        if (item.change24h !== null) {
-            const changeColor = item.change24h >= 0 ? '#16a34a' : '#dc2626';
-            const changeSymbol = item.change24h >= 0 ? '+' : '';
-            changeHtml = `<span style="color: ${changeColor}; font-weight: 500;">${changeSymbol}${item.change24h.toFixed(2)}%</span>`;
+        if (change !== null) {
+            const changeColor = change >= 0 ? '#16a34a' : '#dc2626';
+            const changeSymbol = change >= 0 ? '+' : '';
+            changeHtml = `<span style="color: ${changeColor}; font-weight: 500;">${changeSymbol}${change.toFixed(2)}%</span>`;
         }
         
         const logo = protocolLogos[item.protocol] || '/static/default-logo.png';
