@@ -197,7 +197,9 @@ chains:
             name: "Liqwid Token"
           - symbol: "IAG"
             name: "IAG"
-      
+          - symbol: "USDM"
+            name: "Mehen USDM"
+
       sundaeswap:
         enabled: true
         # SundaeSwap DEX - Cardano decentralized exchange

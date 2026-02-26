@@ -87,55 +87,76 @@ def load_config():
         return yaml.safe_load(f)
 
 
-# CoinGecko token IDs for Liqwid assets
-COINGECKO_IDS = {
-    'ADA': 'cardano',
-    'DJED': 'djed',
-    'iUSD': 'indigo-protocol',
-    'USDA': 'usd-coin',  # Stablecoin ~ $1
-    'SHEN': 'shen',
-    'MIN': 'minswap',
-    'SNEK': 'snek',
-    'NIGHT': 'tokenfi',
-    'wanUSDC': 'usd-coin',  # Wrapped USDC ~ $1
-    'wanDAI': 'dai',
-    'wanBTC': 'bitcoin',
-    'wanETH': 'ethereum',
-    'LQ': 'liqwid-finance',
-    'IAG': 'iagon',
+MINSWAP_BASE_URL = "https://api-mainnet-prod.minswap.org"
+
+# Minswap ADA-pair LP assets for deriving token USD prices.
+# Format: {farm_id}.{pool_id} from config/chains.yaml Minswap pairs.
+# Token price = liquidity_a_currency / liquidity_b
+# (same formula as MinswapAdapter.get_min_price)
+MINSWAP_POOL_MAP = {
+    'DJED': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.a939812d08cfb6066e17d2914a7272c6b8c0197acdf68157d02c73649cc3efc0',
+    'iUSD': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3',
+    'USDA': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.ee5cfbc5b0dc10c873a0bcc69e49b9af21b899f59337a894874c6b596c2da136',
+    'SHEN': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.93a6e6b33626dd6e2cb52e446a80ee3b0c92b38cc158417b30a6d415e97652a1',
+    'MIN': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75',
+    'SNEK': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.2ffadbb87144e875749122e0bbb9f535eeaa7f5660c6c4a91bcc4121e477f08d',
+    'NIGHT': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.e74c52975908a612d5ce68327040d449aae99f8b463bb6de046a1b23c5713169',
+    'LQ': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.6263e0101384dace4d7a8dadf0e6d45c8d43c8872604118ee82e3f2212934917',
+    'IAG': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7b12f25ce8d6f424e1edbc8b61f0742fb13252605f31dc40373d6a245e8ec1d1',
+    'USDM': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171',
+    # Wrapped tokens use equivalent Cardano-native token pools as price proxy
+    'wanBTC': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.63a3b8ee322ea31a931fd1902528809dc681bc650af21895533c9e98fa4bef2e',  # iBTC-ADA
+    'wanETH': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.562b9ff903fe8d9e1c980120a233051e7b1518cfc75eb9b4227f7710b670b6e9',  # iETH-ADA
 }
+
+# Stablecoins without dedicated Minswap ADA pools default to $1
+STABLECOIN_DEFAULTS = {'wanUSDC', 'wanDAI'}
 
 
 def fetch_token_prices() -> Dict[str, Decimal]:
-    """Fetch current USD prices for Liqwid tokens from CoinGecko."""
-    # Get unique CoinGecko IDs
-    ids = set(COINGECKO_IDS.values())
-    ids_str = ','.join(ids)
+    """Fetch current USD prices for Liqwid tokens from Minswap pool data.
 
+    Derives prices from ADA-pair pool metrics on Minswap:
+      token_price = liquidity_a_currency / liquidity_b
+    ADA price is derived from the first successful pool response.
+    """
     prices: Dict[str, Decimal] = {}
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'defitracker/1.0'})
 
-    try:
-        response = requests.get(
-            f'https://api.coingecko.com/api/v3/simple/price?ids={ids_str}&vs_currencies=usd',
-            timeout=15,
-            headers={'User-Agent': 'defitracker/1.0'}
-        )
-        if response.ok:
-            data = response.json()
-            # Map back to our symbols
-            for symbol, cg_id in COINGECKO_IDS.items():
-                if cg_id in data and 'usd' in data[cg_id]:
-                    prices[symbol] = Decimal(str(data[cg_id]['usd']))
-                elif symbol in ['USDA', 'wanUSDC', 'wanDAI', 'iUSD']:
-                    # Stablecoins default to $1
-                    prices[symbol] = Decimal('1.0')
+    for symbol, lp_asset in MINSWAP_POOL_MAP.items():
+        try:
+            resp = session.get(
+                f"{MINSWAP_BASE_URL}/v1/pools/{lp_asset}/metrics",
+                timeout=15
+            )
+            if not resp.ok:
+                logger.warning(f"Minswap API returned {resp.status_code} for {symbol}")
+                continue
 
-            logger.info(f"Fetched prices for {len(prices)} tokens from CoinGecko")
-        else:
-            logger.warning(f"CoinGecko API returned {response.status_code}")
-    except Exception as e:
-        logger.warning(f"Could not fetch token prices: {e}")
+            data = resp.json()
+            liq_a_currency = data.get('liquidity_a_currency')
+            liq_b = data.get('liquidity_b')
 
+            if liq_a_currency and liq_b and float(liq_b) > 0:
+                prices[symbol] = Decimal(str(liq_a_currency)) / Decimal(str(liq_b))
+
+            # Derive ADA price from first successful pool response
+            if 'ADA' not in prices:
+                liq_a = data.get('liquidity_a')
+                if liq_a_currency and liq_a and float(liq_a) > 0:
+                    prices['ADA'] = Decimal(str(liq_a_currency)) / Decimal(str(liq_a))
+
+        except Exception as e:
+            logger.warning(f"Could not fetch Minswap price for {symbol}: {e}")
+            continue
+
+    # Default stablecoins without Minswap pools to $1
+    for symbol in STABLECOIN_DEFAULTS:
+        if symbol not in prices:
+            prices[symbol] = Decimal('1.0')
+
+    logger.info(f"Fetched prices for {len(prices)} tokens from Minswap")
     return prices
 
 
