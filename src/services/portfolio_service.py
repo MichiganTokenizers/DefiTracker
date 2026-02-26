@@ -859,6 +859,49 @@ class PortfolioService:
         finally:
             self._db.return_connection(conn)
 
+    def _get_stored_farm_entries_from_db(
+        self, wallet_address: str, protocol: str
+    ) -> List[Dict]:
+        """
+        Get all stored LP entries for a wallet+protocol from the database.
+
+        Used as fallback when transaction scan window misses staked positions.
+        """
+        conn = self._db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT policy_id, asset_name, protocol, pool_name,
+                           entry_date, entry_price_ratio, token_a_symbol,
+                           token_b_symbol, lp_amount, original_entry_date
+                    FROM user_lp_entries
+                    WHERE wallet_address = %s
+                      AND protocol = %s
+                      AND lp_amount IS NOT NULL
+                      AND lp_amount > 0
+                """, (wallet_address, protocol))
+
+                return [
+                    {
+                        "policy_id": row[0],
+                        "asset_name": row[1],
+                        "protocol": row[2],
+                        "pool_name": row[3],
+                        "entry_date": row[4].isoformat() if row[4] else None,
+                        "entry_price_ratio": float(row[5]) if row[5] else None,
+                        "token_a_symbol": row[6],
+                        "token_b_symbol": row[7],
+                        "lp_amount": int(row[8]) if row[8] is not None else None,
+                        "original_entry_date": row[9].isoformat() if row[9] else None,
+                    }
+                    for row in cur.fetchall()
+                ]
+        except Exception as e:
+            logger.debug("Error fetching stored farm entries: %s", e)
+            return []
+        finally:
+            self._db.return_connection(conn)
+
     def _store_lp_entry(
         self, wallet_address: str, policy_id: str, asset_name: str,
         protocol: str, pool_name: str, entry_date: str,
@@ -2335,8 +2378,12 @@ class PortfolioService:
         Returns:
             Dict with lp_positions, farm_positions, lending_positions, and total_usd_value
         """
-        lp_positions = self.get_lp_positions(wallet_address)
-        farm_positions = self.get_farm_positions(wallet_address)
+        # Fetch wallet assets once and share with farm detection to avoid duplicate API call
+        if BLOCKFROST_API_KEY:
+            lp_positions, wallet_lp_units = self._fetch_blockfrost_lp_positions(wallet_address)
+        else:
+            lp_positions, wallet_lp_units = [], set()
+        farm_positions = self.get_farm_positions(wallet_address, wallet_asset_units=wallet_lp_units)
         lending_positions = self.get_lending_positions(wallet_address)
 
         total_usd = sum(
@@ -2368,11 +2415,17 @@ class PortfolioService:
             logger.warning("BLOCKFROST_API_KEY not configured. Cannot fetch LP positions.")
             return []
 
-        return self._fetch_blockfrost_lp_positions(wallet_address)
+        positions, _ = self._fetch_blockfrost_lp_positions(wallet_address)
+        return positions
 
-    def _fetch_blockfrost_lp_positions(self, wallet_address: str) -> List[LPPosition]:
-        """Fetch LP positions by scanning wallet assets via Blockfrost."""
+    def _fetch_blockfrost_lp_positions(self, wallet_address: str) -> tuple:
+        """Fetch LP positions by scanning wallet assets via Blockfrost.
+
+        Returns:
+            Tuple of (List[LPPosition], set of LP unit strings in wallet)
+        """
         positions = []
+        wallet_lp_units = set()
 
         try:
             # Get all assets held by the address
@@ -2384,11 +2437,11 @@ class PortfolioService:
 
             if resp.status_code == 404:
                 logger.debug("Address not found on Blockfrost: %s", wallet_address[:20])
-                return positions
+                return positions, wallet_lp_units
 
             if resp.status_code != 200:
                 logger.warning("Blockfrost API error: %d - %s", resp.status_code, resp.text[:200])
-                return positions
+                return positions, wallet_lp_units
 
             address_data = resp.json()
 
@@ -2410,6 +2463,7 @@ class PortfolioService:
                     asset_name_hex = unit[56:]
 
                     if policy_id in LP_POLICY_IDS:
+                        wallet_lp_units.add(unit)
                         protocol = LP_POLICY_IDS[policy_id]
                         position = self._create_lp_position_from_asset(
                             policy_id, asset_name_hex, quantity, protocol, wallet_address
@@ -2424,7 +2478,7 @@ class PortfolioService:
         except Exception as e:
             logger.error("Unexpected error parsing Blockfrost data: %s", e)
 
-        return positions
+        return positions, wallet_lp_units
 
     def _create_lp_position_from_asset(
         self, policy_id: str, asset_name_hex: str, quantity: str, protocol: str,
@@ -2708,7 +2762,7 @@ class PortfolioService:
 
         return None
 
-    def get_farm_positions(self, wallet_address: str) -> List[FarmPosition]:
+    def get_farm_positions(self, wallet_address: str, wallet_asset_units: Optional[set] = None) -> List[FarmPosition]:
         """
         Fetch staked LP positions from yield farms.
 
@@ -2719,6 +2773,8 @@ class PortfolioService:
 
         Args:
             wallet_address: Cardano wallet address
+            wallet_asset_units: Set of LP unit strings currently in the wallet
+                (used by DB fallback to verify positions are still staked)
 
         Returns:
             List of FarmPosition objects
@@ -2735,7 +2791,7 @@ class PortfolioService:
 
         # Fetch other protocol farm positions via transaction analysis
         if BLOCKFROST_API_KEY:
-            other_positions = self._fetch_staked_farm_positions(wallet_address)
+            other_positions = self._fetch_staked_farm_positions(wallet_address, wallet_asset_units=wallet_asset_units)
             positions.extend(other_positions)
         else:
             logger.warning("BLOCKFROST_API_KEY not configured. Cannot fetch other farm positions.")
@@ -3157,7 +3213,7 @@ class PortfolioService:
 
         return positions
 
-    def _fetch_staked_farm_positions(self, wallet_address: str) -> List[FarmPosition]:
+    def _fetch_staked_farm_positions(self, wallet_address: str, wallet_asset_units: Optional[set] = None) -> List[FarmPosition]:
         """
         Fetch staked LP positions by analyzing recent transactions.
 
@@ -3177,7 +3233,7 @@ class PortfolioService:
         try:
             # Get recent transactions for the wallet
             url = f"{BLOCKFROST_API_URL}/addresses/{wallet_address}/transactions"
-            params = {"count": 20, "order": "desc"}
+            params = {"count": 50, "order": "desc"}
             resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
 
             if resp.status_code != 200:
@@ -3256,6 +3312,35 @@ class PortfolioService:
                                 )
                                 if from_farm:
                                     del staked_lp[unit]
+
+            # DB fallback: recover farm positions the scan window missed
+            scan_found_units = set(staked_lp.keys())
+            db_entries = self._get_stored_farm_entries_from_db(wallet_address, "minswap")
+            for entry in db_entries:
+                unit = f"{entry['policy_id']}{entry['asset_name']}"
+
+                if unit in scan_found_units:
+                    continue
+
+                # If LP token is in the wallet, it was unstaked — skip
+                if wallet_asset_units and unit in wallet_asset_units:
+                    logger.debug(
+                        "Skipping DB fallback for %s - LP token is in wallet (unstaked)",
+                        entry.get("pool_name", unit[:20])
+                    )
+                    continue
+
+                logger.info(
+                    "DB fallback: recovering farm position %s (unit=%s...)",
+                    entry.get("pool_name", "?"), unit[:30]
+                )
+                staked_lp[unit] = {
+                    "amount": str(entry["lp_amount"]),
+                    "protocol": entry["protocol"],
+                    "policy_id": entry["policy_id"],
+                    "asset_name_hex": entry["asset_name"],
+                    "tx_hash": None,
+                }
 
             # Create farm positions from staked LP tokens
             for unit, lp_info in staked_lp.items():
