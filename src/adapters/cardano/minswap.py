@@ -35,6 +35,27 @@ class PoolMetrics:
     pool_id: Optional[str] = None       # Pool identifier for tracking
 
 
+@dataclass
+class MinswapPoolMetrics:
+    """Container for dynamically discovered Minswap pool data.
+
+    Used by get_all_pools() for auto-discovery of pools above TVL threshold.
+    """
+    pair: str                # Normalized pair name (e.g., "NIGHT-ADA")
+    pool_id: str             # LP asset ID: "{farm_id}.{pool_id}"
+    version: str             # "V1", "V2", "Stableswap"
+    tvl_usd: Optional[Decimal] = None
+    tvl_ada: Optional[Decimal] = None
+    has_farm: bool = False
+    apr: Optional[Decimal] = None            # 30-day trading fee APR
+    apr_1d: Optional[Decimal] = None         # 1-day total APR (fees + farming)
+    trading_fee_apr_1d: Optional[Decimal] = None
+    farming_apr_1d: Optional[Decimal] = None
+    fees_24h: Optional[Decimal] = None
+    volume_24h: Optional[Decimal] = None
+    swap_fee_percent: Optional[Decimal] = None
+
+
 class MinswapAdapter(ProtocolAdapter):
     """Adapter for querying Minswap pool/farm APRs."""
 
@@ -365,6 +386,147 @@ class MinswapAdapter(ProtocolAdapter):
             lookback_days,
         )
         return None
+
+    # ------------------------------------------------------------------ #
+    # Dynamic pool discovery
+    # ------------------------------------------------------------------ #
+
+    def get_all_pools(self, tracked_pool_ids: Optional[List[str]] = None) -> List[MinswapPoolMetrics]:
+        """Get all pools meeting the TVL threshold plus any tracked pools.
+
+        Uses the yield-server endpoint for discovery (returns ~150 pools in one
+        call), then enriches each qualifying pool with per-pool metrics from the
+        REST API.
+
+        Args:
+            tracked_pool_ids: Optional list of LP asset IDs (farm_id.pool_id)
+                             to always include regardless of TVL threshold.
+
+        Returns:
+            List of MinswapPoolMetrics for all qualifying pools.
+        """
+        tracked_set = set(tracked_pool_ids) if tracked_pool_ids else set()
+
+        # Refresh ADA price from a known pool before filtering
+        self._refresh_ada_price()
+
+        # Fetch all pools from yield-server (single API call, ~150 pools)
+        yield_data = self._get_yield_data()
+        if not yield_data:
+            logger.warning("No yield data available for pool discovery")
+            return []
+
+        # Filter by TVL threshold, always include tracked pools
+        candidates = []
+        for lp_asset, pool_data in yield_data.items():
+            tvl_usd = Decimal(str(pool_data.get("tvlUsd", 0)))
+            tvl_ada = tvl_usd / self.ada_price_usd if self.ada_price_usd > 0 else Decimal(0)
+
+            is_tracked = lp_asset in tracked_set
+            if not is_tracked and tvl_ada < self.min_tvl_ada:
+                continue
+
+            raw_symbol = pool_data.get("symbol", "???-???")
+            pair = self._normalize_pair_name(raw_symbol)
+            version = pool_data.get("poolMeta", "V2")
+            apy_reward = Decimal(str(pool_data.get("apyReward") or 0))
+
+            pool = MinswapPoolMetrics(
+                pair=pair,
+                pool_id=lp_asset,
+                version=version,
+                tvl_usd=tvl_usd,
+                tvl_ada=tvl_ada,
+                has_farm=apy_reward > 0,
+                farming_apr_1d=apy_reward if apy_reward > 0 else None,
+            )
+            candidates.append(pool)
+
+        # Sort by TVL descending
+        candidates.sort(key=lambda p: p.tvl_usd or Decimal(0), reverse=True)
+        logger.info(
+            "Discovered %d Minswap pools above threshold (from %d total)",
+            len(candidates), len(yield_data),
+        )
+
+        # Enrich with per-pool metrics (30-day APR, fees, volume, swap fee)
+        self._enrich_pools_with_metrics(candidates)
+
+        return candidates
+
+    def _normalize_pair_name(self, raw_symbol: str) -> str:
+        """Normalize pair name so ADA is always second (TOKEN-ADA format).
+
+        The yield-server returns "ADA-NIGHT" but our convention is "NIGHT-ADA".
+        For non-ADA pairs (USDM-USDA), keep as-is.
+        """
+        parts = raw_symbol.split("-")
+        if len(parts) == 2 and parts[0] == "ADA" and parts[1] != "ADA":
+            return f"{parts[1]}-{parts[0]}"
+        return raw_symbol
+
+    def _refresh_ada_price(self) -> None:
+        """Update ada_price_usd from a known pool for accurate TVL filtering."""
+        try:
+            payload = self._get_json(f"v1/pools/{self.MIN_ADA_LP_ASSET}/metrics")
+            if payload:
+                liq_currency = payload.get("liquidity_currency")
+                liq_a = payload.get("liquidity_a")
+                if liq_currency and liq_a and float(liq_a) > 0:
+                    self.ada_price_usd = Decimal(str(liq_currency)) / Decimal(str(liq_a))
+                    logger.info("ADA price refreshed: $%.4f", self.ada_price_usd)
+        except Exception as e:
+            logger.warning("Could not refresh ADA price: %s", e)
+
+    def _enrich_pools_with_metrics(self, pools: List[MinswapPoolMetrics]) -> None:
+        """Enrich pool list with per-pool metrics from the Minswap REST API.
+
+        Fetches /v1/pools/{lp_asset}/metrics for each pool to get the 30-day
+        trading fee APR, 24h fees, 24h volume, and swap fee percentage.
+        """
+        for i, pool in enumerate(pools):
+            # Small delay between requests to avoid rate limiting
+            if i > 0 and i % 10 == 0:
+                time.sleep(1)
+            try:
+                payload = self._get_json(f"v1/pools/{pool.pool_id}/metrics")
+                if not payload:
+                    logger.debug("No metrics for %s (%s)", pool.pair, pool.pool_id)
+                    continue
+
+                # 30-day trading fee APR
+                apr_value = self._extract_apr(payload)
+                if apr_value is not None:
+                    pool.apr = Decimal(str(apr_value))
+
+                # 24h fees
+                fees_value = self._extract_field(payload, self.CANDIDATE_FEES_24H_KEYS)
+                if fees_value is not None:
+                    pool.fees_24h = Decimal(str(fees_value))
+
+                # 24h volume
+                volume_value = self._extract_field(payload, self.CANDIDATE_VOLUME_24H_KEYS)
+                if volume_value is not None:
+                    pool.volume_24h = Decimal(str(volume_value))
+
+                # Swap fee
+                swap_fee = self._extract_swap_fee(payload)
+                if swap_fee is not None:
+                    pool.swap_fee_percent = Decimal(str(swap_fee))
+
+                # 1-day trading fee APR
+                if pool.fees_24h and pool.tvl_usd and pool.tvl_usd > 0:
+                    pool.trading_fee_apr_1d = (pool.fees_24h / pool.tvl_usd) * Decimal(365) * Decimal(100)
+
+                # Total 1-day APR = trading fees + farming
+                if pool.trading_fee_apr_1d is not None:
+                    pool.apr_1d = pool.trading_fee_apr_1d
+                    if pool.farming_apr_1d is not None:
+                        pool.apr_1d += pool.farming_apr_1d
+
+            except Exception as e:
+                logger.warning("Error enriching pool %s: %s", pool.pair, e)
+                continue
 
     # ------------------------------------------------------------------ #
     # Internal helpers

@@ -2,8 +2,11 @@
 """
 Minswap APR Collection Script
 
-This script pulls APR/APY data for configured Minswap pools (e.g., NIGHT-ADA)
-and stores it in the `apr_snapshots` table.
+Dynamically discovers all Minswap pools above the TVL threshold (default 10K ADA)
+and stores APR/TVL snapshots in the `apr_snapshots` table.
+
+Discovery source: Minswap /defillama/yield-server endpoint (~150 pools).
+Each qualifying pool is enriched with per-pool metrics (30-day APR, fees, volume).
 
 Collects:
 - Trading fee APR (30-day rolling average from API)
@@ -13,8 +16,8 @@ Collects:
 - 24h fees and volume
 
 Tracked Pools:
-- Configured pools are tracked in tracked_pools table
-- TVL status (above/below 10k ADA threshold) is logged
+- Pools are auto-discovered when above TVL threshold
+- Previously tracked pools are included even if below threshold
 - Pools only drop off after 30 consecutive days below threshold
 
 Designed to be run daily via cron.
@@ -104,48 +107,51 @@ def collect_and_store_minswap():
         # Get TVL threshold from config
         min_tvl_ada = protocol_config.get("min_tvl_ada", 10000)
 
-        # Get all configured assets and fetch their metrics
-        assets = minswap_adapter.get_supported_assets()
+        # Get tracked pool IDs from database
+        tracked_pool_ids = queries.get_tracked_pool_ids("minswap")
+        logger.info("Found %d tracked pools in database", len(tracked_pool_ids))
+
+        # Discover all pools above threshold + tracked pools
+        pools = minswap_adapter.get_all_pools(tracked_pool_ids=tracked_pool_ids)
         timestamp = datetime.utcnow()
+
+        logger.info("Found %d Minswap pools total (discovered + tracked)", len(pools))
 
         inserted = 0
         pools_above_threshold = 0
         pools_below_threshold = 0
 
-        for asset in assets:
-            metrics = minswap_adapter.get_pool_metrics(asset)
-
-            if metrics is None or metrics.apr is None:
-                logger.warning("Skipping %s due to missing metrics", asset)
+        for pool in pools:
+            if pool.apr is None:
+                logger.warning("Skipping %s due to missing APR", pool.pair)
                 continue
 
-            asset_id = queries.get_or_create_asset(symbol=asset, name=asset)
+            asset_id = queries.get_or_create_asset(symbol=pool.pair, name=pool.pair)
             queries.insert_apr_snapshot(
                 blockchain_id=blockchain_id,
                 protocol_id=protocol_id,
                 asset_id=asset_id,
-                apr=metrics.apr,
+                apr=pool.apr,
                 timestamp=timestamp,
-                yield_type='lp',  # Minswap is a DEX - all pairs are liquidity pools
-                tvl_usd=metrics.tvl_usd,
-                fees_24h=metrics.fees_24h,
-                volume_24h=metrics.volume_24h,
-                apr_1d=metrics.apr_1d,
-                swap_fee_percent=metrics.swap_fee_percent,
+                yield_type='lp',
+                tvl_usd=pool.tvl_usd,
+                fees_24h=pool.fees_24h,
+                volume_24h=pool.volume_24h,
+                apr_1d=pool.apr_1d,
+                swap_fee_percent=pool.swap_fee_percent,
+                version=pool.version,
             )
             inserted += 1
 
             # Update tracked pools table
-            # A pool is above threshold if its TVL >= min_tvl_ada
-            above_threshold = metrics.tvl_ada is not None and metrics.tvl_ada >= min_tvl_ada
-            if metrics.pool_id:
-                queries.upsert_tracked_pool(
-                    protocol="minswap",
-                    pool_identifier=metrics.pool_id,
-                    pair_name=asset,
-                    version=None,  # Minswap doesn't have pool versions
-                    above_threshold=above_threshold
-                )
+            above_threshold = pool.tvl_ada is not None and pool.tvl_ada >= min_tvl_ada
+            queries.upsert_tracked_pool(
+                protocol="minswap",
+                pool_identifier=pool.pool_id,
+                pair_name=pool.pair,
+                version=pool.version,
+                above_threshold=above_threshold
+            )
 
             if above_threshold:
                 pools_above_threshold += 1
@@ -153,28 +159,28 @@ def collect_and_store_minswap():
                 pools_below_threshold += 1
 
             # Format output strings
-            tvl_str = f"${metrics.tvl_usd:,.2f}" if metrics.tvl_usd else "N/A"
-            tvl_ada_str = f"{metrics.tvl_ada:,.0f} ADA" if metrics.tvl_ada else "N/A"
-            fees_str = f"${metrics.fees_24h:,.2f}" if metrics.fees_24h else "N/A"
-            vol_str = f"${metrics.volume_24h:,.2f}" if metrics.volume_24h else "N/A"
-            apr_30d_str = f"{metrics.apr:.2f}%" if metrics.apr else "N/A"
-            apr_1d_str = f"{metrics.apr_1d:.2f}%" if metrics.apr_1d else "N/A"
+            tvl_str = f"${pool.tvl_usd:,.2f}" if pool.tvl_usd else "N/A"
+            tvl_ada_str = f"{pool.tvl_ada:,.0f} ADA" if pool.tvl_ada else "N/A"
+            fees_str = f"${pool.fees_24h:,.2f}" if pool.fees_24h else "N/A"
+            apr_30d_str = f"{pool.apr:.2f}%" if pool.apr else "N/A"
+            apr_1d_str = f"{pool.apr_1d:.2f}%" if pool.apr_1d else "N/A"
 
             # APR breakdown for logging
-            fee_apr_str = f"{metrics.trading_fee_apr_1d:.2f}%" if metrics.trading_fee_apr_1d else "N/A"
-            farm_apr_str = f"{metrics.farming_apr_1d:.2f}%" if metrics.farming_apr_1d else "0.00%"
+            fee_apr_str = f"{pool.trading_fee_apr_1d:.2f}%" if pool.trading_fee_apr_1d else "N/A"
+            farm_apr_str = f"{pool.farming_apr_1d:.2f}%" if pool.farming_apr_1d else "0.00%"
             threshold_indicator = "" if above_threshold else " [LOW TVL]"
 
-            if metrics.farming_apr_1d:
+            if pool.farming_apr_1d:
                 logger.info(
-                    "Stored %s%s: APR(30d)=%s, APR(1d)=%s [Fees=%s + Farm=%s], TVL=%s (%s)",
-                    asset, threshold_indicator, apr_30d_str, apr_1d_str, fee_apr_str, farm_apr_str,
-                    tvl_str, tvl_ada_str
+                    "Stored %s (%s)%s: APR(30d)=%s, APR(1d)=%s [Fees=%s + Farm=%s], TVL=%s (%s)",
+                    pool.pair, pool.version, threshold_indicator, apr_30d_str, apr_1d_str,
+                    fee_apr_str, farm_apr_str, tvl_str, tvl_ada_str
                 )
             else:
                 logger.info(
-                    "Stored %s%s: APR(30d)=%s, APR(1d)=%s [Fees only], TVL=%s (%s), Fees24h=%s",
-                    asset, threshold_indicator, apr_30d_str, apr_1d_str, tvl_str, tvl_ada_str, fees_str
+                    "Stored %s (%s)%s: APR(30d)=%s, APR(1d)=%s [Fees only], TVL=%s (%s), Fees24h=%s",
+                    pool.pair, pool.version, threshold_indicator, apr_30d_str, apr_1d_str,
+                    tvl_str, tvl_ada_str, fees_str
                 )
 
         # Deactivate pools that have been below threshold for 30+ consecutive days

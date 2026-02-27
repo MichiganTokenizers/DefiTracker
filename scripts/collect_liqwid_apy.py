@@ -88,24 +88,12 @@ def load_config():
 
 
 MINSWAP_BASE_URL = "https://api-mainnet-prod.minswap.org"
+MINSWAP_YIELD_SERVER = "defillama/yield-server"
 
-# Minswap ADA-pair LP assets for deriving token USD prices.
-# Format: {farm_id}.{pool_id} from config/chains.yaml Minswap pairs.
-# Token price = liquidity_a_currency / liquidity_b
-# (same formula as MinswapAdapter.get_min_price)
-MINSWAP_POOL_MAP = {
-    'DJED': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.a939812d08cfb6066e17d2914a7272c6b8c0197acdf68157d02c73649cc3efc0',
-    'iUSD': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3',
-    'USDA': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.ee5cfbc5b0dc10c873a0bcc69e49b9af21b899f59337a894874c6b596c2da136',
-    'SHEN': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.93a6e6b33626dd6e2cb52e446a80ee3b0c92b38cc158417b30a6d415e97652a1',
-    'MIN': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75',
-    'SNEK': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.2ffadbb87144e875749122e0bbb9f535eeaa7f5660c6c4a91bcc4121e477f08d',
-    'NIGHT': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.e74c52975908a612d5ce68327040d449aae99f8b463bb6de046a1b23c5713169',
-    'LQ': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.6263e0101384dace4d7a8dadf0e6d45c8d43c8872604118ee82e3f2212934917',
-    'IAG': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7b12f25ce8d6f424e1edbc8b61f0742fb13252605f31dc40373d6a245e8ec1d1',
-    'rsERG': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.bae40b377b196400f601fb1d04bd75486cfc2b5cbab9329bb49a1dfe93180fdf',
-    'USDM': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171',
-    # Wrapped tokens use equivalent Cardano-native token pools as price proxy
+# Override map for tokens whose Liqwid symbol differs from their Minswap pair name.
+# These are resolved correctly by the dynamic builder only when names match,
+# so we keep explicit overrides for wrapped-token proxies.
+PRICE_MAP_OVERRIDES = {
     'wanBTC': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.63a3b8ee322ea31a931fd1902528809dc681bc650af21895533c9e98fa4bef2e',  # iBTC-ADA
     'wanETH': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.562b9ff903fe8d9e1c980120a233051e7b1518cfc75eb9b4227f7710b670b6e9',  # iETH-ADA
 }
@@ -114,25 +102,92 @@ MINSWAP_POOL_MAP = {
 STABLECOIN_DEFAULTS = {'wanUSDC', 'wanDAI', 'wanUSDT'}
 
 
+def build_minswap_price_map() -> Dict[str, str]:
+    """Dynamically build token-to-LP-asset mapping from Minswap yield-server.
+
+    For each Minswap pool with ADA as one side, maps the non-ADA token
+    symbol to the pool's LP asset ID.  When multiple pools exist for the
+    same token, keeps the one with the highest TVL.
+
+    Returns:
+        Dict mapping token symbol to LP asset ID (e.g. {"DJED": "f5808c...efc0"}).
+    """
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'defitracker/1.0'})
+
+    try:
+        resp = session.get(
+            f"{MINSWAP_BASE_URL}/{MINSWAP_YIELD_SERVER}",
+            timeout=15
+        )
+        if not resp.ok:
+            logger.warning("Minswap yield-server returned %s", resp.status_code)
+            return {}
+
+        pools = resp.json()
+        if not isinstance(pools, list):
+            return {}
+
+        # Build mapping: token -> (lp_asset, tvl_usd)
+        token_map: Dict[str, tuple] = {}
+        for pool in pools:
+            symbol = pool.get("symbol", "")
+            parts = symbol.split("-")
+            if len(parts) != 2:
+                continue
+
+            lp_asset = pool.get("pool", "")
+            tvl = float(pool.get("tvlUsd", 0))
+
+            # Determine the non-ADA token
+            if parts[0] == "ADA" and parts[1] != "ADA":
+                token = parts[1]
+            elif parts[1] == "ADA" and parts[0] != "ADA":
+                token = parts[0]
+            else:
+                continue
+
+            # Keep highest TVL pool for each token
+            if token not in token_map or tvl > token_map[token][1]:
+                token_map[token] = (lp_asset, tvl)
+
+        result = {token: lp_asset for token, (lp_asset, _) in token_map.items()}
+        logger.info("Built dynamic price map for %d tokens from Minswap yield-server", len(result))
+        return result
+
+    except Exception as e:
+        logger.warning("Error building dynamic price map: %s", e)
+        return {}
+
+
 def fetch_token_prices() -> Dict[str, Decimal]:
     """Fetch current USD prices for Liqwid tokens from Minswap pool data.
 
-    Derives prices from ADA-pair pool metrics on Minswap:
+    Dynamically discovers ADA-paired pools via the yield-server, then
+    fetches per-pool metrics to derive token prices:
       token_price = liquidity_a_currency / liquidity_b
     ADA price is derived from the first successful pool response.
+
+    Hardcoded overrides (PRICE_MAP_OVERRIDES) handle wrapped tokens whose
+    Liqwid symbol differs from their Minswap pool name.
     """
+    # Build pool map dynamically, then overlay overrides
+    pool_map = build_minswap_price_map()
+    for symbol, lp_asset in PRICE_MAP_OVERRIDES.items():
+        pool_map[symbol] = lp_asset
+
     prices: Dict[str, Decimal] = {}
     session = requests.Session()
     session.headers.update({'User-Agent': 'defitracker/1.0'})
 
-    for symbol, lp_asset in MINSWAP_POOL_MAP.items():
+    for symbol, lp_asset in pool_map.items():
         try:
             resp = session.get(
                 f"{MINSWAP_BASE_URL}/v1/pools/{lp_asset}/metrics",
                 timeout=15
             )
             if not resp.ok:
-                logger.warning(f"Minswap API returned {resp.status_code} for {symbol}")
+                logger.warning("Minswap API returned %s for %s", resp.status_code, symbol)
                 continue
 
             data = resp.json()
@@ -149,7 +204,7 @@ def fetch_token_prices() -> Dict[str, Decimal]:
                     prices['ADA'] = Decimal(str(liq_a_currency)) / Decimal(str(liq_a))
 
         except Exception as e:
-            logger.warning(f"Could not fetch Minswap price for {symbol}: {e}")
+            logger.warning("Could not fetch Minswap price for %s: %s", symbol, e)
             continue
 
     # Default stablecoins without Minswap pools to $1
@@ -157,7 +212,7 @@ def fetch_token_prices() -> Dict[str, Decimal]:
         if symbol not in prices:
             prices[symbol] = Decimal('1.0')
 
-    logger.info(f"Fetched prices for {len(prices)} tokens from Minswap")
+    logger.info("Fetched prices for %d tokens from Minswap", len(prices))
     return prices
 
 
@@ -242,6 +297,12 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
             total_supply = market_state.get('total_supply')
             total_borrows = market_state.get('total_borrows')
             token_price = prices.get(market_symbol)
+
+            if token_price is None and market_symbol not in STABLECOIN_DEFAULTS and market_symbol != 'ADA':
+                logger.info(
+                    "No Minswap ADA pair found for %s — USD values will be null",
+                    market_symbol,
+                )
 
             total_supply_usd = None
             total_borrows_usd = None

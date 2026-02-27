@@ -110,14 +110,22 @@ class LiqwidAdapter(ProtocolAdapter):
     # ------------------------------------------------------------------ #
 
     def get_supported_assets(self) -> List[str]:
-        """Return the list of tracked market asset symbols."""
-        if self.tracked_markets:
-            return [m.get("symbol", m.get("asset_id", "")) for m in self.tracked_markets]
-        
-        # If no markets configured, try to fetch all available markets
+        """Return the list of market asset symbols, auto-discovered from API.
+
+        Always queries the Liqwid GraphQL API for all available markets.
+        Falls back to the configured markets list if the API is unreachable.
+        """
         markets = self._fetch_all_markets()
         if markets:
             return [self._get_market_symbol(m) for m in markets]
+
+        # Fallback to config if API fetch fails
+        if self.tracked_markets:
+            logger.warning(
+                "API fetch failed, using %d configured markets as fallback",
+                len(self.tracked_markets),
+            )
+            return [m.get("symbol", m.get("asset_id", "")) for m in self.tracked_markets]
         return []
 
     def get_supply_apr(self, asset: str) -> Optional[Decimal]:
