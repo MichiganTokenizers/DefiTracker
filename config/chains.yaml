@@ -197,8 +197,12 @@ chains:
             name: "Liqwid Token"
           - symbol: "IAG"
             name: "IAG"
+          - symbol: "rsERG"
+            name: "rsERG"
           - symbol: "USDM"
             name: "Mehen USDM"
+          - symbol: "wanUSDT"
+            name: "Wrapped USDT"
 
       sundaeswap:
         enabled: true

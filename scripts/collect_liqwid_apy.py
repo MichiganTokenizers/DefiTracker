@@ -103,6 +103,7 @@ MINSWAP_POOL_MAP = {
     'NIGHT': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.e74c52975908a612d5ce68327040d449aae99f8b463bb6de046a1b23c5713169',
     'LQ': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.6263e0101384dace4d7a8dadf0e6d45c8d43c8872604118ee82e3f2212934917',
     'IAG': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7b12f25ce8d6f424e1edbc8b61f0742fb13252605f31dc40373d6a245e8ec1d1',
+    'rsERG': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.bae40b377b196400f601fb1d04bd75486cfc2b5cbab9329bb49a1dfe93180fdf',
     'USDM': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171',
     # Wrapped tokens use equivalent Cardano-native token pools as price proxy
     'wanBTC': 'f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c.63a3b8ee322ea31a931fd1902528809dc681bc650af21895533c9e98fa4bef2e',  # iBTC-ADA
@@ -110,7 +111,7 @@ MINSWAP_POOL_MAP = {
 }
 
 # Stablecoins without dedicated Minswap ADA pools default to $1
-STABLECOIN_DEFAULTS = {'wanUSDC', 'wanDAI'}
+STABLECOIN_DEFAULTS = {'wanUSDC', 'wanDAI', 'wanUSDT'}
 
 
 def fetch_token_prices() -> Dict[str, Decimal]:

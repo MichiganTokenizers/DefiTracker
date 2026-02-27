@@ -25,7 +25,7 @@ MARKETS_QUERY = """
 query GetMarkets {
   liqwid {
     data {
-      markets {
+      markets(input: { perPage: 50 }) {
         results {
           id
           displayName
