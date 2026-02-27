@@ -823,6 +823,7 @@ async function loadAssets() {
     const assetTvlMap = {};
     historyData.forEach(item => {
         const symbol = item.symbol;
+        if (!symbol || symbol === 'None') return;
         // Get latest TVL from the data array
         const latestData = item.data && item.data.length > 0 ? item.data[item.data.length - 1] : null;
         const tvl = latestData ? (latestData.tvl_usd || 0) : 0;
