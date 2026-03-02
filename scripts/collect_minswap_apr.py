@@ -108,8 +108,12 @@ def collect_and_store_minswap():
         min_tvl_ada = protocol_config.get("min_tvl_ada", 10000)
 
         # Get tracked pool IDs from database
-        tracked_pool_ids = queries.get_tracked_pool_ids("minswap")
-        logger.info("Found %d tracked pools in database", len(tracked_pool_ids))
+        try:
+            tracked_pool_ids = queries.get_tracked_pool_ids("minswap")
+            logger.info("Found %d tracked pools in database", len(tracked_pool_ids))
+        except Exception as e:
+            logger.warning("Could not load tracked pools (table may not exist yet): %s", e)
+            tracked_pool_ids = []
 
         # Discover all pools above threshold + tracked pools
         pools = minswap_adapter.get_all_pools(tracked_pool_ids=tracked_pool_ids)
@@ -145,13 +149,16 @@ def collect_and_store_minswap():
 
             # Update tracked pools table
             above_threshold = pool.tvl_ada is not None and pool.tvl_ada >= min_tvl_ada
-            queries.upsert_tracked_pool(
-                protocol="minswap",
-                pool_identifier=pool.pool_id,
-                pair_name=pool.pair,
-                version=pool.version,
-                above_threshold=above_threshold
-            )
+            try:
+                queries.upsert_tracked_pool(
+                    protocol="minswap",
+                    pool_identifier=pool.pool_id,
+                    pair_name=pool.pair,
+                    version=pool.version,
+                    above_threshold=above_threshold
+                )
+            except Exception:
+                pass  # tracked_pools table may not exist yet
 
             if above_threshold:
                 pools_above_threshold += 1
@@ -184,7 +191,10 @@ def collect_and_store_minswap():
                 )
 
         # Deactivate pools that have been below threshold for 30+ consecutive days
-        deactivated = queries.deactivate_stale_pools("minswap", grace_period_days=30)
+        try:
+            deactivated = queries.deactivate_stale_pools("minswap", grace_period_days=30)
+        except Exception:
+            deactivated = 0  # tracked_pools table may not exist yet
 
         logger.info(
             "Minswap collection complete. Snapshots: %s. Above threshold: %s, Below threshold: %s, Deactivated: %s",

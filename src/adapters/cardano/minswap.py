@@ -442,11 +442,30 @@ class MinswapAdapter(ProtocolAdapter):
             )
             candidates.append(pool)
 
+        # Include config pairs not found in yield-server (e.g. stableswap pools)
+        discovered_ids = {p.pool_id for p in candidates}
+        config_added = 0
+        for pair_cfg in self.pairs:
+            farm_id = pair_cfg.get("farm_id", "")
+            pool_id_cfg = pair_cfg.get("pool_id", "")
+            lp_asset = f"{farm_id}.{pool_id_cfg}"
+            if lp_asset in discovered_ids:
+                continue
+            symbol = self._pair_label(pair_cfg)
+            pool = MinswapPoolMetrics(
+                pair=symbol,
+                pool_id=lp_asset,
+                version="",
+            )
+            candidates.append(pool)
+            config_added += 1
+            logger.info("Added config pair %s (not in yield-server)", symbol)
+
         # Sort by TVL descending
         candidates.sort(key=lambda p: p.tvl_usd or Decimal(0), reverse=True)
         logger.info(
-            "Discovered %d Minswap pools above threshold (from %d total)",
-            len(candidates), len(yield_data),
+            "Discovered %d Minswap pools above threshold (from %d yield-server + %d config-only)",
+            len(candidates), len(candidates) - config_added, config_added,
         )
 
         # Enrich with per-pool metrics (30-day APR, fees, volume, swap fee)
@@ -493,6 +512,24 @@ class MinswapAdapter(ProtocolAdapter):
                 if not payload:
                     logger.debug("No metrics for %s (%s)", pool.pair, pool.pool_id)
                     continue
+
+                # Fill TVL if not already set (config-only pools)
+                if pool.tvl_usd is None:
+                    tvl_value = self._extract_tvl(payload)
+                    if tvl_value is not None:
+                        pool.tvl_usd = Decimal(str(tvl_value))
+                        if self.ada_price_usd and self.ada_price_usd > 0:
+                            pool.tvl_ada = pool.tvl_usd / self.ada_price_usd
+
+                # Infer version from pool type if not set
+                if not pool.version:
+                    pool_type = payload.get("type", "")
+                    if "Stable" in pool_type:
+                        pool.version = "Stableswap"
+                    elif "V1" in pool_type:
+                        pool.version = "V1"
+                    else:
+                        pool.version = "V2"
 
                 # 30-day trading fee APR
                 apr_value = self._extract_apr(payload)
