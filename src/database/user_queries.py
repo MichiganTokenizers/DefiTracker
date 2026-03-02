@@ -713,7 +713,7 @@ class ChartQueries:
                     "chain": "cardano",
                     "chart_type": "multi_asset",
                     "days": 30,
-                    "assets": ["USDM-USDA", "DJED-USDM", "USDM-iUSD", "USDC-iUSD", "USDT-iUSD"],
+                    "assets": ["USDM-USDA", "DJED-USDM", "USDM-iUSD", "USDC-iUSD", "USDT-iUSD", "USDCx-USDM"],
                     "yield_type": "lp",
                     "apr_type": "1d"
                 }
