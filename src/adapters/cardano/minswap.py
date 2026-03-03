@@ -114,7 +114,7 @@ class MinswapAdapter(ProtocolAdapter):
         "trading_volume_24h",
     ]
 
-    def __init__(self, protocol_name: str, config: Dict):
+    def __init__(self, protocol_name: str, config: Dict, price_service=None):
         super().__init__(protocol_name, config)
         self.base_url = config.get(
             "base_url", "https://api-mainnet-prod.minswap.org"
@@ -122,7 +122,8 @@ class MinswapAdapter(ProtocolAdapter):
         self.pairs = config.get("pairs", [])
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
-        self.ada_price_usd = Decimal(str(config.get("ada_price_usd", 0.35)))
+        self._price_service = price_service
+        self._config_ada_price = Decimal(str(config.get("ada_price_usd", 0.35)))
         self.min_tvl_ada = config.get("min_tvl_ada", 10000)  # 10K ADA minimum for tracking
 
         # Cache for MIN price (refreshed per collection run)
@@ -137,6 +138,18 @@ class MinswapAdapter(ProtocolAdapter):
 
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "defitracker/1.0"})
+
+    @property
+    def ada_price_usd(self) -> Decimal:
+        """Get current ADA/USD price from shared service or config fallback."""
+        if self._price_service is not None:
+            return self._price_service.get_ada_price()
+        return self._config_ada_price
+
+    @ada_price_usd.setter
+    def ada_price_usd(self, value):
+        """Allow direct assignment for backward compatibility."""
+        self._config_ada_price = value
 
     # ------------------------------------------------------------------ #
     # ProtocolAdapter interface
@@ -484,18 +497,34 @@ class MinswapAdapter(ProtocolAdapter):
             return f"{parts[1]}-{parts[0]}"
         return raw_symbol
 
-    def _refresh_ada_price(self) -> None:
-        """Update ada_price_usd from a known pool for accurate TVL filtering."""
+    def _get_ada_price_from_pool(self) -> Optional[Decimal]:
+        """Derive ADA/USD price from the MIN-ADA pool on Minswap.
+
+        Used as a fallback for PriceService when Pyth is unavailable.
+        """
         try:
             payload = self._get_json(f"v1/pools/{self.MIN_ADA_LP_ASSET}/metrics")
             if payload:
                 liq_currency = payload.get("liquidity_currency")
                 liq_a = payload.get("liquidity_a")
                 if liq_currency and liq_a and float(liq_a) > 0:
-                    self.ada_price_usd = Decimal(str(liq_currency)) / Decimal(str(liq_a))
-                    logger.info("ADA price refreshed: $%.4f", self.ada_price_usd)
+                    price = Decimal(str(liq_currency)) / Decimal(str(liq_a))
+                    logger.info("ADA price from Minswap pool: $%.4f", price)
+                    return price
         except Exception as e:
-            logger.warning("Could not refresh ADA price: %s", e)
+            logger.warning("Could not get ADA price from Minswap pool: %s", e)
+        return None
+
+    def _refresh_ada_price(self) -> None:
+        """Update ada_price_usd from a known pool for accurate TVL filtering."""
+        if self._price_service is not None:
+            # Price service handles refresh; trigger a fetch to warm cache
+            self._price_service.get_ada_price()
+            return
+
+        price = self._get_ada_price_from_pool()
+        if price is not None:
+            self._config_ada_price = price
 
     def _enrich_pools_with_metrics(self, pools: List[MinswapPoolMetrics]) -> None:
         """Enrich pool list with per-pool metrics from the Minswap REST API.

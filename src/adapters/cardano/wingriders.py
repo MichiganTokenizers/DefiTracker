@@ -127,7 +127,7 @@ class WingRidersPoolMetrics:
 class WingRidersAdapter(ProtocolAdapter):
     """Adapter for querying WingRiders pool data."""
 
-    def __init__(self, protocol_name: str, config: Dict):
+    def __init__(self, protocol_name: str, config: Dict, price_service=None):
         super().__init__(protocol_name, config)
         self.graphql_url = config.get(
             "graphql_url", "https://api.mainnet.wingriders.com/graphql"
@@ -135,7 +135,8 @@ class WingRidersAdapter(ProtocolAdapter):
         self.timeout = config.get("timeout", 30)
         self.max_retries = config.get("max_retries", 3)
         self.min_tvl_ada = config.get("min_tvl_ada", 10000)  # 10K ADA minimum
-        self.ada_price_usd = config.get("ada_price_usd", 0.35)
+        self._price_service = price_service
+        self._config_ada_price = config.get("ada_price_usd", 0.35)
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -148,6 +149,13 @@ class WingRidersAdapter(ProtocolAdapter):
         self._pool_cache: List[WingRidersPoolMetrics] = []
         self._cache_timestamp: float = 0
         self._cache_ttl = config.get("cache_ttl", 300)
+
+    @property
+    def ada_price_usd(self):
+        """Get current ADA/USD price from shared service or config fallback."""
+        if self._price_service is not None:
+            return self._price_service.get_ada_price()
+        return self._config_ada_price
 
     def get_supported_assets(self) -> List[str]:
         """Return list of pool pair names with TVL above threshold."""
