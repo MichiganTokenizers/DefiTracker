@@ -566,7 +566,7 @@ function updateAssetOptions() {
             <label for="asset-${item.symbol}">
                 <span style="color: ${getAssetColor(item.symbol)};">●</span>
                 ${item.symbol}
-                <small class="text-muted ms-1">${formatTVL(item.total_supply)}</small>
+                <small class="text-muted ms-1">${formatTVL(item.total_supply_usd)}</small>
             </label>
         </div>
     `).join('');
@@ -576,12 +576,10 @@ function updateAssetOptions() {
 
 function formatTVL(value) {
     if (!value) return '';
-    // ADA symbol with double crossbar (Unicode combining characters for the look)
-    const adaSymbol = '<span style="font-family: sans-serif; font-weight: 700;">₳</span>';
-    if (value >= 1e9) return `${adaSymbol}${(value / 1e9).toFixed(1)}B`;
-    if (value >= 1e6) return `${adaSymbol}${(value / 1e6).toFixed(1)}M`;
-    if (value >= 1e3) return `${adaSymbol}${(value / 1e3).toFixed(1)}K`;
-    return `${adaSymbol}${value.toFixed(0)}`;
+    if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+    if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+    if (value >= 1e3) return `$${(value / 1e3).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
 }
 
 function toggleAsset(symbol) {
@@ -701,7 +699,7 @@ async function loadData() {
         // Store assets list sorted by TVL (already sorted from API)
         allAssetsList = latestData.map(item => ({
             symbol: item.symbol,
-            total_supply: item.total_supply
+            total_supply_usd: item.total_supply_usd
         }));
 
         // Default to top 3 by TVL only on first load
@@ -975,7 +973,7 @@ function updateTable(historyData, latestDataForTVL) {
             borrow_apy: latest.borrow_apy,
             spread: latest.spread,
             utilization: latestInfo?.utilization ?? latest.utilization,
-            total_supply: latestInfo?.total_supply ?? latest.total_supply
+            total_supply_usd: latestInfo?.total_supply_usd ?? null
         };
     }).filter(x => x !== null);
 
@@ -1012,8 +1010,8 @@ function applySortToTable() {
                 bVal = b.utilization ?? -Infinity;
                 break;
             case 5: // TVL
-                aVal = a.total_supply ?? -Infinity;
-                bVal = b.total_supply ?? -Infinity;
+                aVal = a.total_supply_usd ?? -Infinity;
+                bVal = b.total_supply_usd ?? -Infinity;
                 break;
             default:
                 return 0;
@@ -1055,7 +1053,7 @@ function applySortToTable() {
             <td><span style="color: #1a1a1a; font-weight: 600;">${item.borrow_apy?.toFixed(2) ?? '-'}%</span></td>
             <td><span style="color: ${spreadColor}; font-weight: 600;">${item.spread?.toFixed(2) ?? '-'}%</span></td>
             <td>${utilPercent}%</td>
-            <td>${formatTVL(item.total_supply)}</td>
+            <td>${formatTVL(item.total_supply_usd)}</td>
         `;
         tbody.appendChild(row);
     });
