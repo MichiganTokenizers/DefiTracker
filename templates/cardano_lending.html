@@ -701,9 +701,9 @@ async function loadData() {
             total_supply_usd: item.total_supply_usd
         }));
 
-        // Default to top 3 by TVL only on first load
+        // Default to stablecoin selection on first load
         selectedAssets.clear();
-        allAssetsList.slice(0, 3).forEach(item => selectedAssets.add(item.symbol));
+        ['DJED', 'USDA', 'USDM'].forEach(s => selectedAssets.add(s));
 
         isFirstLoad = false;
     }
