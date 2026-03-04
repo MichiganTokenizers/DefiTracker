@@ -586,7 +586,17 @@ class SundaeSwapAdapter(ProtocolAdapter):
                 if volume_24h is not None:
                     volume_ada = Decimal(volume_24h) / Decimal(1_000_000)
                     pool.volume_24h_usd = volume_ada * Decimal(str(self.ada_price_usd))
-                    
+
+                # Stableswaps pools report 0 lpFees in ticks despite having volume.
+                # Estimate fees from volume * fee_percent as fallback.
+                if (not pool.fees_24h_usd or pool.fees_24h_usd == 0) \
+                        and pool.volume_24h_usd and pool.volume_24h_usd > 0 \
+                        and pool.fee_percent and pool.fee_percent > 0:
+                    estimated_fees = pool.volume_24h_usd * pool.fee_percent / Decimal(100)
+                    pool.fees_24h_usd = estimated_fees
+                    if pool.tvl_usd and pool.tvl_usd > 0:
+                        pool.hra = (estimated_fees / pool.tvl_usd) * Decimal(365) * Decimal(100)
+
             except Exception as e:
                 logger.warning("Error fetching HRA for %s: %s", pool.pair, e)
                 continue

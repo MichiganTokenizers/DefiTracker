@@ -134,7 +134,7 @@ def collect_and_store_sundaeswap():
 
             # Calculate 1-day APR from fees only (HRA)
             # This represents the daily trading fee return, annualized
-            apr_1d = pool.hra if pool.hra else None
+            apr_1d = pool.hra if pool.hra is not None else None
 
             asset_id = queries.get_or_create_asset(
                 symbol=pool.pair,
