@@ -1567,21 +1567,25 @@ function updateProtocolOptionsForAsset(selectedAsset) {
     const toggleContainer = document.getElementById('protocolToggle');
     toggleContainer.innerHTML = '';
 
+    // If Minswap is available, default to it; otherwise select all protocols
+    const hasMinswap = allProtocolOptions.some(p => p.split('_')[0] === 'minswap');
+
     allProtocolOptions.forEach(protocol => {
         const baseProtocol = protocol.split('_')[0];
         const logo = protocolLogos[baseProtocol] || '/static/default-logo.png';
         const displayName = getProtocolDisplayName(protocol);
         const isMinswap = baseProtocol === 'minswap';
+        const shouldSelect = hasMinswap ? isMinswap : true;
 
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = isMinswap ? 'proto-btn active' : 'proto-btn';
+        btn.className = shouldSelect ? 'proto-btn active' : 'proto-btn';
         btn.dataset.protocol = protocol;
         btn.title = displayName;
         btn.innerHTML = `<img src="${logo}" alt="${displayName}">`;
         btn.onclick = () => toggleProtocol(protocol);
         toggleContainer.appendChild(btn);
-        if (isMinswap) {
+        if (shouldSelect) {
             selectedProtocols.add(protocol);
         }
     });
