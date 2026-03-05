@@ -1006,9 +1006,10 @@ async function loadChart() {
         const color = getPairColor(symbol);
         const lineStyle = protocolLineStyles[protocol] || { borderDash: [], pointStyle: 'circle' };
         
-        const versionSuffix = version ? ` ${version}` : '';
+        const displayVersion = version ? (versionDisplayNames[version.toLowerCase()] || version) : '';
+        const versionSuffix = displayVersion ? ` ${displayVersion}` : '';
         const label = `${symbol} (${protocol}${versionSuffix})`;
-        
+
         // Select which APR field to use based on selected type
         let processedData;
         if (is1d) {
@@ -1494,11 +1495,15 @@ const protocolDisplayNames = {
 };
 let allProtocolOptions = [];
 
+const versionDisplayNames = {
+    'stableswaps': 'Stable'
+};
+
 function getProtocolDisplayName(protocol) {
     const parts = protocol.split('_');
     if (parts.length === 2 && versionedProtocols.includes(parts[0])) {
         const baseName = protocolDisplayNames[parts[0]] || parts[0];
-        const version = parts[1].toUpperCase();
+        const version = versionDisplayNames[parts[1]] || parts[1].toUpperCase();
         return `${baseName} ${version}`;
     }
     return protocolDisplayNames[protocol] || protocol.charAt(0).toUpperCase() + protocol.slice(1);
@@ -1690,7 +1695,8 @@ async function loadSingleAssetChart() {
         // Calculate rolling averages
         const processed = calculateRollingAverages(rawData, days);
         
-        const versionSuffix = version ? ` ${version}` : '';
+        const displayVersion = version ? (versionDisplayNames[version.toLowerCase()] || version) : '';
+        const versionSuffix = displayVersion ? ` ${displayVersion}` : '';
         const label = `${protocol}${versionSuffix}`;
         
         // Get unique color for this protocol+version combination
