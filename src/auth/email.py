@@ -285,3 +285,153 @@ If you didn't add this email, please contact support immediately.
         print(f"Failed to send email added notification: {e}")
         return False
 
+
+def send_newsletter_email(to_email: str, base_url: str, subject: str,
+                          intro: str, updates: list[dict], cta_text: str = "Check It Out") -> bool:
+    """
+    Send a monthly newsletter email.
+
+    Args:
+        to_email: Recipient email address
+        base_url: Base URL of the application
+        subject: Email subject line
+        intro: Intro paragraph text
+        updates: List of dicts with 'icon' (html entity), 'title', and 'description'
+        cta_text: Call-to-action button text
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    try:
+        # Build plain text
+        plain_updates = "\n".join(
+            f"- {u['title']} — {u['description']}" for u in updates
+        )
+        plain_body = f"""{subject}
+
+{intro}
+
+{plain_updates}
+
+Visit {base_url} to check it out.
+Follow @yieldlife_xyz on X for updates between newsletters.
+
+- The YieldLife Team
+"""
+
+        # Build HTML update rows
+        update_rows = ""
+        for u in updates:
+            update_rows += f"""
+                    <tr>
+                        <td style="padding: 0 40px 24px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="40" valign="top" style="padding-top: 2px;">
+                                        <div style="width: 32px; height: 32px; background: #0e8749; border-radius: 8px; text-align: center; line-height: 32px; font-size: 16px;">{u['icon']}</div>
+                                    </td>
+                                    <td style="padding-left: 12px;">
+                                        <p style="margin: 0 0 4px; font-weight: 600; color: #1a1a2e; font-size: 15px;">{u['title']}</p>
+                                        <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6;">{u['description']}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>"""
+
+        html_body = f"""
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f1eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f1eb;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+
+                    <!-- Header with logo -->
+                    <tr>
+                        <td align="center" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 40px 30px;">
+                            <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="120" height="120" style="display: block; border: none;">
+                            <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 16px 0 4px; letter-spacing: -0.5px;">Monthly Update</h1>
+                            <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin: 0;">March 2026</p>
+                        </td>
+                    </tr>
+
+                    <!-- Intro -->
+                    <tr>
+                        <td style="padding: 32px 40px 16px;">
+                            <p style="color: #333; font-size: 15px; line-height: 1.7; margin: 0;">{intro}</p>
+                        </td>
+                    </tr>
+
+                    <!-- Divider -->
+                    <tr>
+                        <td style="padding: 0 40px;">
+                            <div style="border-top: 1px solid #e8e4dc; margin: 16px 0;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Section heading -->
+                    <tr>
+                        <td style="padding: 8px 40px 20px;">
+                            <h2 style="color: #1a1a2e; font-size: 20px; font-weight: 700; margin: 0;">What's New</h2>
+                        </td>
+                    </tr>
+
+                    <!-- Update items -->
+{update_rows}
+
+                    <!-- CTA -->
+                    <tr>
+                        <td align="center" style="padding: 8px 40px 32px;">
+                            <a href="{base_url}" style="display: inline-block; background: #0e8749; color: #ffffff; padding: 14px 36px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 15px;">{cta_text}</a>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9f7f3; padding: 24px 40px; border-top: 1px solid #e8e4dc;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center">
+                                        <p style="margin: 0 0 8px; color: #888; font-size: 13px;">
+                                            Follow us on <a href="https://x.com/yieldlife_xyz" style="color: #0e8749; text-decoration: none; font-weight: 600;">@yieldlife_xyz</a>
+                                        </p>
+                                        <p style="margin: 0; color: #aaa; font-size: 12px;">
+                                            You're receiving this because you signed up at yieldlife.xyz
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>
+"""
+
+        msg = Message(
+            subject=subject,
+            recipients=[to_email],
+            body=plain_body,
+            html=html_body
+        )
+
+        mail.send(msg)
+        return True
+
+    except Exception as e:
+        print(f"Failed to send newsletter email: {e}")
+        return False
+
