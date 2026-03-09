@@ -355,10 +355,10 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
                     <!-- Header with logo -->
                     <tr>
-                        <td align="center" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 40px 30px;">
+                        <td align="center" style="background: #ddd6b9; padding: 40px 40px 30px;">
                             <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="120" height="120" style="display: block; border: none;">
-                            <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 16px 0 4px; letter-spacing: -0.5px;">Monthly Update</h1>
-                            <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin: 0;">March 2026</p>
+                            <h1 style="color: #1a1a2e; font-size: 28px; font-weight: 700; margin: 16px 0 4px; letter-spacing: -0.5px;">Monthly Update</h1>
+                            <p style="color: #555; font-size: 14px; margin: 0;">March 2026</p>
                         </td>
                     </tr>
 
