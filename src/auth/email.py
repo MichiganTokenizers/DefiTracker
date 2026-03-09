@@ -355,7 +355,7 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
                     <!-- Logo -->
                     <tr>
-                        <td align="center" style="padding: 30px 40px 16px;">
+                        <td align="center" style="padding: 12px 40px 8px;">
                             <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="240" height="240" style="display: block; border: none;">
                         </td>
                     </tr>
