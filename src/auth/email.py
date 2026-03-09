@@ -307,9 +307,7 @@ def send_newsletter_email(to_email: str, base_url: str, subject: str,
         plain_updates = "\n".join(
             f"- {u['title']} — {u['description']}" for u in updates
         )
-        plain_body = f"""{subject}
-
-{intro}
+        plain_body = f"""{intro}
 
 {plain_updates}
 
