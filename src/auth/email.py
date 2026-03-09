@@ -353,9 +353,16 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
 
+                    <!-- Banner photo -->
+                    <tr>
+                        <td style="padding: 0; line-height: 0;">
+                            <img src="{base_url}/static/dramatic-skies-leah-may.jpg" alt="" width="600" style="display: block; width: 100%; height: auto; border: none;">
+                        </td>
+                    </tr>
+
                     <!-- Header with logo -->
                     <tr>
-                        <td align="center" style="background: #ddd6b9; padding: 40px 40px 30px;">
+                        <td align="center" style="background: #ddd6b9; padding: 30px 40px 24px;">
                             <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="240" height="240" style="display: block; border: none;">
                             <h1 style="color: #1a1a2e; font-size: 28px; font-weight: 700; margin: 16px 0 4px; letter-spacing: -0.5px;">Monthly Update</h1>
                             <p style="color: #555; font-size: 14px; margin: 0;">March 2026</p>

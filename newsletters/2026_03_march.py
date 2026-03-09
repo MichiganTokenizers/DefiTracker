@@ -87,33 +87,41 @@ BASE_URL = "https://yieldlife.xyz"
 
 # --- Send ---
 if __name__ == "__main__":
+    # Set to True to send to all DB subscribers, False for test mode
+    SEND_TO_ALL = False
+    TEST_RECIPIENT = "danladuke@michigantokenizers.com"
+
     import time
-    from src.database.connection import DatabaseConnection
 
     print(f"MAIL_SERVER: {app.config['MAIL_SERVER']}")
     print(f"MAIL_PORT:   {app.config['MAIL_PORT']}")
     print(f"MAIL_SENDER: {app.config['MAIL_DEFAULT_SENDER']}")
     print()
 
-    # Fetch all user emails from DB
-    db = DatabaseConnection()
-    conn = db.get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT email FROM users WHERE email IS NOT NULL ORDER BY email")
-            emails = [row[0] for row in cur.fetchall()]
-    finally:
-        db.return_connection(conn)
+    if SEND_TO_ALL:
+        from src.database.connection import DatabaseConnection
+        db = DatabaseConnection()
+        conn = db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT email FROM users WHERE email IS NOT NULL ORDER BY email")
+                emails = [row[0] for row in cur.fetchall()]
+        finally:
+            db.return_connection(conn)
 
-    print(f"Found {len(emails)} email addresses:")
-    for e in emails:
-        print(f"  - {e}")
-    print()
+        print(f"Found {len(emails)} email addresses:")
+        for e in emails:
+            print(f"  - {e}")
+        print()
 
-    confirm = input(f"Send newsletter to all {len(emails)} recipients? (yes/no): ")
-    if confirm.strip().lower() != "yes":
-        print("Aborted.")
-        sys.exit(0)
+        confirm = input(f"Send newsletter to all {len(emails)} recipients? (yes/no): ")
+        if confirm.strip().lower() != "yes":
+            print("Aborted.")
+            sys.exit(0)
+    else:
+        emails = [TEST_RECIPIENT]
+        print(f"TEST MODE: sending to {TEST_RECIPIENT} only")
+        print()
 
     with app.app_context():
         import src.auth.email as email_module
