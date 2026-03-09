@@ -87,12 +87,33 @@ BASE_URL = "https://yieldlife.xyz"
 
 # --- Send ---
 if __name__ == "__main__":
-    recipient = "danladuke@michigantokenizers.com"
+    import time
+    from src.database.connection import DatabaseConnection
 
     print(f"MAIL_SERVER: {app.config['MAIL_SERVER']}")
     print(f"MAIL_PORT:   {app.config['MAIL_PORT']}")
     print(f"MAIL_SENDER: {app.config['MAIL_DEFAULT_SENDER']}")
     print()
+
+    # Fetch all user emails from DB
+    db = DatabaseConnection()
+    conn = db.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT email FROM users WHERE email IS NOT NULL ORDER BY email")
+            emails = [row[0] for row in cur.fetchall()]
+    finally:
+        db.return_connection(conn)
+
+    print(f"Found {len(emails)} email addresses:")
+    for e in emails:
+        print(f"  - {e}")
+    print()
+
+    confirm = input(f"Send newsletter to all {len(emails)} recipients? (yes/no): ")
+    if confirm.strip().lower() != "yes":
+        print("Aborted.")
+        sys.exit(0)
 
     with app.app_context():
         import src.auth.email as email_module
@@ -100,15 +121,23 @@ if __name__ == "__main__":
 
         from src.auth.email import send_newsletter_email
 
-        print(f"Sending to {recipient}...")
-        result = send_newsletter_email(
-            to_email=recipient,
-            base_url=BASE_URL,
-            subject=SUBJECT,
-            intro=INTRO,
-            updates=UPDATES,
-        )
-        if result:
-            print("Sent successfully! Check your inbox.")
-        else:
-            print("Failed to send. Check error above.")
+        sent = 0
+        failed = 0
+        for email in emails:
+            print(f"Sending to {email}...", end=" ")
+            result = send_newsletter_email(
+                to_email=email,
+                base_url=BASE_URL,
+                subject=SUBJECT,
+                intro=INTRO,
+                updates=UPDATES,
+            )
+            if result:
+                print("OK")
+                sent += 1
+            else:
+                print("FAILED")
+                failed += 1
+            time.sleep(2)  # Brief pause to avoid SMTP rate limits
+
+        print(f"\nDone! Sent: {sent}, Failed: {failed}")
