@@ -3078,11 +3078,24 @@ class PortfolioService:
         """ % wallet_address
 
         try:
-            resp = self.session.post(
-                SUNDAESWAP_YIELD_API_URL,
-                json={"query": query},
-                timeout=self.timeout
-            )
+            # Use longer timeout + retry for this heavy GraphQL query
+            resp = None
+            for attempt in range(2):
+                try:
+                    resp = self.session.post(
+                        SUNDAESWAP_YIELD_API_URL,
+                        json={"query": query},
+                        timeout=30
+                    )
+                    break
+                except requests.RequestException as e:
+                    if attempt == 0:
+                        logger.info("SundaeSwap yield API timeout, retrying: %s", e)
+                        continue
+                    raise
+
+            if resp is None:
+                return positions
 
             if resp.status_code != 200:
                 logger.debug("SundaeSwap yield API error: %d", resp.status_code)
@@ -3100,109 +3113,113 @@ class PortfolioService:
             active_positions = [p for p in api_positions if not p.get("spentTxHash")]
 
             for pos in active_positions:
-                # Find LP token in value array
-                lp_asset_id = None
-                lp_amount = None
+                try:
+                    # Find LP token in value array
+                    lp_asset_id = None
+                    lp_amount = None
 
-                for value in pos.get("value", []):
-                    asset_id = value.get("assetID", "")
-                    # Skip ADA
-                    if asset_id == "ada.lovelace":
+                    for value in pos.get("value", []):
+                        asset_id = value.get("assetID", "")
+                        # Skip ADA
+                        if asset_id == "ada.lovelace":
+                            continue
+                        # Check if this is a SundaeSwap LP token
+                        if asset_id.startswith(SUNDAESWAP_V3_LP_POLICY):
+                            lp_asset_id = asset_id
+                            lp_amount = value.get("amount")
+                            break
+
+                    if not lp_asset_id or not lp_amount:
                         continue
-                    # Check if this is a SundaeSwap LP token
-                    if asset_id.startswith(SUNDAESWAP_V3_LP_POLICY):
-                        lp_asset_id = asset_id
-                        lp_amount = value.get("amount")
-                        break
 
-                if not lp_asset_id or not lp_amount:
-                    continue
+                    # Extract asset name hex from asset ID (policy.assetname format)
+                    parts = lp_asset_id.split(".")
+                    if len(parts) != 2:
+                        continue
 
-                # Extract asset name hex from asset ID (policy.assetname format)
-                parts = lp_asset_id.split(".")
-                if len(parts) != 2:
-                    continue
+                    policy_id = parts[0]
+                    asset_name_hex = parts[1]
 
-                policy_id = parts[0]
-                asset_name_hex = parts[1]
+                    # Get pool metrics for value calculation
+                    pool_data = self._get_sundaeswap_pool_metrics(asset_name_hex)
+                    lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
+                    pool_name = "SundaeSwap LP"
 
-                # Get pool metrics for value calculation
-                pool_data = self._get_sundaeswap_pool_metrics(asset_name_hex)
-                lp_value_info = {"ada_value": None, "token_a": {}, "token_b": {}, "apr": None}
-                pool_name = "SundaeSwap LP"
+                    if pool_data:
+                        lp_value_info = self._calculate_sundaeswap_lp_value(lp_amount, pool_data)
+                        # Build pool name from asset tickers (normalized)
+                        asset_a = pool_data.get("assetA", {})
+                        asset_b = pool_data.get("assetB", {})
+                        ticker_a = asset_a.get("ticker", "?")
+                        ticker_b = asset_b.get("ticker", "?")
+                        if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
+                            pool_name = self._normalize_pool_name(ticker_a, ticker_b)
 
-                if pool_data:
-                    lp_value_info = self._calculate_sundaeswap_lp_value(lp_amount, pool_data)
-                    # Build pool name from asset tickers (normalized)
-                    asset_a = pool_data.get("assetA", {})
-                    asset_b = pool_data.get("assetB", {})
-                    ticker_a = asset_a.get("ticker", "?")
-                    ticker_b = asset_b.get("ticker", "?")
-                    if ticker_a and ticker_b and ticker_a != "?" and ticker_b != "?":
-                        pool_name = self._normalize_pool_name(ticker_a, ticker_b)
+                    # Get APR from protocol API if available
+                    farm_apr = lp_value_info.get("apr")
+                    farm_apr_1d = None
 
-                # Get APR from protocol API if available
-                farm_apr = lp_value_info.get("apr")
-                farm_apr_1d = None
+                    # Always look up apr_1d from database (and fallback APR if not from API)
+                    if pool_name and pool_name != "SundaeSwap LP":
+                        apr_data = self._get_pool_apr_from_db(pool_name, "sundaeswap")
+                        if apr_data:
+                            # Always use database apr_1d (more consistent with charts)
+                            farm_apr_1d = apr_data.get("apr_1d")
+                            # Use database APR if not available from protocol API
+                            if not farm_apr:
+                                farm_apr = apr_data.get("apr")
+                            if farm_apr or farm_apr_1d:
+                                logger.debug("Found SundaeSwap APR from database: %s = %.2f%% (1d: %s)",
+                                            pool_name, farm_apr or 0, farm_apr_1d)
 
-                # Always look up apr_1d from database (and fallback APR if not from API)
-                if pool_name and pool_name != "SundaeSwap LP":
-                    apr_data = self._get_pool_apr_from_db(pool_name, "sundaeswap")
-                    if apr_data:
-                        # Always use database apr_1d (more consistent with charts)
-                        farm_apr_1d = apr_data.get("apr_1d")
-                        # Use database APR if not available from protocol API
-                        if not farm_apr:
-                            farm_apr = apr_data.get("apr")
-                        if farm_apr or farm_apr_1d:
-                            logger.debug("Found SundaeSwap APR from database: %s = %.2f%% (1d: %s)",
-                                        pool_name, farm_apr or 0, farm_apr_1d)
+                    # Calculate IL for farm position
+                    il_data = self._calculate_farm_position_il(
+                        wallet_address, policy_id, asset_name_hex,
+                        "sundaeswap", pool_name, lp_value_info,
+                        lp_amount=int(lp_amount),
+                    )
 
-                # Calculate IL for farm position
-                il_data = self._calculate_farm_position_il(
-                    wallet_address, policy_id, asset_name_hex,
-                    "sundaeswap", pool_name, lp_value_info,
-                    lp_amount=int(lp_amount),
-                )
+                    farm_deposit_history = self._get_lp_deposit_history(
+                        wallet_address, policy_id, asset_name_hex
+                    )
 
-                farm_deposit_history = self._get_lp_deposit_history(
-                    wallet_address, policy_id, asset_name_hex
-                )
-
-                # Calculate yield metrics
-                yield_data = self._calculate_yield_metrics(
-                    pool_name, "sundaeswap",
-                    il_data.get("original_entry_date") or il_data.get("entry_date"),
-                    il_data.get("il_percent"),
-                    deposit_history=farm_deposit_history,
-                    current_lp_amount=int(lp_amount),
-                )
-                position = FarmPosition(
-                    protocol="sundaeswap",
-                    pool=pool_name,
-                    lp_amount=lp_amount,
-                    farm_type="yield_farming",
-                    token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
-                    token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
-                    usd_value=lp_value_info.get("ada_value"),
-                    current_apr=farm_apr,
-                    apr_1d=farm_apr_1d,
-                    rewards_earned=None,
-                    pool_share_percent=lp_value_info.get("pool_share_percent"),
-                    entry_date=il_data.get("entry_date"),
-                    entry_price_ratio=il_data.get("entry_price_ratio"),
-                    current_price_ratio=il_data.get("current_price_ratio"),
-                    il_percent=il_data.get("il_percent"),
-                    il_usd=il_data.get("il_usd"),
-                    actual_apr=yield_data.get("actual_apr"),
-                    actual_yield=yield_data.get("actual_yield"),
-                    net_gain_loss=yield_data.get("net_gain_loss"),
-                    days_held=yield_data.get("days_held"),
-                    apr_data_points=yield_data.get("apr_data_points"),
-                    original_entry_date=il_data.get("original_entry_date"),
-                    deposit_history=farm_deposit_history if farm_deposit_history else None,
-                )
-                positions.append(position)
+                    # Calculate yield metrics
+                    yield_data = self._calculate_yield_metrics(
+                        pool_name, "sundaeswap",
+                        il_data.get("original_entry_date") or il_data.get("entry_date"),
+                        il_data.get("il_percent"),
+                        deposit_history=farm_deposit_history,
+                        current_lp_amount=int(lp_amount),
+                    )
+                    position = FarmPosition(
+                        protocol="sundaeswap",
+                        pool=pool_name,
+                        lp_amount=lp_amount,
+                        farm_type="yield_farming",
+                        token_a=lp_value_info.get("token_a") or {"symbol": "?", "amount": 0},
+                        token_b=lp_value_info.get("token_b") or {"symbol": "?", "amount": 0},
+                        usd_value=lp_value_info.get("ada_value"),
+                        current_apr=farm_apr,
+                        apr_1d=farm_apr_1d,
+                        rewards_earned=None,
+                        pool_share_percent=lp_value_info.get("pool_share_percent"),
+                        entry_date=il_data.get("entry_date"),
+                        entry_price_ratio=il_data.get("entry_price_ratio"),
+                        current_price_ratio=il_data.get("current_price_ratio"),
+                        il_percent=il_data.get("il_percent"),
+                        il_usd=il_data.get("il_usd"),
+                        actual_apr=yield_data.get("actual_apr"),
+                        actual_yield=yield_data.get("actual_yield"),
+                        net_gain_loss=yield_data.get("net_gain_loss"),
+                        days_held=yield_data.get("days_held"),
+                        apr_data_points=yield_data.get("apr_data_points"),
+                        original_entry_date=il_data.get("original_entry_date"),
+                        deposit_history=farm_deposit_history if farm_deposit_history else None,
+                    )
+                    positions.append(position)
+                except Exception as e:
+                    logger.warning("Error processing SundaeSwap position %s: %s",
+                                  pos.get("txHash", "?")[:16], e)
 
             logger.info("Found %d SundaeSwap yield farming positions", len(positions))
 
