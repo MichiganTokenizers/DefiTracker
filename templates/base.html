@@ -159,6 +159,72 @@
         a:hover { color: var(--moss-green); }
         .dropdown-menu-dark {
             background: var(--carbon-black);
+            border-radius: 12px;
+            border: 1px solid rgba(121, 207, 85, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 0.5rem 0;
+            min-width: 280px;
+        }
+        .dropdown-menu-dark .dropdown-item {
+            padding: 0.5rem 1rem;
+            transition: background 0.15s;
+        }
+        .dropdown-menu-dark .dropdown-item:hover {
+            background: rgba(121, 207, 85, 0.12);
+        }
+        .saved-chart-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .saved-chart-item .chart-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        .chart-badge-lp {
+            background: var(--sea-green);
+            color: #fff;
+        }
+        .chart-badge-lending {
+            background: var(--cardano-color);
+            color: #fff;
+        }
+        .saved-chart-item .chart-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .saved-chart-item .chart-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .saved-chart-item .chart-detail {
+            font-size: 0.7rem;
+            opacity: 0.55;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #myChartsMenu .dropdown-divider {
+            border-color: rgba(121, 207, 85, 0.15);
+            margin: 0.35rem 0;
+        }
+        #myChartsMenu .manage-link {
+            font-size: 0.8rem;
+            text-align: center;
+            justify-content: center;
+            opacity: 0.7;
+        }
+        #myChartsMenu .manage-link:hover {
+            opacity: 1;
         }
         .table { color: var(--text-primary); }
         .table-dark { 
@@ -456,12 +522,13 @@
                     {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" id="myChartsDropdown">
-                            Saved Charts
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="margin-right:4px;vertical-align:-2px"><path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm.5 4h2a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5zm4-2h2a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5zm4 4h2a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-5a.5.5 0 0 1 .5-.5z"/></svg>
+                            My Charts
                         </a>
                         <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" id="myChartsMenu">
-                            <li><span class="dropdown-item text-muted">Loading...</span></li>
+                            <li><span class="dropdown-item text-muted" style="font-size:0.85rem">Loading...</span></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="/my-charts">Manage Charts</a></li>
+                            <li><a class="dropdown-item manage-link" href="/my-charts">Manage Charts</a></li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -1001,7 +1068,7 @@
                         // Build chart items
                         let html = '';
                         if (charts.length === 0) {
-                            html = '<li><span class="dropdown-item text-muted">No saved charts</span></li>';
+                            html = '<li><span class="dropdown-item text-muted" style="font-size:0.85rem">No saved charts yet</span></li>';
                         } else {
                             charts.slice(0, 10).forEach(chart => {
                                 const filters = chart.filters || {};
@@ -1012,14 +1079,39 @@
                                     chartUrl = `/${filters.chain}/lending`;
                                 }
                                 chartUrl += `?chart_id=${chart.chart_id}`;
-                                html += `<li><a class="dropdown-item" href="${chartUrl}">${chart.name}</a></li>`;
+
+                                const yieldType = filters.yield_type || 'lp';
+                                const badgeClass = yieldType === 'lending' ? 'chart-badge-lending' : 'chart-badge-lp';
+                                const badgeLabel = yieldType === 'lending' ? 'Lend' : 'LP';
+
+                                // Build detail line from assets or days
+                                let detail = '';
+                                if (filters.assets && filters.assets.length) {
+                                    detail = filters.assets.slice(0, 3).join(', ');
+                                    if (filters.assets.length > 3) detail += ` +${filters.assets.length - 3}`;
+                                } else if (filters.asset) {
+                                    detail = filters.asset;
+                                }
+                                if (filters.days) {
+                                    detail += detail ? ` · ${filters.days}d` : `${filters.days}d`;
+                                }
+
+                                html += `<li><a class="dropdown-item" href="${chartUrl}">
+                                    <div class="saved-chart-item">
+                                        <span class="chart-badge ${badgeClass}">${badgeLabel}</span>
+                                        <div class="chart-info">
+                                            <span class="chart-name">${chart.name}</span>
+                                            ${detail ? `<span class="chart-detail">${detail}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </a></li>`;
                             });
                             if (charts.length > 10) {
-                                html += '<li><span class="dropdown-item text-muted">... and ${charts.length - 10} more</span></li>';
+                                html += `<li><span class="dropdown-item text-muted" style="font-size:0.8rem">… and ${charts.length - 10} more</span></li>`;
                             }
                         }
                         html += '<li><hr class="dropdown-divider"></li>';
-                        html += '<li><a class="dropdown-item" href="/my-charts">Manage Charts</a></li>';
+                        html += '<li><a class="dropdown-item manage-link" href="/my-charts">Manage Charts</a></li>';
 
                         menu.innerHTML = html;
                         chartsLoaded = true;
