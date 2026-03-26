@@ -542,13 +542,14 @@ class MinswapAdapter(ProtocolAdapter):
                     logger.debug("No metrics for %s (%s)", pool.pair, pool.pool_id)
                     continue
 
-                # Fill TVL if not already set (config-only pools)
-                if pool.tvl_usd is None:
-                    tvl_value = self._extract_tvl(payload)
-                    if tvl_value is not None:
-                        pool.tvl_usd = Decimal(str(tvl_value))
-                        if self.ada_price_usd and self.ada_price_usd > 0:
-                            pool.tvl_ada = pool.tvl_usd / self.ada_price_usd
+                # Always use TVL from metrics endpoint (liquidity_currency) — it reflects
+                # total pool liquidity. The yield-server tvlUsd only counts farmed LP,
+                # which is a fraction of the pool, causing inflated apr_1d calculations.
+                tvl_value = self._extract_tvl(payload)
+                if tvl_value is not None:
+                    pool.tvl_usd = Decimal(str(tvl_value))
+                    if self.ada_price_usd and self.ada_price_usd > 0:
+                        pool.tvl_ada = pool.tvl_usd / self.ada_price_usd
 
                 # Infer version from pool type if not set
                 if not pool.version:
