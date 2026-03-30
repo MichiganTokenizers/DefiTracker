@@ -22,7 +22,7 @@ Cron example (every 6 hours, aligned with Enosys epochs):
 import sys
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict
 
@@ -294,7 +294,7 @@ def main():
             logger.error("Enosys adapter not initialized")
             return 1
         
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         pools_config = enosys_config.get('pools', [])
         
         if not pools_config:

@@ -28,7 +28,7 @@ Cron example (10:00 AM server time):
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -117,7 +117,7 @@ def collect_and_store_minswap():
 
         # Discover all pools above threshold + tracked pools
         pools = minswap_adapter.get_all_pools(tracked_pool_ids=tracked_pool_ids)
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         logger.info("Found %d Minswap pools total (discovered + tracked)", len(pools))
 

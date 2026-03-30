@@ -17,7 +17,7 @@ Cron example (daily at midnight UTC):
 import sys
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict
 from zoneinfo import ZoneInfo
@@ -228,7 +228,7 @@ def collect_liqwid_apy(cardano_adapter: CardanoChainAdapter, db_queries: APYQuer
     # Fetch token prices for USD conversion
     prices = fetch_token_prices()
 
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(timezone.utc)
     snapshots = []
 
     # Get all supported markets

@@ -25,7 +25,7 @@ Cron example (10:10 AM server time):
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -115,7 +115,7 @@ def collect_and_store_wingriders():
 
         # Get all pools: those meeting threshold + tracked pools below threshold
         pools = wingriders_adapter.get_all_pools(tracked_pairs=tracked_pairs)
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         logger.info("Found %d WingRiders pools total (above threshold + tracked)", len(pools))
 
