@@ -344,13 +344,21 @@ Follow @yieldlife_xyz on X for updates between newsletters.
         if notable_events:
             event_rows = ""
             for e in notable_events:
-                event_rows += f"""
+                image_row = ""
+                if e.get('image'):
+                    image_row = f"""
                     <tr>
-                        <td style="padding: 0 40px 16px;">
-                            <p style="margin: 0 0 2px; font-weight: 600; color: #1a1a2e; font-size: 15px;">{e['title']}</p>
-                            <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6;">{e['description']}</p>
+                        <td style="padding: 0 40px 12px; line-height: 0;">
+                            <img src="{base_url}/static/{e['image']}" alt="" width="520" style="display: block; width: 100%; height: auto; border-radius: 8px; border: none;">
                         </td>
                     </tr>"""
+                event_rows += f"""
+                    <tr>
+                        <td style="padding: 0 40px 4px;">
+                            <p style="margin: 0 0 2px; font-weight: 600; color: #1a1a2e; font-size: 15px;">{e['title']}</p>
+                            <p style="margin: 0 0 10px; color: #555; font-size: 14px; line-height: 1.6;">{e['description']}</p>
+                        </td>
+                    </tr>{image_row}"""
             notable_events_section = f"""
                     <!-- Divider -->
                     <tr>

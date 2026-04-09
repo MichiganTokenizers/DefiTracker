@@ -85,6 +85,7 @@ NOTABLE_EVENTS = [
             "The NIGHT/USDCx pool on Minswap has been offering notably high NIGHT token rewards. "
             "Worth keeping an eye on if you\u2019re looking for yield in stablecoin-adjacent pairs."
         ),
+        "image": "night_usdcx_apr26.png",
     },
     {
         "title": "NIGHT/ADA — Increased APY on WingRiders",
@@ -92,6 +93,7 @@ NOTABLE_EVENTS = [
             "The NIGHT/ADA pool on WingRiders has seen an uptick in APY recently. "
             "Check YieldLife for the latest historical data."
         ),
+        "image": "WR_night_ada_surge.png",
     },
 ]
 
