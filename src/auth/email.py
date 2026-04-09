@@ -287,7 +287,8 @@ If you didn't add this email, please contact support immediately.
 
 
 def send_newsletter_email(to_email: str, base_url: str, subject: str,
-                          intro: str, updates: list[dict], cta_text: str = "Check It Out") -> bool:
+                          intro: str, updates: list[dict], cta_text: str = "Check It Out",
+                          month_label: str = "") -> bool:
     """
     Send a monthly newsletter email.
 
@@ -369,7 +370,7 @@ Follow @yieldlife_xyz on X for updates between newsletters.
                     <tr>
                         <td align="center" style="padding: 24px 40px 8px;">
                             <h1 style="color: #1a1a2e; font-size: 28px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.5px;">Monthly Update</h1>
-                            <p style="color: #555; font-size: 14px; margin: 0;">March 2026</p>
+                            <p style="color: #555; font-size: 14px; margin: 0;">{month_label}</p>
                         </td>
                     </tr>
 

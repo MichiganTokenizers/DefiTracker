@@ -1,4 +1,4 @@
-"""March 2026 monthly newsletter — first edition."""
+"""April 2026 monthly newsletter — second edition."""
 import os
 import sys
 from pathlib import Path
@@ -23,62 +23,57 @@ app.config['MAIL_DEFAULT_SENDER'] = ('YieldLife', sender_email)
 
 mail = Mail(app)
 
-SUBJECT = "YieldLife Monthly Update \u2014 March 2026"
+SUBJECT = "YieldLife Monthly Update \u2014 April 2026"
 
 INTRO = (
-    "Welcome to the first YieldLife monthly update! YieldLife is a free "
-    "analytics platform for Cardano DeFi &mdash; we track historical yield "
-    "data across liquidity pools, farms, and lending markets from Minswap, "
-    "SundaeSwap, WingRiders, and Liqwid so you can make decisions with full "
-    "knowledge of the past."
+    "This month\u2019s focus has been data quality. Rather than rushing to add features, "
+    "we\u2019ve been going deep on accuracy &mdash; validating that what you\u2019re seeing "
+    "reflects reality. We found and fixed two notable issues, cleaned up the affected data, "
+    "and have been running cleanly and consistently for the last couple of weeks."
 )
 
 UPDATES = [
     {
+        "icon": "&#x1F551;",
+        "title": "Timezone Bug Fixed",
+        "description": (
+            "Our database server running in BST was causing duplicate snapshots to be recorded "
+            "around daylight saving transitions. Fixed and historical data has been corrected."
+        ),
+    },
+    {
         "icon": "&#x1F4CA;",
-        "title": "Redesigned Portfolio Cards",
+        "title": "Minswap TVL Undercount Resolved",
         "description": (
-            "Position cards now feature a clean 3-column layout with "
-            "protocol-branded colors, making it easier to scan your LP and "
-            "lending positions at a glance."
+            "The yield server was returning incomplete TVL figures for certain Minswap pools, "
+            "which was inflating APR calculations. We\u2019ve patched the source and backfilled "
+            "the affected data."
         ),
     },
-    {
-        "icon": "&#x1F4DC;",
-        "title": "Deposit History Tracking",
-        "description": (
-            "YieldLife now scans your on-chain transaction history to detect "
-            "deposits and withdrawals automatically, showing percentage "
-            "changes so you can see how each position has evolved."
-        ),
-    },
-    {
-        "icon": "&#x1F50D;",
-        "title": "Auto-Discovery of Pools &amp; Markets",
-        "description": (
-            "New Minswap liquidity pools and Liqwid lending markets are now "
-            "detected automatically. WingRiders and Sundaedwap also have this feature."
-            "USDCx pool APIs has been added by Sundaeswap and Liqwid, we're expecting Minswap and WingRiders soon."
-            "Use caution and double check rates on protocols when viewing any new pools, including USDCx. We're building fast and live along side the protocols themselves."
-            ""
-        ),
-    },
-    {
-        "icon": "&#x1F4B0;",
-        "title": "Improved Pricing Accuracy",
-        "description": (
-            "We replaced our pricing backend with Minswap pool-derived prices "
-            "and added Pyth Network as a primary ADA price source for more "
-            "reliable valuations."
-        ),
-    },
-
     {
         "icon": "&#x26A1;",
-        "title": "Faster Page Loads",
+        "title": "SundaeSwap Reliability",
         "description": (
-            "Compressed images, lazy-loaded logos, deferred chart scripts, and "
-            "an optimized background video for a noticeably snappier experience."
+            "Added retry logic and per-position error handling for SundaeSwap. Failures on "
+            "individual positions no longer cause the whole fetch to bail out."
+        ),
+    },
+    {
+        "icon": "&#x1F5C2;",
+        "title": "Improved Charts & UI",
+        "description": (
+            "Saved charts dropdown redesigned with badges and asset details. Pool version labels "
+            "now display correctly for stableswaps, and charts default more sensibly for "
+            "lending and single-asset views."
+        ),
+    },
+    {
+        "icon": "&#x1F6E3;",
+        "title": "On the Horizon",
+        "description": (
+            "Two things are coming up: an infrastructure upgrade to handle more wallets and "
+            "higher data frequency, and early work on a public API so you can pull historical "
+            "APR and TVL data for your own use. More details next month."
         ),
     },
 ]
@@ -88,7 +83,7 @@ BASE_URL = "https://yieldlife.xyz"
 # --- Send ---
 if __name__ == "__main__":
     # Set to True to send to all DB subscribers, False for test mode
-    SEND_TO_ALL = True
+    SEND_TO_ALL = False
     TEST_RECIPIENT = "danladuke@michigantokenizers.com"
 
     import time
@@ -139,7 +134,7 @@ if __name__ == "__main__":
                 subject=SUBJECT,
                 intro=INTRO,
                 updates=UPDATES,
-                month_label="March 2026",
+                month_label="April 2026",
             )
             if result:
                 print("OK")
