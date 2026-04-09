@@ -135,6 +135,8 @@ if __name__ == "__main__":
                 intro=INTRO,
                 updates=UPDATES,
                 month_label="April 2026",
+                banner_image="morning_dew_white_rabbit.jpeg",
+                photo_credit_url="https://fineartamerica.com/profiles/leah-may",
             )
             if result:
                 print("OK")

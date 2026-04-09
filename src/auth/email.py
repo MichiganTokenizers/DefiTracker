@@ -288,7 +288,9 @@ If you didn't add this email, please contact support immediately.
 
 def send_newsletter_email(to_email: str, base_url: str, subject: str,
                           intro: str, updates: list[dict], cta_text: str = "Check It Out",
-                          month_label: str = "") -> bool:
+                          month_label: str = "",
+                          banner_image: str = "dramatic-skies-leah-may.jpg",
+                          photo_credit_url: str = "") -> bool:
     """
     Send a monthly newsletter email.
 
@@ -299,6 +301,9 @@ def send_newsletter_email(to_email: str, base_url: str, subject: str,
         intro: Intro paragraph text
         updates: List of dicts with 'icon' (html entity), 'title', and 'description'
         cta_text: Call-to-action button text
+        month_label: Date subtitle shown under the Monthly Update heading
+        banner_image: Filename of the banner image in /static/
+        photo_credit_url: URL for photo credit link shown below the banner (optional)
 
     Returns:
         True if email sent successfully, False otherwise
@@ -317,6 +322,15 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
 - The YieldLife Team
 """
+
+        # Build optional photo credit row
+        photo_credit_row = ""
+        if photo_credit_url:
+            photo_credit_row = f"""<tr>
+                        <td align="right" style="padding: 4px 12px 0;">
+                            <a href="{photo_credit_url}" style="color: #aaa; font-size: 11px; text-decoration: none;">Photo credit</a>
+                        </td>
+                    </tr>"""
 
         # Build HTML update rows
         update_rows = ""
@@ -362,9 +376,10 @@ Follow @yieldlife_xyz on X for updates between newsletters.
                     <!-- Banner photo -->
                     <tr>
                         <td style="padding: 0; line-height: 0;">
-                            <img src="{base_url}/static/dramatic-skies-leah-may.jpg" alt="" width="600" style="display: block; width: 100%; height: auto; border: none;">
+                            <img src="{base_url}/static/{banner_image}" alt="" width="600" style="display: block; width: 100%; height: auto; border: none;">
                         </td>
                     </tr>
+                    {photo_credit_row}
 
                     <!-- Title -->
                     <tr>
