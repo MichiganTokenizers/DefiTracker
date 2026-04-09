@@ -78,6 +78,23 @@ UPDATES = [
     },
 ]
 
+NOTABLE_EVENTS = [
+    {
+        "title": "NIGHT/USDCx — High NIGHT Rewards on Minswap",
+        "description": (
+            "The NIGHT/USDCx pool on Minswap has been offering notably high NIGHT token rewards. "
+            "Worth keeping an eye on if you\u2019re looking for yield in stablecoin-adjacent pairs."
+        ),
+    },
+    {
+        "title": "NIGHT/ADA — Increased APY on WingRiders",
+        "description": (
+            "The NIGHT/ADA pool on WingRiders has seen an uptick in APY recently. "
+            "Check YieldLife for the latest historical data."
+        ),
+    },
+]
+
 BASE_URL = "https://yieldlife.xyz"
 
 # --- Send ---
@@ -137,6 +154,7 @@ if __name__ == "__main__":
                 month_label="April 2026",
                 banner_image="morning_dew_white_rabbit.jpg",
                 photo_credit_url="https://fineartamerica.com/profiles/leah-may",
+                notable_events=NOTABLE_EVENTS,
             )
             if result:
                 print("OK")

@@ -290,7 +290,8 @@ def send_newsletter_email(to_email: str, base_url: str, subject: str,
                           intro: str, updates: list[dict], cta_text: str = "Check It Out",
                           month_label: str = "",
                           banner_image: str = "dramatic-skies-leah-may.jpg",
-                          photo_credit_url: str = "") -> bool:
+                          photo_credit_url: str = "",
+                          notable_events: list[dict] | None = None) -> bool:
     """
     Send a monthly newsletter email.
 
@@ -313,9 +314,15 @@ def send_newsletter_email(to_email: str, base_url: str, subject: str,
         plain_updates = "\n".join(
             f"- {u['title']} — {u['description']}" for u in updates
         )
+        plain_notable = ""
+        if notable_events:
+            plain_notable = "\n\nNotable Events\n" + "\n".join(
+                f"- {e['title']} — {e['description']}" for e in notable_events
+            )
+
         plain_body = f"""{intro}
 
-{plain_updates}
+{plain_updates}{plain_notable}
 
 Visit {base_url} to check it out.
 Follow @yieldlife_xyz on X for updates between newsletters.
@@ -331,6 +338,34 @@ Follow @yieldlife_xyz on X for updates between newsletters.
                             <a href="{photo_credit_url}" style="color: #aaa; font-size: 11px; text-decoration: none;">Photo credit</a>
                         </td>
                     </tr>"""
+
+        # Build optional notable events section
+        notable_events_section = ""
+        if notable_events:
+            event_rows = ""
+            for e in notable_events:
+                event_rows += f"""
+                    <tr>
+                        <td style="padding: 0 40px 16px;">
+                            <p style="margin: 0 0 2px; font-weight: 600; color: #1a1a2e; font-size: 15px;">{e['title']}</p>
+                            <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6;">{e['description']}</p>
+                        </td>
+                    </tr>"""
+            notable_events_section = f"""
+                    <!-- Divider -->
+                    <tr>
+                        <td style="padding: 0 40px;">
+                            <div style="border-top: 1px solid #e8e4dc; margin: 8px 0 16px;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Notable events heading -->
+                    <tr>
+                        <td style="padding: 8px 40px 20px;">
+                            <h2 style="color: #1a1a2e; font-size: 20px; font-weight: 700; margin: 0;">Notable Events</h2>
+                        </td>
+                    </tr>
+{event_rows}"""
 
         # Build HTML update rows
         update_rows = ""
@@ -412,7 +447,7 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
                     <!-- Update items -->
 {update_rows}
-
+{notable_events_section}
                     <!-- CTA -->
                     <tr>
                         <td align="center" style="padding: 8px 40px 32px;">
