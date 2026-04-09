@@ -418,7 +418,6 @@ Follow @yieldlife_xyz on X for updates between newsletters.
                                         <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="100" height="100" style="display: block; border: none;">
                                     </td>
                                     <td valign="middle" style="padding-left: 20px;">
-                                        <p style="margin: 0 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; letter-spacing: -0.5px;">YieldLife</p>
                                         <p style="margin: 0; font-size: 13px; color: #666; line-height: 1.6;">Cardano DeFi analytics &mdash; tracking historical APYs across Minswap, SundaeSwap, WingRiders, and Liqwid.</p>
                                     </td>
                                 </tr>
