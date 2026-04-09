@@ -102,7 +102,7 @@ BASE_URL = "https://yieldlife.xyz"
 # --- Send ---
 if __name__ == "__main__":
     # Set to True to send to all DB subscribers, False for test mode
-    SEND_TO_ALL = False
+    SEND_TO_ALL = True
     TEST_RECIPIENT = "danladuke@michigantokenizers.com"
 
     import time
