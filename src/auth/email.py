@@ -409,10 +409,20 @@ Follow @yieldlife_xyz on X for updates between newsletters.
 
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
 
-                    <!-- Logo -->
+                    <!-- Logo + tagline -->
                     <tr>
-                        <td align="center" style="padding: 12px 40px 8px;">
-                            <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="240" height="240" style="display: block; border: none;">
+                        <td style="padding: 24px 40px 16px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="100" valign="middle">
+                                        <img src="{base_url}/static/YieldLife_Logo_tp_560x560.png" alt="YieldLife" width="100" height="100" style="display: block; border: none;">
+                                    </td>
+                                    <td valign="middle" style="padding-left: 20px;">
+                                        <p style="margin: 0 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; letter-spacing: -0.5px;">YieldLife</p>
+                                        <p style="margin: 0; font-size: 13px; color: #666; line-height: 1.6;">Cardano DeFi analytics &mdash; tracking historical APYs across Minswap, SundaeSwap, WingRiders, and Liqwid.</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
 
