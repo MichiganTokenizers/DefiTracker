@@ -3261,6 +3261,11 @@ class PortfolioService:
 
             # Track LP tokens sent to farm contracts
             staked_lp = {}  # {asset_id: {amount, protocol, tx_hash}}
+            # Track LP tokens that were unstaked (returned from farm to wallet).
+            # Kept separate because transactions arrive in desc order — the unstake
+            # tx may be processed before the older stake tx, so we can't remove from
+            # staked_lp in-flight. We filter at the end instead.
+            unstaked_units = set()
 
             for tx_info in transactions:
                 tx_hash = tx_info.get("tx_hash", "")
@@ -3320,15 +3325,25 @@ class PortfolioService:
                         for asset in output.get("amount", []):
                             unit = asset.get("unit", "")
 
-                            # If LP token came back to wallet, remove from staked
-                            if unit in staked_lp:
-                                # Check if input was from farm
-                                from_farm = any(
-                                    inp.get("address", "") in FARM_CONTRACTS
-                                    for inp in tx_data.get("inputs", [])
-                                )
-                                if from_farm:
-                                    del staked_lp[unit]
+                            if len(unit) < 56:
+                                continue
+                            policy_id = unit[:56]
+                            if policy_id not in LP_POLICY_IDS:
+                                continue
+
+                            # LP token returned to wallet from farm = unstaked
+                            from_farm = any(
+                                inp.get("address", "") in FARM_CONTRACTS
+                                for inp in tx_data.get("inputs", [])
+                            )
+                            if from_farm:
+                                unstaked_units.add(unit)
+
+            # Remove any positions that were subsequently unstaked.
+            # This handles the desc-order case where the unstake tx appears
+            # before the stake tx in the iteration.
+            for unit in unstaked_units:
+                staked_lp.pop(unit, None)
 
             # DB fallback: recover farm positions the scan window missed
             scan_found_units = set(staked_lp.keys())
