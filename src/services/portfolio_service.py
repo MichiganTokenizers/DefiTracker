@@ -3347,6 +3347,34 @@ class PortfolioService:
                     )
                     continue
 
+                # Verify LP is still staked: scan recent txs for this specific LP token.
+                # If we find any sent events (LP left wallet after returning from farm),
+                # the position was fully exited and the stale DB entry should be cleaned up.
+                pool_name_log = entry.get("pool_name", unit[:20])
+                recent_events = self._scan_lp_token_history(
+                    wallet_address, entry["policy_id"], entry["asset_name"],
+                    max_pages=3, order="desc", count=100
+                )
+                if any(e.get("sent", 0) > 0 for e in recent_events):
+                    logger.info(
+                        "DB fallback: LP token for %s has recent sent events — position closed, deleting entry",
+                        pool_name_log
+                    )
+                    conn_del = self._db.get_connection()
+                    try:
+                        with conn_del.cursor() as cur:
+                            cur.execute("""
+                                DELETE FROM user_lp_entries
+                                WHERE wallet_address = %s AND policy_id = %s AND asset_name = %s
+                            """, (wallet_address, entry["policy_id"], entry["asset_name"]))
+                            conn_del.commit()
+                    except Exception as del_err:
+                        conn_del.rollback()
+                        logger.warning("Error deleting stale LP entry for %s: %s", pool_name_log, del_err)
+                    finally:
+                        self._db.return_connection(conn_del)
+                    continue
+
                 logger.info(
                     "DB fallback: recovering farm position %s (unit=%s...)",
                     entry.get("pool_name", "?"), unit[:30]
