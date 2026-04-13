@@ -801,7 +801,7 @@ const pairColorMap = {};
 
 // Default assets
 const defaultAssets = [
-    'NIGHT-ADA', 'NIGHT-USDA'
+    'ADA-USDA', 'ADA-USDM'
 ];
 
 function isDefaultAsset(symbol) {
@@ -1534,11 +1534,13 @@ function initSingleAssetChart() {
         assetSelect.appendChild(option);
     });
 
-    // Set default to first NIGHT asset if available
-    const nightAsset = allAssets.find(a => a.symbol.includes('NIGHT'));
-    if (nightAsset) {
-        assetSelect.value = nightAsset.symbol;
-        updateProtocolOptionsForAsset(nightAsset.symbol);
+    // Set default to ADA/USDA, then ADA/USDM, then first available
+    const defaultAsset = allAssets.find(a => a.symbol.includes('USDA'))
+        || allAssets.find(a => a.symbol.includes('USDM'))
+        || allAssets[0];
+    if (defaultAsset) {
+        assetSelect.value = defaultAsset.symbol;
+        updateProtocolOptionsForAsset(defaultAsset.symbol);
         loadSingleAssetChart();
     }
 
