@@ -800,17 +800,10 @@ const pairColors = [
 const pairColorMap = {};
 
 // Default assets
-const defaultAssets = [
-    'ADA-USDA', 'ADA-USDM'
-];
+const defaultAssets = ['USDA', 'USDM'];
 
 function isDefaultAsset(symbol) {
-    return defaultAssets.some(d => 
-        symbol === d || 
-        symbol.toUpperCase() === d.toUpperCase() ||
-        symbol.includes(d) || 
-        d.includes(symbol)
-    );
+    return defaultAssets.some(d => symbol.toUpperCase().includes(d.toUpperCase()));
 }
 
 async function loadAssets() {
@@ -1535,8 +1528,8 @@ function initSingleAssetChart() {
     });
 
     // Set default to ADA/USDA, then ADA/USDM, then first available
-    const defaultAsset = allAssets.find(a => a.symbol.includes('USDA'))
-        || allAssets.find(a => a.symbol.includes('USDM'))
+    const defaultAsset = allAssets.find(a => a.symbol.toUpperCase().includes('USDA'))
+        || allAssets.find(a => a.symbol.toUpperCase().includes('USDM'))
         || allAssets[0];
     if (defaultAsset) {
         assetSelect.value = defaultAsset.symbol;
