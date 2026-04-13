@@ -800,10 +800,10 @@ const pairColors = [
 const pairColorMap = {};
 
 // Default assets
-const defaultAssets = ['USDA', 'USDM'];
+const defaultAssets = ['USDA/ADA', 'USDM/ADA'];
 
 function isDefaultAsset(symbol) {
-    return defaultAssets.some(d => symbol.toUpperCase().includes(d.toUpperCase()));
+    return defaultAssets.some(d => symbol.toUpperCase() === d.toUpperCase());
 }
 
 async function loadAssets() {
