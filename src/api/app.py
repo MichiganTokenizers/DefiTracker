@@ -25,9 +25,9 @@ app = Flask(__name__,
 
 # Configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SECURE'] = True        # Required for SameSite=None
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'    # Required for IPFS cross-origin requests
 
 # Mail configuration (from environment variables)
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
@@ -37,7 +37,21 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@yieldlife.io')
 
-CORS(app, supports_credentials=True)
+ALLOWED_ORIGINS = [
+    "https://yieldlife.xyz",
+    "https://app.yieldlife.xyz",             # DNSLink domain for IPFS frontend
+    "https://gateway.lighthouse.storage",    # Lighthouse IPFS gateway
+    "https://ipfs.io",
+    "https://cloudflare-ipfs.com",
+    os.environ.get("IPFS_FRONTEND_ORIGIN", ""),  # Fleek/custom domain via .env
+]
+CORS(
+    app,
+    supports_credentials=True,
+    origins=[o for o in ALLOWED_ORIGINS if o],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+)
 
 # Initialize extensions
 login_manager.init_app(app)
