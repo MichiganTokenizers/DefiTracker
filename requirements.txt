@@ -28,7 +28,7 @@ pyyaml==6.0.1
 python-dotenv==1.0.1
 
 # Data processing
-pandas==2.1.4
+pandas==2.2.3
 
 # Logging
 python-json-logger==2.0.7
