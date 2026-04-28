@@ -1,6 +1,6 @@
 # Web Framework
-flask==3.0.0
-flask-cors==4.0.0
+flask==3.1.0
+flask-cors==5.0.0
 flask-login==0.6.3
 flask-mail==0.10.0
 
@@ -19,13 +19,13 @@ APScheduler==3.10.4
 web3==6.15.1
 
 # HTTP Requests
-requests==2.31.0
+requests==2.32.3
 
 # Configuration
 pyyaml==6.0.1
 
 # Environment variables
-python-dotenv==1.0.0
+python-dotenv==1.0.1
 
 # Data processing
 pandas==2.1.4
