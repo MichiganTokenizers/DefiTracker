@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pin the dist/ directory to IPFS + Filecoin via Lighthouse.storage.
+Pin the dist/ directory to IPFS via Pinata.
 
 After uploading, prints the CID and the DNS TXT record to update.
 Optionally auto-updates Cloudflare DNS if credentials are configured.
@@ -9,12 +9,12 @@ Usage (from project root):
     python scripts/deploy_ipfs.py
 
 Required environment variables (in .env or shell):
-    LIGHTHOUSE_API_KEY   API key from https://lighthouse.storage (free tier)
+    PINATA_JWT   JWT token from https://app.pinata.cloud (free tier, 1 GB)
 
 Optional environment variables for Cloudflare DNS auto-update:
     CLOUDFLARE_API_TOKEN  Cloudflare API token with DNS:Edit permission
     CLOUDFLARE_ZONE_ID    Zone ID for your domain (from Cloudflare dashboard)
-    DNSLINK_SUBDOMAIN     Subdomain to update (default: app.yieldlife.io)
+    DNSLINK_SUBDOMAIN     Subdomain to update (default: app.yieldlife.xyz)
 """
 
 import os
@@ -31,8 +31,8 @@ DIST_DIR = PROJECT_ROOT / "dist"
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-LIGHTHOUSE_API_KEY = os.environ.get("LIGHTHOUSE_API_KEY", "")
-LIGHTHOUSE_UPLOAD_URL = "https://node.lighthouse.storage/api/v0/add"
+PINATA_JWT = os.environ.get("PINATA_JWT", "")
+PINATA_UPLOAD_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
 
 CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_ZONE_ID = os.environ.get("CLOUDFLARE_ZONE_ID", "")
@@ -41,52 +41,53 @@ DNSLINK_SUBDOMAIN = os.environ.get("DNSLINK_SUBDOMAIN", "app.yieldlife.xyz")
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 
-def upload_to_lighthouse(dist_dir: Path) -> str:
-    """Upload dist/ directory to Lighthouse and return the root CID."""
-    if not LIGHTHOUSE_API_KEY:
-        print("ERROR: LIGHTHOUSE_API_KEY not set.")
-        print("  Get a free key at https://lighthouse.storage")
-        print("  Then add to .env:  LIGHTHOUSE_API_KEY=your_key_here")
+def upload_to_pinata(dist_dir: Path) -> str:
+    """Upload dist/ directory to Pinata and return the root CID."""
+    if not PINATA_JWT:
+        print("ERROR: PINATA_JWT not set.")
+        print("  Get a free token at https://app.pinata.cloud")
+        print("  Dashboard → API Keys → New Key → select 'pinFileToIPFS'")
+        print("  Then add to .env:  PINATA_JWT=your_jwt_here")
         sys.exit(1)
 
     if not dist_dir.exists():
         print(f"ERROR: {dist_dir} not found. Run export_static.py first.")
         sys.exit(1)
 
-    print(f"Uploading {dist_dir} to Lighthouse.storage ...")
+    print(f"Uploading {dist_dir} to Pinata ...")
 
-    # Collect all files as multipart form data
+    # Collect all files as multipart form data.
+    # Pinata preserves directory structure when file names include path separators.
+    file_handles = []
     files = []
     for path in sorted(dist_dir.rglob("*")):
         if path.is_file():
             rel = path.relative_to(dist_dir)
+            fh = open(path, "rb")
+            file_handles.append(fh)
             files.append(
-                ("file", (str(rel), open(path, "rb"), "application/octet-stream"))
+                ("file", (f"dist/{rel}", fh, "application/octet-stream"))
             )
 
     print(f"  {len(files)} files to upload ...")
 
-    resp = requests.post(
-        LIGHTHOUSE_UPLOAD_URL,
-        headers={"Authorization": f"Bearer {LIGHTHOUSE_API_KEY}"},
-        files=files,
-        timeout=300,
-    )
-
-    # Close all file handles
-    for _, (_, fh, _) in files:
-        fh.close()
+    try:
+        resp = requests.post(
+            PINATA_UPLOAD_URL,
+            headers={"Authorization": f"Bearer {PINATA_JWT}"},
+            files=files,
+            timeout=300,
+        )
+    finally:
+        for fh in file_handles:
+            fh.close()
 
     if not resp.ok:
         print(f"ERROR: Upload failed ({resp.status_code}): {resp.text}")
         sys.exit(1)
 
-    # Lighthouse returns one JSON object per uploaded file/directory.
-    # The last line is the root directory entry with the top-level CID.
-    lines = [line.strip() for line in resp.text.strip().splitlines() if line.strip()]
-    import json
-    last = json.loads(lines[-1])
-    cid = last["Hash"]
+    result = resp.json()
+    cid = result["IpfsHash"]
     return cid
 
 
@@ -140,13 +141,13 @@ def update_cloudflare_dnslink(cid: str):
 def main():
     print("\nDefiTracker IPFS deploy")
     print(f"  Source : {DIST_DIR}")
-    print(f"  Target : Lighthouse.storage (IPFS + Filecoin)\n")
+    print(f"  Target : Pinata (IPFS)\n")
 
-    cid = upload_to_lighthouse(DIST_DIR)
+    cid = upload_to_pinata(DIST_DIR)
 
     print(f"\n✓ Deployed successfully!")
     print(f"\n  CID     : {cid}")
-    print(f"  Gateway : https://gateway.lighthouse.storage/ipfs/{cid}/")
+    print(f"  Gateway : https://gateway.pinata.cloud/ipfs/{cid}/")
     print(f"  IPFS    : https://ipfs.io/ipfs/{cid}/")
 
     # Try Cloudflare auto-update
