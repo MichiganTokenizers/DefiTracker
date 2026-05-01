@@ -412,7 +412,7 @@ async function loadChart() {
     // Fetch from ALL protocols on this chain
     const url = `/api/${chain}/all/history?days=${days}`;
     
-    const response = await fetch(url);
+    const response = await (window.apiFetch || fetch)(url);
     allHistoryData = await response.json();  // Store all data
     
     // Filter by selected assets

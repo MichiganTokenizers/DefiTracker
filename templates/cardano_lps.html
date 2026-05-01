@@ -972,7 +972,7 @@ async function loadChart() {
     
     const url = `/api/${chain}/all/history?days=${days}&yield_type=${yieldType}`;
     
-    const response = await fetch(url);
+    const response = await (window.apiFetch || fetch)(url);
     allHistoryData = await response.json();
     
     let chartData = allHistoryData;
