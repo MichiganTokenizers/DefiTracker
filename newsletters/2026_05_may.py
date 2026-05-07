@@ -125,6 +125,8 @@ if __name__ == "__main__":
                 intro=INTRO,
                 updates=UPDATES,
                 month_label="May 2026",
+                banner_image="lake-michigan-aura.jpg",
+                photo_credit_url="https://leah-may.pixels.com/featured/lake-michigan-aura-leah-may.html",
             )
             if result:
                 print("OK")
